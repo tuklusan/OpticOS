@@ -20,7 +20,6 @@ def parse_blocks(raw):
         payload = raw[pos:pos+size]
         assert len(payload) == size
         assert pause == 1000
-        assert not (sum([]) if False else 0)  # explicit no stateful decoder
         parity = 0
         for value in payload:
             parity ^= value
