@@ -51,4 +51,39 @@ s.type("NEW\n")
 s.frame(80)
 assert s.block(0x6000, len(image)) == image, "NEW clobbered the RAM executable"
 assert s.regs()["IM"] == 2, "NEW did not reinstall IM2"
-print("PASS: RAM boot, IM2, code integrity, console, arithmetic, AUTO/RUN, NEW")
+
+# Directly exercise the relocated software SAVE/LOAD primitives on a genuine
+# EAR/MIC pulse feed.  In contrast to tape traps, this uses real timings.
+import re
+from rig import decode_pulses, NOTOGGLE
+symbols = {}
+for line in (ROOT / "build" / "opticos_ram.sym").read_text().splitlines():
+    m = re.match(r"(\w+)\s+EQU\s+0?([0-9A-F]+)H", line)
+    if m:
+        symbols[m.group(1)] = int(m.group(2), 16)
+assert "SA_BYTES" in symbols and "LD_BYTES" in symbols, "RAM symbols missing"
+
+payload = bytes((i * 73 + 11) & 255 for i in range(80))
+s.load(0xD000, payload)
+s.mic_start(3)
+s.call(symbols["SA_BYTES"], IX=0xD000, DE=len(payload),
+       AF=0xFF00, IFF1=1, IFF2=1, IM=2, limit=900_000_000)
+pulses = s.mic_pulses()[1:]
+expected_parity = 0xFF
+for b in payload:
+    expected_parity ^= b
+expected = b"\xff" + payload + bytes((expected_parity,))
+decoded = decode_pulses(pulses)
+assert decoded and decoded[0] == expected, "SA_BYTES parity/pulse regression"
+
+loaded = Spectrum(bytes(16384))
+loaded.load(0x6000, image)
+loaded.setregs(PC=0x6000, SP=0x5FF0)
+loaded.frame(200)
+loaded.tape([NOTOGGLE | 35000] + pulses + [NOTOGGLE | 3500000])
+result = loaded.call(symbols["LD_BYTES"], IX=0xD000, DE=len(payload),
+                     AF=0xFF01, IFF1=1, IFF2=1, IM=2, limit=900_000_000)
+assert result["AF"] & 1, "LD_BYTES reported an error"
+assert loaded.block(0xD000, len(payload)) == payload, "LD_BYTES data mismatch"
+print("PASS: RAM boot, IM2, PRINT, AUTO/RUN, NEW, and software tape round-trip")
+
