@@ -27,7 +27,7 @@ jobs:
         run: make ram
       - name: Inspect ROM restart conversion
         run: |
-          if grep -Ei '(^|[[:space:]])rst[[:space:]]+(\$[0-9a-f]+|[0-9]+)' build/opticos_ram.asm; then
+          if sed 's/;.*$//' build/opticos_ram.asm | grep -Ei '(^|[[:space:]])rst[[:space:]]+(\$[0-9a-f]+|[0-9]+)'; then
             echo "Unexpected ROM restart left in RAM source" >&2
             exit 1
           fi
