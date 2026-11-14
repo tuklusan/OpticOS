@@ -1,0 +1,45 @@
+name: Build OpticBASIC RAM TZX
+
+on:
+  push:
+    branches:
+      - port/ram-tzx
+  pull_request:
+    paths:
+      - "src/**"
+      - "font/**"
+      - "tools/make_ram_*"
+      - "Makefile"
+      - ".github/workflows/ram-tzx.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ram-tzx:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Z80 assembler
+        run: sudo apt-get update && sudo apt-get install -y pasmo
+      - name: Build RAM image and self-booting TZX
+        run: make ram
+      - name: Inspect ROM restart conversion
+        run: |
+          if sed 's/;.*$//' build/opticos_ram.asm | grep -Ei '(^|[[:space:]])rst[[:space:]]+(\$[0-9a-f]+|[0-9]+)'; then
+            echo "Unexpected ROM restart left in RAM source" >&2
+            exit 1
+          fi
+      - name: Exercise the TZX block encoder
+        run: python3 -m unittest discover -s tools -p 'test_ram_tzx.py'
+      - name: Boot RAM OpticBASIC in headless Z80 rig
+        run: python3 tools/rig/test_ram.py
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpticOS-RAM-TZX
+          path: |
+            build/OpticOS-RAM.tzx
+            build/opticos_ram.bin
+            build/opticos_ram.sym
+          if-no-files-found: error
