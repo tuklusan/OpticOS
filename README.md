@@ -93,6 +93,19 @@ There is no full-screen editor. Editing follows the ZX BASIC pattern: the progra
 
 When a program stops with an error, the failing line becomes the current line, so EDIT brings it straight up.
 
+## Experimental stock-ROM RAM/TZX edition
+
+The original 16K ROM build is now complemented by an **experimental 48K RAM-resident OpticBASIC**. This edition loads from an ordinary TZX, with the factory Sinclair ROM still installed. No ROM switcher or replacement chip is needed.
+
+```sh
+make ram
+# build/OpticOS-RAM.tzx
+```
+
+On a stock 48K Spectrum, type `LOAD ""` and play the tape; its short BASIC autoloader loads CODE at `$6000` and starts OpticBASIC. The separate RAM build replaces restart calls with local calls and uses an IM2 interrupt handler. The original ROM build is unchanged.
+
+**Limits:** requires 48K RAM; legacy Sinclair BASIC/game tapes cannot be run from inside the RAM edition; emulator fast-tape traps for the custom SAVE/LOAD routines may not work. The port is tested in the headless Z80 rig, but has not been tested on physical hardware. [Memory map, build and limitations](docs/ram-tzx.md).
+
 ## Building and running
 
 ```
