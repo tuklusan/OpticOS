@@ -20,6 +20,13 @@ RST = {8: "err_rst", 0x10: "print_a", 0x18: "tk",
 RAM_BOOT = """boot:   di
         xor a
         out ($FE),a             ; border and beeper to zero
+        ; A ROM cold start zeroed RAM, but we must only clear variables.
+        ; Clear $5B00-$5FFF (Sinclair BASIC is no longer running).
+        ld hl,$5B00
+        ld (hl),0
+        ld de,$5B01
+        ld bc,$04FF
+        ldir
         ; Never probe/clear RAM: the code executing now lives in it!
         ; The user-space application requires a full 48K ZX Spectrum.
         ld hl,$FFFF
