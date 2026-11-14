@@ -36,3 +36,18 @@ clean:
 	rm -rf build tools/rig/libz80.so
 
 .PHONY: rig zex check fuse clean coef
+
+
+# Experimental ROM-independent build.  Requires a stock 48K Sinclair ROM
+# only for loading the standard BASIC + CODE TZX blocks.
+build/opticos_ram.bin: $(SRC) tools/make_ram_source.py
+	@mkdir -p build
+	python3 tools/make_ram_source.py
+	cd src && $(PASMO) --bin ../build/opticos_ram.asm ../build/opticos_ram.bin ../build/opticos_ram.sym
+
+build/OpticOS-RAM.tzx: build/opticos_ram.bin tools/make_ram_tzx.py
+	python3 tools/make_ram_tzx.py $< $@
+
+ram: build/OpticOS-RAM.tzx
+
+.PHONY: ram
