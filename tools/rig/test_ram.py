@@ -38,4 +38,17 @@ s.frame(100)
 rows = [row.rstrip("\x7f").rstrip() for row in s.text_rows(font)]
 print("Printed RAM test:", [x for x in rows if "RAM" in x])
 assert any("RAM OK" in x for x in rows), "OpticBASIC PRINT failed after loading"
-print("PASS: RAM OpticBASIC boot, IM2, code integrity, keyboard and PRINT")
+s.type("AUTO\n")
+s.type("PRINT 40+2\n")
+s.type("\n")  # blank line ends AUTO
+s.type("RUN\n")
+s.frame(80)
+rows = [row.rstrip("\x7f").rstrip() for row in s.text_rows(font)]
+print("Program RUN output:", [x for x in rows if "42" in x])
+assert any(x.strip() == "42" for x in rows), "Stored OpticBASIC program failed"
+
+s.type("NEW\n")
+s.frame(80)
+assert s.block(0x6000, len(image)) == image, "NEW clobbered the RAM executable"
+assert s.regs()["IM"] == 2, "NEW did not reinstall IM2"
+print("PASS: RAM boot, IM2, code integrity, console, arithmetic, AUTO/RUN, NEW")
