@@ -145,7 +145,12 @@ def convert_assembly(text: str) -> str:
     out = []
     orgs = 0
     replacements = 0
+    current_file = ""
+    timing_modules = {"src/edge.asm", "src/load.asm", "src/save.asm",
+                      "src/sound.asm", "src/keyboard.asm"}
     for line in text.splitlines(keepends=True):
+        if line.startswith("; ===== BEGIN "):
+            current_file = line[len("; ===== BEGIN "):].split(" =====")[0]
         code, semi, comment = line.partition(";")
         if re.match(r"^\s*org\s+", code, re.I):
             orgs += 1
@@ -173,6 +178,11 @@ def convert_assembly(text: str) -> str:
             return "call " + RST[addr]
 
         code = re.sub(r"\brst\s+(\$[0-9a-fA-F]+|\d+)\b", change, code, flags=re.I)
+        # RST->CALL expands branches by 2 bytes. Most of the ROM used
+        # tight JR reachability; use absolute JP in non-timing modules.
+        # Keep exact short branch timing in the tape and beeper loops.
+        if current_file not in timing_modules:
+            code = re.sub(r"\bjr\b", "jp", code, flags=re.I)
         out.append(code + semi + comment if semi else code)
     if orgs < 8 or replacements < 90:
         raise ValueError(f"Unexpected source layout: {orgs} ORGs / {replacements} RSTs")
