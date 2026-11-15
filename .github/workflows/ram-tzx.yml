@@ -3,7 +3,7 @@ name: Build OpticBASIC RAM TZX
 on:
   push:
     branches:
-      - port/ram-tzx
+      - main
   pull_request:
     paths:
       - "src/**"
@@ -12,6 +12,8 @@ on:
       - "Makefile"
       - ".github/workflows/ram-tzx.yml"
   workflow_dispatch:
+  release:
+    types: [published]
 
 permissions:
   contents: read
@@ -43,3 +45,23 @@ jobs:
             build/opticos_ram.bin
             build/opticos_ram.sym
           if-no-files-found: error
+
+  release-tzx:
+    name: Attach tested TZX to GitHub Release
+    if: github.event_name == 'release'
+    needs: ram-tzx
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download tested TZX build
+        uses: actions/download-artifact@v4
+        with:
+          name: OpticOS-RAM-TZX
+          path: release-assets
+      - name: Upload TZX release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: gh release upload "$RELEASE_TAG" release-assets/OpticOS-RAM.tzx --clobber
