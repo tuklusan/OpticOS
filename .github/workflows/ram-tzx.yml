@@ -65,3 +65,45 @@ jobs:
           GH_REPO: ${{ github.repository }}
           RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: gh release upload "$RELEASE_TAG" release-assets/OpticOS-RAM.tzx --clobber
+
+  publish-ram-v1:
+    name: Publish the first RAM/TZX release
+    if: >-
+      github.event_name == 'push' &&
+      github.ref == 'refs/heads/main' &&
+      contains(github.event.head_commit.message, '[publish-ram-v1.0.0]')
+    needs: ram-tzx
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download validated TZX
+        uses: actions/download-artifact@v4
+        with:
+          name: OpticOS-RAM-TZX
+          path: release-assets
+      - name: Write release notes
+        run: |
+          cat > release-notes.md <<'EOF'
+          First RAM-resident OpticOS / OpticBASIC edition for a standard ZX Spectrum 48K.
+
+          **Download:** OpticOS-RAM.tzx from the Assets section below.
+          **Start:** Boot with the factory Sinclair 48K ROM, enter LOAD "", then play the TZX tape. Its BASIC autoloader loads the RAM executable at 24576 ($6000) and launches it.
+
+          Derived from the original ROM-based OpticOS by Optica Technology Design (brixham99/OpticOS), adapted into a self-contained RAM program in this fork. The original 16K ROM build remains available in the source tree.
+
+          **Testing:** Automated RAM boot, IM2 interrupt, BASIC input, PRINT, AUTO/RUN, NEW, TZX framing/checksums and native software tape round-trip passed in a headless Z80 rig. Physical ZX Spectrum and end-to-end stock-ROM TZX bootstrap have not yet been verified.
+
+          **Limits:** 48K required; ordinary Sinclair BASIC/game-tape loading is not provided inside RAM OpticBASIC. Reset the machine to return to the Sinclair ROM.
+
+          Source, build instructions, and credits: https://github.com/tuklusan/OpticOS
+          EOF
+      - name: Create v1.0.0 release and upload TZX
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create v1.0.0 release-assets/OpticOS-RAM.tzx \
+            --target "$GITHUB_SHA" \
+            --title "OpticOS RAM/TZX v1.0.0" \
+            --notes-file release-notes.md
