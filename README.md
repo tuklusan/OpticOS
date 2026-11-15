@@ -1,189 +1,101 @@
-# OpticOS
+# OpticOS — RAM edition for the ZX Spectrum 48K
 
-[![Downloads](https://img.shields.io/github/downloads/brixham99/OpticOS/total)](https://github.com/brixham99/OpticOS/releases) [![Latest release downloads](https://img.shields.io/github/downloads/brixham99/OpticOS/latest/total)](https://github.com/brixham99/OpticOS/releases/latest)
+[![Build RAM TZX](https://github.com/tuklusan/OpticOS/actions/workflows/ram-tzx.yml/badge.svg)](https://github.com/tuklusan/OpticOS/actions/workflows/ram-tzx.yml)
+[![GitHub release](https://img.shields.io/github/v/release/tuklusan/OpticOS)](https://github.com/tuklusan/OpticOS/releases)
+[![Downloads](https://img.shields.io/github/downloads/tuklusan/OpticOS/total)](https://github.com/tuklusan/OpticOS/releases)
 
-![OpticOS boot screen](assets/opticos_boot_3x.png)
+**OpticOS RAM** is a TZX-loadable, RAM-resident version of **OpticOS / OpticBASIC** for a standard **48K Sinclair ZX Spectrum**. It runs with the factory Sinclair ROM still installed: **no replacement ROM, modified emulator ROM, or ROM switcher is needed**.
 
-*A clean-room replacement 16K ROM for the 48K ZX Spectrum.*
+This edition is **derived from the original [ROM-based OpticOS by Optica Technology Design](https://github.com/brixham99/OpticOS)**. The original project is a clean-room 16K replacement ROM containing the structured, line-number-free OpticBASIC language and 64-column display. This fork relocates that software into a normal RAM program and packages it as a tape image. The original ROM source and build remain available.
 
-**OpticOS** is a new operating environment and BASIC, **OpticBASIC**, for the Sinclair ZX Spectrum. It boots from a 16,384-byte ROM, just as the original did, but the language has no line numbers: you write named procedures and functions with a Sinclair-style line editor, on a 64-column display that uses a condensed 4-pixel font.
+## Download the RAM/TZX edition
 
-The boot message reads:
+**[Download OpticOS-RAM.tzx (latest release)](https://github.com/tuklusan/OpticOS/releases/latest/download/OpticOS-RAM.tzx)**
 
+Or browse the **[Releases page](https://github.com/tuklusan/OpticOS/releases)** and select `OpticOS-RAM.tzx` under **Assets**.
+
+### Run it
+
+1. Start a standard **ZX Spectrum 48K** with its **original Sinclair ROM**, on hardware or in an emulator.
+2. Load the downloaded `OpticOS-RAM.tzx` as a tape image.
+3. At the Sinclair BASIC prompt, type `LOAD ""` and play the tape. (On real hardware, use a suitable TZX-to-audio player or tape interface.)
+4. The tape's BASIC autoloader loads OpticOS at **24576 (`$6000`)** and starts OpticBASIC.
+
+The autoloader performs the equivalent of:
+
+```basic
+10 CLEAR VAL "24575"
+20 LOAD "" CODE
+30 RANDOMIZE USR VAL "24576"
 ```
-OpticOS (c) 2026 Optica Technology Design
+
+When OpticBASIC starts, it uses the **`]` prompt**. Type statements directly, or enter a multi-line program with `AUTO`, finish with a blank line, and execute it with `RUN`.
+
+A quick test at the OpticBASIC prompt:
+
+```text
+] PRINT "HELLO FROM RAM"
 ```
 
-**Status: Phases 0–5 complete.** The planned feature list (after the cuts in spec §12) is built and fits the 16K ROM with 116 bytes to spare (v1.0.3, below the 221-byte margin rule). The ROM boots, loads ordinary game tapes, runs structured OpticBASIC programs, and has a Sinclair-style line editor. The **[user manual (PDF)](docs/manual/OpticOS_User_Manual.pdf)** covers the whole system, with worked examples ([source](docs/manual)). The **[example tape](examples)** (`.tap` and `.tzx`) holds the manual's examples and three more, verified in Fuse. Still to do before a v1.0: a check on real hardware and a real TV. The design is in the [specification (PDF)](docs/spec.pdf) ([Markdown](docs/spec.md)); §4.8 lists what is built.
+## What it provides
 
-| Phase | What it delivered | Report |
+OpticOS retains the original OpticBASIC environment, including:
+
+- A **64-column display** using the compact 4×8 font, with screen colours and graphics commands.
+- **Structured BASIC without line numbers**, with named procedures/functions, loops, conditional blocks, arrays and strings.
+- A ZX-inspired **line editor**, plus `AUTO`, `LIST`, `RUN` and `NEW`.
+- Arithmetic, string operations, `PLOT`, `DRAW`, `BEEP` and machine-code access.
+- Native OpticBASIC **SAVE/LOAD** through software-generated tape pulses.
+
+These features come from the original implementation; **not every command has been re-tested in the RAM edition**.
+
+## RAM edition versus the original ROM edition
+
+| | This fork: RAM/TZX | Original OpticOS |
 |---|---|---|
-| 0–1 | Test rig, boot, 64-column screen, keyboard, tape, compatibility entry points, legacy loader (`LOAD ""` loads real game tapes, traps off) | [docs/phase1](docs/phase1/README.md) |
-| 2 | Clean-room floating point: + − × ÷, SQR, SIN/COS/TAN/ATN, EXP/LN, STR$/VAL, RND | [docs/phase2](docs/phase2/README.md), [maths API](docs/maths.md) |
-| 3 | Tokenised interpreter with no line numbers | [docs/phase3](docs/phase3/README.md) |
-| 4 | ZX-style line editor: current-line marker, EDIT, AUTO | [docs/phase4](docs/phase4/README.md) |
-| 5a | Size pass (ASN/ACS dropped), INPUT, DATA/READ/RESTORE, SAVE/LOAD/VERIFY with CODE | [docs/phase5](docs/phase5/README.md) |
-| 5b | Squeezes, PLOT/DRAW, FLASH/BRIGHT/INVERSE/OVER and colours in PRINT, BEEP, INSTR/STRING$/HEX$/UPPER$/ERR$, IN/OUT/USR/CALL/DPEEK/DPOKE, SWAP, start-up chime | [docs/phase5](docs/phase5/README.md#phase-5b-nathans-cuts-the-squeezes-graphics-and-functions) |
-| 5c | Last cuts and squeezes, CASE, EXIT, `ERROR n, msg$`, CLEAR, FREE, KEY, RUN/RESTORE/SAVE … AUTO with a PROC name | [docs/phase5](docs/phase5/README.md#phase-5c-the-last-features) |
+| Installation | Load a TZX into stock 48K Spectrum RAM | Replace the Spectrum's 16K ROM |
+| Execution | Relocated interpreter starting at `$6000` | Interpreter runs from `$0000–$3FFF` |
+| Interrupts | RAM-resident IM2 handler | ROM-resident interrupt handling |
+| OpticBASIC | Yes | Yes |
+| Ordinary Sinclair BASIC/game tape compatibility inside OpticOS | **No** — reset to Sinclair ROM first | Original ROM edition has a compatibility loader |
+| Build | `make ram` | `make` |
+| Main output | `build/OpticOS-RAM.tzx` | `build/opticos.rom` |
 
-## Screenshots
+The RAM adapter converts fixed ROM origins and restart instructions into relocatable calls, includes the font in the RAM image, and keeps OpticBASIC program storage clear of the executable. The original 16K ROM build is **not replaced**.
 
-All are from real [Fuse](https://fuse-emulator.sourceforge.net/) with traps and loader acceleration off.
+## Build from source
 
-| Boot | Direct mode |
-|---|---|
-| ![Boot screen in Fuse](docs/phase1/fuse_boot.png) | ![PRINT in direct mode](docs/phase2/fuse_hello.png) |
-| **A structured program, LIST and RUN** | **The line editor: marker and EDIT** |
-| ![LIST and RUN of a program](docs/phase3/fuse_program.png) | ![Editing the current line](docs/phase4/fuse_edit.png) |
-| **Graphics: PLOT, DRAW, colours** | **INPUT and DATA / READ** |
-| ![PLOT and DRAW demo](docs/phase5/fuse_graphics.png) | ![INPUT and READ](docs/phase5/fuse_input_read.png) |
-
-## What works today
-
-- A drop-in 16K ROM for the 48K Spectrum, on emulators such as Fuse (not yet tried on real hardware).
-- **64-column text** in an original 4×8 font, with colours (`INK PAPER FLASH BRIGHT INVERSE OVER`, also inside PRINT), scrolling and `PRINT AT`/`TAB`.
-- **Graphics and sound:** `PLOT`, `DRAW dx,dy`, `DRAW TO x,y` on the full 256×192 screen, and `BEEP duration, pitch`. At a cold start it plays the BBC Micro's two power-on tones in reverse, at half their length: 523 Hz for 0.15 s, then 122 Hz for 0.45 s (spec §6.7).
-- **OpticBASIC with no line numbers:**
-  - named procedures and functions with parameters, dynamic `LOCAL` and recursion; procedures are called by bare name
-  - block `IF` / `ELSEIF` / `ELSE` / `ENDIF`, `CASE` / `WHEN` / `OTHERWISE` / `ENDCASE`, `WHILE` / `WEND`, `REPEAT` / `UNTIL`, `FOR` / `NEXT`, `EXIT WHILE` / `REPEAT` / `FOR`, and `TRY` / `CATCH` / `ENDTRY` with `ERROR n [, msg$]`
-  - floats, 16-bit integers (`a%`), strings up to 255 characters with a garbage-collected heap, and arrays of up to 3 dimensions
-  - `INPUT`, `DATA` / `READ` / `RESTORE [procname]`, `CLEAR [ramtop]`, `FREE`, and `SAVE` / `LOAD` / `VERIFY` of programs and `CODE` on a standard tape signal; `SAVE "x" AUTO procname` starts a program when it loads, and `RUN procname` runs one PROC
-  - the usual maths and string functions plus `INSTR`, `STRING$`, `HEX$`, `UPPER$`, `ERR$`, `INKEY$`, `KEY(k$)` (several keys at once, for games), `FRAMES`, `MAX`, `MIN`, hex (`&FF`) and binary (`%1010`) literals
-  - machine access: `PEEK`/`POKE`, `DPEEK`/`DPOKE`, `IN`/`OUT` (`IN 31` reads a Kempston joystick), `USR`, `CALL`, `BORDER`, and `SWAP a, b`
-  - an indenting `LIST`: the indentation is not stored but recomputed from the block structure; it pauses after each screenful with `cont?` (Y for more)
-- **Keywords are typed letter by letter** and tokenised on entry. The keyword legends on the keys are ignored.
-- **Tape compatibility.** The standard ROM tape format and entry points (`LD-BYTES`, `SA-BYTES`, `BEEPER`, the RST vectors and others) are kept, so `LOAD ""` loads ordinary games, including ones with a BASIC loader, through a small legacy shim.
-- **Clean-room implementation.** OpticOS contains no Sinclair, Amstrad or Tasword code or artwork. A build check confirms that no run of 12 or more bytes is shared with the original ROM.
-
-Dropped by decision (spec §12): `MODE 32`, UDGs, `CIRCLE`, `LABEL`/`GOTO`, `SOUND`, `ASN`/`ACS`, `SCREEN$()`, `ATTR`, `POINT`, `FIND`, `CONT`, array parameters by reference, `CALL` register arguments, `CAT`, the OpticBASIC `SCREEN$` tape forms (legacy loaders keep `LOAD "" SCREEN$`) and `JOY`.
-
-## A short example
-
-```
-] AUTO
-+ DEF fib(n)
-+ IF n<2 THEN RETURN n
-+ RETURN fib(n-1)+fib(n-2)
-+ ENDFN
-+ FOR i=1 TO 10
-+ PRINT fib(i);" ";
-+ NEXT
-+
-] RUN
-1 1 2 3 5 8 13 21 34 55
-```
-
-`AUTO` starts line entry, and the empty line at the end stops it. Anything typed at the `]` prompt runs at once.
-
-## The line editor
-
-There is no full-screen editor. Editing follows the ZX BASIC pattern: the program has a **current line**, shown with `>` in a LIST, and you edit it in place.
-
-| Key | Action |
-|---|---|
-| `AUTO`, then ENTER on an empty line | Start, then stop, entering lines. Each new line goes in after the current one. |
-| `LIST` | List the program with `>` on the current line, a screenful at a time: at `cont?` press Y for more, any other key to stop with the marker on the screenful's first line |
-| CAPS+7 / CAPS+6 | Move the marker up / down and relist around it |
-| CAPS+1 (EDIT) | Copy the current line into the input line (prompt `*`), then ENTER to replace it |
-| EDIT, EDIT, ENTER | Delete the current line |
-| CAPS+5 / CAPS+8 | Cursor left / right in the input line (up to 126 characters, two rows) |
-| CAPS+0 | Delete the character to the left of the cursor |
-| SYMBOL SHIFT + key | The red symbol on the key (`"` `=` `+` `<` `;` …) |
-| CAPS+SPACE | BREAK |
-
-When a program stops with an error, the failing line becomes the current line, so EDIT brings it straight up.
-
-## Experimental stock-ROM RAM/TZX edition
-
-The original 16K ROM build is now complemented by an **experimental 48K RAM-resident OpticBASIC**. This edition loads from an ordinary TZX, with the factory Sinclair ROM still installed. No ROM switcher or replacement chip is needed.
+Requires **Pasmo** (Z80 assembler), Python 3, and a C compiler for the headless Z80 test rig.
 
 ```sh
-make ram
-# build/OpticOS-RAM.tzx
+make ram                         # build/OpticOS-RAM.tzx
+python3 -m unittest discover -s tools -p 'test_ram_tzx.py'
+python3 tools/rig/test_ram.py   # RAM boot and interpreter smoke tests
 ```
 
-On a stock 48K Spectrum, type `LOAD ""` and play the tape; its short BASIC autoloader loads CODE at `$6000` and starts OpticBASIC. The separate RAM build replaces restart calls with local calls and uses an IM2 interrupt handler. The original ROM build is unchanged.
+To build the **original 16K ROM**, use `make` instead.
 
-**Limits:** requires 48K RAM; legacy Sinclair BASIC/game tapes cannot be run from inside the RAM edition; emulator fast-tape traps for the custom SAVE/LOAD routines may not work. The port is tested in the headless Z80 rig, but has not been tested on physical hardware. [Memory map, build and limitations](docs/ram-tzx.md).
+GitHub Actions builds and tests the RAM image on changes to `main`. Publishing a GitHub Release also builds the TZX and attaches it to the release's assets.
 
-## Building and running
+## Testing and limitations
 
-```
-make                # or ./build.sh: assembles build/opticos.rom (16,384 bytes) with pasmo and checks the layout
-make check          # headless rig tests (add REF=/path/to/48.rom for the reference comparisons)
-fuse-sdl --machine 48 --rom-48 build/opticos.rom                     # .tap files load at once (tape traps on)
-fuse-sdl --machine 48 --rom-48 build/opticos.rom --no-traps --no-detect-loader --no-accelerate-loader
-```
+The automated Z80 rig has passed RAM startup, screen/banner, IM2 setup, direct `PRINT`, stored `AUTO`/`RUN`, `NEW`, and a software-timed tape SAVE/LOAD round-trip. The TZX block framing and checksums have also been tested.
 
-Since v1.0.1 the ROM keeps the tape layout that emulator traps expect, so Fuse's tape traps work and `.tap` files load at once; v1.0 itself needs `--no-traps`. The second line turns the traps and loader acceleration off, so tapes load from the real signal in real time, as on a Spectrum; the tests run both ways. `build/` is gitignored. You need `pasmo` 0.5.3, `gcc` and Python 3 with Pillow.
+**Experimental hardware status:** Physical 48K hardware and the complete stock-ROM tape-bootstrap path have **not yet been verified end to end**. The test rig is useful, but it is not a CRT television and a battered cassette deck.
 
-### On The Spectrum (2024)
+Other limits:
 
-On The Spectrum from Retro Games, use the `.tzx` tapes: its instant `.tap` loading only works with ROMs it recognises, and pressing ENTER in Media select to auto-load does not work with OpticOS. In Media select pick the `.tzx` and press **M** (not ENTER), close the menu, type `LOAD ""`, then hold HOME and press Down to open the tape controller and press play. On Fuse and other emulators `.tap` files load as usual. See the manual, "Loading on The Spectrum (2024)".
+- A **48K Spectrum** is required; a 16K machine will not work.
+- Loading ordinary Spectrum games or Sinclair BASIC tapes **inside** RAM OpticBASIC is unsupported. Reset the machine to regain the original Sinclair ROM environment.
+- Custom tape routines may need emulator tape traps/acceleration disabled.
+- Avoid overwriting the RAM interpreter or its workspace using `POKE`, `CALL` or machine-code loads.
 
-## ROM byte usage (Phase 5 complete)
+For technical details, see the **[RAM memory map and implementation notes](docs/ram-tzx.md)**.
 
-16,268 of 16,384 bytes are placed, leaving **116 free** in v1.0.3, **105 below the margin rule** of at least 221 spare (it was 256 until v1.0.1; v1.0.2 had 227 free). v1.0.3's new tape stripe colours cost 10 bytes and the LIST `cont?` pause 101; the shorter chime cost nothing. By module, as `tools/check_layout.py` reports them:
+## Origin, documentation and licence
 
-| Part | Bytes |
-|---|---:|
-| Interpreter: run loop, statements, prepass, PROC/FN, TRY | 2,394 |
-| Tokeniser, keyword table, LIST | 1,848 |
-| Float core (+ - * /, normalise, compare, conversions, small-int ops) | 1,422 |
-| Expression evaluator and functions | 1,329 |
-| Variables, arrays, string heap + GC, value and control stacks | 1,290 |
-| Transcendentals, byte-code runner, coefficient tables | 1,148 |
-| Legacy loader shim (interpreter, expressions, PRINT) | 845 |
-| Number <-> string (STR$/PRINT formatting, VAL) | 709 |
-| 64-column print, control codes, colours, scroll, CLS, RST 16 | 584 |
-| Errors: RST 8 handler and messages | 491 |
-| String and machine functions: INSTR STRING$ HEX$ UPPER$ ERR$ IN USR DPEEK KEY FREE | 465 |
-| Direct mode and console: input line with insert/delete/cursor | 422 |
-| Tape commands: SAVE / LOAD / VERIFY, CODE, headers, name match | 428 |
-| 4-pixel font | 384 |
-| Interrupt routine, keyboard scan, key tables | 355 |
-| Tape low level: SA-BYTES, LD-BYTES, edges, tape_ret | 317 |
-| CASE, EXIT, ERROR n [,msg$], CLEAR [n], PROC-name lookup | 343 |
-| Restarts, NMI, reset, RAM test, sysvars, channels | 300 |
-| Line editor: marker, LIST around it, cursor up/down, EDIT | 269 |
-| Graphics: PLOT, DRAW, DRAW TO | 236 |
-| BEEP, OUT, DPOKE, CALL, SWAP; start-up chime | 226 |
-| INPUT, DATA / READ / RESTORE | 183 |
-| Sound: BEEPER | 82 |
-| Fixed-address stubs (CHAN-OPEN, PR-STRING, PIXEL-ADD, $096F) | 78 |
-| Boot banner + version text, calls | 70 |
-| Number output for the legacy shim and console (pr_dec, pr_hex) | 50 |
+**Original OpticOS:** [brixham99/OpticOS](https://github.com/brixham99/OpticOS), copyright © 2026 Optica Technology Design. This project is a derivative RAM port maintained in [tuklusan/OpticOS](https://github.com/tuklusan/OpticOS), not a change submitted upstream.
 
-The free bytes are spread over about eleven gaps between the ROM's fixed addresses, the largest 27 bytes.
+The original README, including the ROM build, phase history, example program, editor guide, screenshots, and ROM layout, is preserved as **[Original ROM documentation](docs/original-rom-readme.md)**. The existing [OpticOS user manual](docs/manual/OpticOS_User_Manual.pdf), [specification](docs/spec.md), and [examples](examples) describe the original ROM system; RAM-specific differences and limits above take precedence.
 
-## The boot screen
-
-The mock-up above matches the ROM's real boot screen pixel for pixel (the rig checks this). It is a faithful ZX Spectrum frame: 256×192 pixels of bitmap, with a 32-pixel black border, giving a 320×256 image (and a 3× nearest-neighbour upscale here so the text is readable). Paper is black, ink is white, bright is off.
-
-Row 0 is a colour bar made from attribute cells only: 16 swatches, each two cells wide, showing black, blue, red, magenta, green, cyan, yellow and white, first normal and then BRIGHT. Row 1 is blank. Row 2 holds the banner, `OpticOS (c) 2026 Optica Technology Design`, and row 3 the BASIC's name and version, `OpticBASIC v1.0.3`. Row 4 is blank. Row 5 shows the OpticOS prompt `] ` with the cursor block (character 127) at column 2. `]` is the direct-mode prompt everywhere. Everything below the bar is white on black. The font has no copyright glyph — a © is illegible at 3 pixels wide — so the banner uses ASCII `(c)`, as the specification requires.
-
-The native 1× frame is [`assets/opticos_boot.png`](assets/opticos_boot.png).
-
-## The font
-
-The default character set is a 96-glyph 4×8 font (codes 32–127), with a 3-pixel-wide ink grid and a fourth blank column so neighbours have a gap. Two glyphs are packed per byte, which comes to 384 bytes, destined for `$3E80–$3FFF` in the ROM. Code 127 is the editor cursor and wrap mark.
-
-The artwork is original. The idea of a 64-column Spectrum display comes from Tasword Two (Tasman Software, 1983); the bitmaps do not.
-
-| File | What it is |
-|---|---|
-| [`font/font4.txt`](font/font4.txt) | ASCII-art source for every glyph |
-| [`font/font4x8.py`](font/font4x8.py) | The same glyphs, plus the packed 384-byte image |
-| [`font/font4x8.bin`](font/font4x8.bin) | Packed font, ready to assemble at `$3E80` |
-| [`font/make_font.py`](font/make_font.py) | Regenerates the font files and the boot mock-up |
-| [`assets/font_sheet.png`](assets/font_sheet.png) | A labelled sheet of all 96 glyphs |
-
-## What is not in this repository
-
-A Sinclair `48.rom` image is **not** included, and never will be. If a later test rig needs one as a behavioural reference, you must supply your own and keep it out of the tree (`roms/` and `*.rom` are gitignored).
-
-## Licence
-
-Code is under the MIT licence. Artwork and text are under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). See [LICENSE](LICENSE).
-
-Copyright (c) 2026 Optica Technology Design.
+Code remains under the **MIT licence**; artwork and documentation are under **CC BY 4.0**, as described in [LICENSE](LICENSE). The upstream copyright and attribution are retained.
