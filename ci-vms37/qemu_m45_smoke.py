@@ -3,6 +3,7 @@
 import os
 from pathlib import Path
 import select
+import socket
 import shutil
 import subprocess
 import sys
@@ -12,6 +13,8 @@ ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "qemu-m67-serial.log"
 FLOPPY = ROOT / "vms37lab-m67.ima"
 DISK = ROOT / "portdisk.img"
+MONITOR = ROOT / "qemu-m67-hmp.sock"
+LOGIN_IMAGE = ROOT / "vms37-m67-login.ppm"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
     ("SHOW CPU", b"CPUID vendor"),
@@ -77,7 +80,8 @@ def run():
     qemu = shutil.which("qemu-system-i386")
     if not qemu:
         raise RuntimeError("qemu-system-i386 not installed")
-    args = [qemu, "-display", "none", "-monitor", "none", "-serial", "stdio",
+    MONITOR.unlink(missing_ok=True)
+    args = [qemu, "-display", "none", "-monitor", f"unix:{MONITOR},server,nowait", "-serial", "stdio",
             "-m", "128", "-boot", "a", "-no-reboot", "-accel", "tcg",
             "-drive", f"if=floppy,format=raw,file={FLOPPY},snapshot=on",
             "-drive", f"if=ide,index=0,media=disk,format=raw,file={DISK},snapshot=on"]
@@ -85,6 +89,17 @@ def run():
                             stderr=subprocess.STDOUT, bufsize=0)
     log = bytearray()
     deadline = time.monotonic() + 240.0
+    def capture_login_image():
+        try:
+            with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as mon:
+                mon.settimeout(2)
+                mon.connect(str(MONITOR))
+                mon.recv(4096)
+                mon.sendall(("screendump " + str(LOGIN_IMAGE) + "\\r\\n").encode("ascii"))
+                mon.recv(4096)
+        except OSError:
+            pass
+
     def wait_for(needle, seconds, offset=0):
         until = min(time.monotonic() + seconds, deadline)
         while time.monotonic() < until:
@@ -160,6 +175,7 @@ def run():
         start = len(log)
         transmit("LOGIN")
         expect(b"Username: ", start)
+        capture_login_image()
         start = len(log)
         transmit("SYSTEM")
         expect(b"Password: ", start)

@@ -32,8 +32,8 @@ jobs:
         run: |
           set -euo pipefail
           xz --decompress --stdout ci-vms37/vms37lab-m67.ima.xz > ci-vms37/vms37lab-m67.ima
-          echo '95c302e50c7132a622e31173ccb4177b25c9608004e5b9592e0bc3b469a388d8  ci-vms37/vms37lab-m67.ima' | sha256sum --check
-          xz --decompress --stdout ci-vms37/portdisk-m67.img.xz > ci-vms37/portdisk.img
+          echo 'e089ce5b2ef5f03832b7cdfdce2aff1ca418e7e24e16acbd58686ff706cd9412  ci-vms37/vms37lab-m67.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/portdisk-m66.img.xz > ci-vms37/portdisk.img
           echo 'b1e4f739b92c2db35605399ac3389ab1ce622a16360b3007158615470f0b8ee2  ci-vms37/portdisk.img' | sha256sum --check
 
       - name: Run M67 kernel 42 checks plus 76 stress commands and live login/DCL
@@ -45,5 +45,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: vms37-m67-qemu-serial
-          path: ci-vms37/qemu-m67-serial.log
+          path: |
+            ci-vms37/qemu-m67-serial.log
+            ci-vms37/vms37-m67-login.ppm
           if-no-files-found: warn
