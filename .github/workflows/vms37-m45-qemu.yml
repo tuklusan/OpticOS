@@ -1,0 +1,61 @@
+name: VMS37 M45 QEMU guest boot
+on:
+  push:
+    branches:
+      - vms37-x86-qemu-m45-ci
+  workflow_dispatch:
+
+# One executing workflow instance across all branches/attempts.
+# GitHub queues later pushes rather than running two emulators at once.
+concurrency:
+  group: vms37-native-x86-m45-qemu-singleton
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  boot:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout isolated test branch
+        uses: actions/checkout@v4
+
+      - name: Install QEMU TCG
+        shell: bash
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq qemu-system-x86
+
+      - name: Reconstruct and verify exact M45 image, generate IDE test disk
+        shell: bash
+        run: |
+          set -euo pipefail
+          xz --decompress --stdout ci-vms37/vms37lab-m45.ima.xz > ci-vms37/vms37lab-m45.ima
+          echo '951f98330dfd4e3f19c0001f2781da6765ad0f809b2b1994aa2cbdaa8a6e9a53  ci-vms37/vms37lab-m45.ima' | sha256sum --check
+          python3 - <<'PY'
+          from pathlib import Path
+          out = Path('ci-vms37/portdisk.img')
+          data = bytearray(8*16*63*512)
+          for lba in (1, 2):
+              sector = bytearray(512)
+              sector[:16] = f'VMS37LAB-LBA{lba:04d}'.encode('ascii')
+              sector[16:] = bytes(((i*7)+(lba*11)) & 255 for i in range(16, 512))
+              data[lba*512:(lba+1)*512] = sector
+          out.write_bytes(data)
+          print(f'IDE diagnostic: {len(data)} bytes')
+          PY
+          echo 'd87446f7a0e3c5f0af5e2e93a105399d0fbbe39f141e33456f85e4c5cbf96e47  ci-vms37/portdisk.img' | sha256sum --check
+
+      - name: Run actual 32-bit x86 QEMU boot and seven serial guest tests
+        shell: bash
+        run: python3 ci-vms37/qemu_m45_smoke.py
+
+      - name: Preserve QEMU serial transcript
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: vms37-m45-qemu-serial
+          path: ci-vms37/qemu-m45-serial.log
+          if-no-files-found: warn
