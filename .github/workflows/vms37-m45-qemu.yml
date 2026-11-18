@@ -32,9 +32,9 @@ jobs:
         run: |
           set -euo pipefail
           xz --decompress --stdout ci-vms37/vms37lab-m74.ima.xz > ci-vms37/vms37lab-m74.ima
-          echo 'a10dbfe5e71e193c3416a154de618d81be4710aae2c18776991ea1215e60ed03  ci-vms37/vms37lab-m74.ima' | sha256sum --check
+          echo 'dd0c523c139987f0536ab1a757feedd3572e2d1fec39edd58296dd32270a5847  ci-vms37/vms37lab-m74.ima' | sha256sum --check
           xz --decompress --stdout ci-vms37/portdisk-m74.img.xz > ci-vms37/portdisk.img
-          echo '26a9a3a93a8d6e9e106251c8a73f7d2bd3d51460bc9f851d7c5794e21a91182c  ci-vms37/portdisk.img' | sha256sum --check
+          echo 'ee019370f367b87f62bc1d88b834befe7e23f26518eb7b2910d33be7fd9b8400  ci-vms37/portdisk.img' | sha256sum --check
 
       - name: Boot with original Files-11 SYSEXE directory, then require SYS.EXE
         shell: bash
