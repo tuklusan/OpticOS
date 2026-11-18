@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the exact M46 floppy on a real QEMU system emulator, via COM1."""
+"""Run the verified M46 image through expanded M47 real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -20,6 +20,17 @@ CHECKS = (
     ("SHOW RAM", b"3MiB RAM window alias probe PASS."),
     ("TEST RING3", b"PASS: CPL3 entry, syscall, kernel stack, EXIT."),
     ("TEST DISK", b"PASS: native ATA PIO LBA1/LBA2, signature and checksum."),
+    ("TEST USERFAULT", b"PASS: CPL3 write denied, #PF handled, EXIT."),
+    ("TEST USERAST", b"PASS: queued AST delivered in ring3 via syscall."),
+    ("TEST SCHED", b"PASS: two CPL3 contexts, cooperative switches and exit."),
+    ("TEST PREEMPT", b"PASS: PIT preemption, two address spaces, AST IRET trampoline."),
+    ("TEST PCB", b"PASS: PCB isolation, private allocated frames, reclaim."),
+    ("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
+    ("TEST KSTACK", b"PASS: per-PCB TSS.esp0, ring3 traps, guarded kernel stacks."),
+    ("TEST EVENT", b"PASS: event AND block/wakeup, OR immediate, 2 CPL3 tasks."),
+    ("TEST QIO", b"PASS: QIO 512-byte read, event flag and completion AST."),
+    ("TEST USRDESC", b"PASS: CPL3 copy-in QIO descriptor and IDE completion."),
+    ("TEST USRTEAR", b"PASS: process exit reclaimed owned QIO and channel."),
 )
 
 def run():
@@ -33,7 +44,7 @@ def run():
     proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, bufsize=0)
     log = bytearray()
-    deadline = time.monotonic() + 120.0
+    deadline = time.monotonic() + 240.0
     def wait_for(needle, seconds, offset=0):
         until = min(time.monotonic() + seconds, deadline)
         while time.monotonic() < until:
@@ -58,7 +69,7 @@ def run():
                 proc.stdin.write(bytes((char,)))
                 proc.stdin.flush()
                 time.sleep(0.02)
-            if not wait_for(expected, 12.0, offset):
+            if not wait_for(expected, 20.0, offset):
                 if command == "TEST DISK" and proc.poll() is None:
                     for char in b"SHOW DISK\r":
                         proc.stdin.write(bytes((char,)))
@@ -67,10 +78,10 @@ def run():
                     wait_for(b"ATA PIO reads", 5.0, len(log)-1)
                     wait_for(b"PORTLAB> ", 5.0, len(log)-1)
                 raise RuntimeError(f"{command} did not yield {expected!r} (QEMU exit {proc.poll()})")
-            if not wait_for(b"PORTLAB> ", 12.0, offset):
+            if not wait_for(b"PORTLAB> ", 15.0, offset):
                 raise RuntimeError(f"{command} did not return to prompt")
             print(f"PASS: {command}", flush=True)
-        print("PASS: actual M46 QEMU boot + seven guest commands", flush=True)
+        print(f"PASS: actual QEMU boot + {len(CHECKS)} guest commands", flush=True)
         return 0
     except (RuntimeError, BrokenPipeError) as exc:
         print("FAIL:", exc, file=sys.stderr, flush=True)
