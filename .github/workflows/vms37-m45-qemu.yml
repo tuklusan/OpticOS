@@ -2,7 +2,7 @@ name: VMS37 M46 QEMU guest boot
 on:
   push:
     branches:
-      - vms37-x86-qemu-m46-ci
+      - vms37-x86-qemu-m45-ci
   workflow_dispatch:
 
 # One executing workflow instance across all branches/attempts.
