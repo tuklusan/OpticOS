@@ -1,4 +1,4 @@
-name: VMS37 M66 QEMU repeated guest stress
+name: VMS37 M67 QEMU repeated guest stress
 on:
   push:
     branches:
@@ -27,16 +27,16 @@ jobs:
         run: |
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
-      - name: Reconstruct and verify exact M66 image, generate IDE test disk
+      - name: Reconstruct and verify exact M67 image, generate IDE test disk
         shell: bash
         run: |
           set -euo pipefail
-          xz --decompress --stdout ci-vms37/vms37lab-m66.ima.xz > ci-vms37/vms37lab-m66.ima
-          echo 'd05915d14674d647e3fbd979cb7fd36789664cc2f4fd8088c0a9789af30c5766  ci-vms37/vms37lab-m66.ima' | sha256sum --check
-          xz --decompress --stdout ci-vms37/portdisk-m66.img.xz > ci-vms37/portdisk.img
+          xz --decompress --stdout ci-vms37/vms37lab-m67.ima.xz > ci-vms37/vms37lab-m67.ima
+          echo '95c302e50c7132a622e31173ccb4177b25c9608004e5b9592e0bc3b469a388d8  ci-vms37/vms37lab-m67.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/portdisk-m67.img.xz > ci-vms37/portdisk.img
           echo 'b1e4f739b92c2db35605399ac3389ab1ce622a16360b3007158615470f0b8ee2  ci-vms37/portdisk.img' | sha256sum --check
 
-      - name: Run M66 kernel 41 checks plus 76 stress commands and live login/DCL
+      - name: Run M67 kernel 42 checks plus 76 stress commands and live login/DCL
         shell: bash
         run: python3 ci-vms37/qemu_m45_smoke.py
 
@@ -44,6 +44,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m66-qemu-serial
-          path: ci-vms37/qemu-m66-serial.log
+          name: vms37-m67-qemu-serial
+          path: ci-vms37/qemu-m67-serial.log
           if-no-files-found: warn
