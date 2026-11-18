@@ -1,4 +1,4 @@
-name: VMS37 M48 QEMU guest boot
+name: VMS37 M49 QEMU repeated guest stress
 on:
   push:
     branches:
@@ -47,7 +47,7 @@ jobs:
           PY
           echo 'd87446f7a0e3c5f0af5e2e93a105399d0fbbe39f141e33456f85e4c5cbf96e47  ci-vms37/portdisk.img' | sha256sum --check
 
-      - name: Run actual 32-bit x86 QEMU boot and 20 serial guest tests
+      - name: Run M48 kernel 20 checks plus 44 repeated stress commands
         shell: bash
         run: python3 ci-vms37/qemu_m45_smoke.py
 
@@ -55,6 +55,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m48-qemu-serial
-          path: ci-vms37/qemu-m48-serial.log
+          name: vms37-m49-qemu-serial
+          path: ci-vms37/qemu-m49-serial.log
           if-no-files-found: warn

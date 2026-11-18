@@ -9,7 +9,7 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m48-serial.log"
+OUT = ROOT / "qemu-m49-serial.log"
 FLOPPY = ROOT / "vms37lab-m48.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
@@ -33,6 +33,18 @@ CHECKS = (
     ("TEST QIO", b"PASS: QIO 512-byte read, event flag and completion AST."),
     ("TEST USRDESC", b"PASS: CPL3 copy-in QIO descriptor and IDE completion."),
     ("TEST USRTEAR", b"PASS: process exit reclaimed owned QIO and channel."),
+)
+
+# M49 stress the already-verified M48 kernel image without weakening any checks.
+# Each demand test must reclaim all 512 physical frames before the next cycle.
+STRESS_CHECKS = (
+    ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
+      ("SHOW MEMORY", b"Physical 4K frames free=0x00000200")) * 12)
+    + (("TEST PREEMPT", b"PASS: PIT preemption, two address spaces, AST IRET trampoline."),) * 4
+    + (("TEST QIO", b"PASS: QIO 512-byte read, event flag and completion AST."),) * 4
+    + (("TEST USRTEAR", b"PASS: process exit reclaimed owned QIO and channel."),) * 4
+    + (("TEST EVENT", b"PASS: event AND block/wakeup, OR immediate, 2 CPL3 tasks."),) * 4
+    + (("TEST SCHED", b"PASS: two CPL3 contexts, cooperative switches and exit."),) * 4
 )
 
 def run():
@@ -66,7 +78,7 @@ def run():
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
         print("PASS: M48 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
-        for command, expected in CHECKS:
+        for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
             for char in (command + "\r").encode("ascii"):
                 proc.stdin.write(bytes((char,)))
@@ -82,7 +94,7 @@ def run():
                 print(f"PASS: {command}", flush=True)
         if failures:
             raise RuntimeError(f"{len(failures)} failed guest checks: {', '.join(failures)}")
-        print(f"PASS: actual QEMU boot + {len(CHECKS)} guest commands", flush=True)
+        print(f"PASS: actual QEMU boot + {len(CHECKS)} baseline and {len(STRESS_CHECKS)} stress guest commands", flush=True)
         return 0
     except (RuntimeError, BrokenPipeError) as exc:
         print("FAIL:", exc, file=sys.stderr, flush=True)
