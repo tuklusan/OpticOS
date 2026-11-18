@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the repaired M62 image through expanded 20-command real-guest QEMU checks."""
+"""Run the repaired M63 image through expanded 20-command real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -9,8 +9,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m62-serial.log"
-FLOPPY = ROOT / "vms37lab-m62.ima"
+OUT = ROOT / "qemu-m63-serial.log"
+FLOPPY = ROOT / "vms37lab-m63.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
@@ -49,9 +49,11 @@ CHECKS = (
     ("TEST DCLSTATUS", b"PASS: DCL STATUS severity, symbols, ON ERROR, EXIT guard, YLEVEL."),
     ("TEST DCLIF", b"PASS: DCL IF expression, THEN branch, NOSTAT, invalid syntax."),
     ("TEST DCLINQUIRE", b"PASS: DCL INQUIRE prompt, options, symbol value, AST gating."),
+    ("TEST DCLON", b"PASS: DCL ON level, handler, CONTROL Y, status restart."),
+    ("TEST DCLIMAGES", b"PASS: 43 original DCL internal image numbers."),
 )
 
-# M62 stress the already-verified M62 kernel image without weakening any checks.
+# M63 stress the already-verified M63 kernel image without weakening any checks.
 # Each demand test must reclaim all 512 physical frames before the next cycle.
 STRESS_CHECKS = (
     ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
@@ -96,7 +98,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M62 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M63 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
         for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
@@ -173,6 +175,11 @@ def run():
         expect(b'DEST = "Mars"', start)
         expect(b"$ ", start)
         print("PASS: live DCL INQUIRE stored and read back global string", flush=True)
+        start = len(log)
+        transmit("ON ERROR THEN EXIT")
+        expect(b"%DCL-E-ONLEVL", start)
+        expect(b"$ ", start)
+        print("PASS: direct DCL ON correctly rejects level-zero handler setup", flush=True)
         start = len(log)
         transmit("SET HOST 0")
         expect(b"DECnet remote terminal service not implemented", start)
