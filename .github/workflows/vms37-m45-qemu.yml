@@ -49,7 +49,7 @@ jobs:
 
       - name: Run actual 32-bit x86 QEMU boot and seven serial guest tests
         shell: bash
-        run: python3 ci-vms37/qemu_m46_smoke.py
+        run: python3 ci-vms37/qemu_m45_smoke.py
 
       - name: Preserve QEMU serial transcript
         if: always()
