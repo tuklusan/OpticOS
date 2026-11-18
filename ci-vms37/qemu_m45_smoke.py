@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the repaired M67 image through expanded 20-command real-guest QEMU checks."""
+"""Run the repaired M68 image through expanded 20-command real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -10,11 +10,11 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m67-serial.log"
-FLOPPY = ROOT / "vms37lab-m67.ima"
+OUT = ROOT / "qemu-m68-serial.log"
+FLOPPY = ROOT / "vms37lab-m68.ima"
 DISK = ROOT / "portdisk.img"
-MONITOR = ROOT / "qemu-m67-hmp.sock"
-LOGIN_IMAGE = ROOT / "vms37-m67-login.ppm"
+MONITOR = ROOT / "qemu-m68-hmp.sock"
+LOGIN_IMAGE = ROOT / "vms37-m68-login.ppm"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
     ("SHOW CPU", b"CPUID vendor"),
@@ -58,9 +58,10 @@ CHECKS = (
     ("TEST DCLGOTO", b"PASS: DCL GOTO forward label, RFA seek, status and cleanup."),
     ("TEST DCLREAD", b"PASS: DCL READREC IDE command records, skipping, symbols, indirect levels."),
     ("TEST DCLINITIAL", b"PASS: DCL INITIAL live AST, default symbols, RMS blocks and indirect frames."),
+    ("TEST DCLCOMMAND", b"PASS: DCL COMMAND real guest parse, symbols, dispatch, errors and indirect open."),
 )
 
-# M67 stress the already-verified M67 kernel image without weakening any checks.
+# M68 stress the already-verified M68 kernel image without weakening any checks.
 # Each demand test must reclaim all 512 physical frames before the next cycle.
 STRESS_CHECKS = (
     ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
@@ -117,7 +118,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M67 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M68 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
         for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
@@ -201,12 +202,31 @@ def run():
         expect(b"$ ", start)
         print("PASS: live DCL INQUIRE stored and read back global string", flush=True)
         start = len(log)
+        transmit('BETA := "Sky"')
+        expect(b"$ ", start)
+        start = len(log)
+        transmit("SHOW SYMBOL BETA")
+        expect(b'BETA = "Sky"', start)
+        expect(b"$ ", start)
+        start = len(log)
+        transmit("SHO :== SHOW SYMBOL")
+        expect(b"$ ", start)
+        start = len(log)
+        transmit("SHO BETA")
+        expect(b'BETA = "Sky"', start)
+        expect(b"$ ", start)
+        print("PASS: DCL COMMAND live string assignment, lookup and verb alias", flush=True)
+        start = len(log)
         transmit("@LAB.COM")
         expect(b'DEST = "Mars"', start)
         next_record = log.find(b'DEST = "Mars"', start) + len(b'DEST = "Mars"')
         expect(b'DEST = "Mars"', next_record)
-        expect(b"$ ", next_record)
-        print("PASS: DCL @LAB.COM read two genuine IDE procedure records, returned to parent level", flush=True)
+        third_record = log.find(b'DEST = "Mars"', next_record) + len(b'DEST = "Mars"')
+        expect(b'DEST = "Mars"', third_record)
+        expect(b"$ ", third_record)
+        if b"%DCL-W-UNDSYM" in log[start:]:
+            raise RuntimeError("forward GOTO ran the skipped SHOW command")
+        print("PASS: DCL @LAB.COM read three IDE records with forward GOTO skipping the bad line", flush=True)
         start = len(log)
         transmit("ON ERROR THEN EXIT")
         expect(b"%DCL-E-ONLEVL", start)
