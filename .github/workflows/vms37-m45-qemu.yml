@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           xz --decompress --stdout ci-vms37/vms37lab-m52.ima.xz > ci-vms37/vms37lab-m52.ima
-          echo '24c81d1a5c057bd7dcc5d7da844cd711f9f262527e4996fdeb95f3383b262c28  ci-vms37/vms37lab-m52.ima' | sha256sum --check
+          echo '0a2f094e4f1e3fb9c73138147c9292b8f8e182eebaa2f8b07db68c686dc29a3e  ci-vms37/vms37lab-m52.ima' | sha256sum --check
           python3 - <<'PY'
           from pathlib import Path
           out = Path('ci-vms37/portdisk.img')
