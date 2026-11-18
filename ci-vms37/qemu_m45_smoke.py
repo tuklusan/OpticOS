@@ -108,8 +108,8 @@ def run():
                         proc.stdin.flush()
                         time.sleep(0.02)
             if command == "TEST INTERACT":
-                for prompt, answer in ((b"Username: ", b"labuser\\r"),
-                                       (b"Password: ", b"password\\r")):
+                for prompt, answer in ((b"Username: ", b"labuser\r"),
+                                       (b"Password: ", b"password\r")):
                     if not wait_for(prompt, 15.0, offset):
                         raise RuntimeError(f"{command}: missing {prompt!r}")
                     for char in answer:
