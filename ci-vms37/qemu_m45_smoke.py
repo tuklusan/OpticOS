@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the repaired M61 image through expanded 20-command real-guest QEMU checks."""
+"""Run the repaired M62 image through expanded 20-command real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -9,8 +9,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m61-serial.log"
-FLOPPY = ROOT / "vms37lab-m61.ima"
+OUT = ROOT / "qemu-m62-serial.log"
+FLOPPY = ROOT / "vms37lab-m62.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
@@ -48,9 +48,10 @@ CHECKS = (
     ("TEST DCLWAIT", b"PASS: DCL WAIT PIT timer, event 31, elapsed guest ticks."),
     ("TEST DCLSTATUS", b"PASS: DCL STATUS severity, symbols, ON ERROR, EXIT guard, YLEVEL."),
     ("TEST DCLIF", b"PASS: DCL IF expression, THEN branch, NOSTAT, invalid syntax."),
+    ("TEST DCLINQUIRE", b"PASS: DCL INQUIRE prompt, options, symbol value, AST gating."),
 )
 
-# M61 stress the already-verified M61 kernel image without weakening any checks.
+# M62 stress the already-verified M62 kernel image without weakening any checks.
 # Each demand test must reclaim all 512 physical frames before the next cycle.
 STRESS_CHECKS = (
     ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
@@ -95,7 +96,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M61 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M62 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
         for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
@@ -140,7 +141,48 @@ def run():
                 print(f"PASS: {command}", flush=True)
         if failures:
             raise RuntimeError(f"{len(failures)} failed guest checks: {', '.join(failures)}")
-        print(f"PASS: actual QEMU boot + {len(CHECKS)} baseline and {len(STRESS_CHECKS)} stress guest commands", flush=True)
+        # Real LOGINOUT authentication followed by live DCL command input/output.
+        def transmit(line):
+            for ch in (line + "\\r").encode("ascii"):
+                proc.stdin.write(bytes((ch,)))
+                proc.stdin.flush()
+                time.sleep(0.02)
+        def expect(text, after, timeout=20.0):
+            if not wait_for(text, timeout, after):
+                raise RuntimeError("live LOGIN/DCL missing %r; tail %r" %
+                                   (text, log[after:].decode("ascii", "replace")[-500:]))
+        start = len(log)
+        transmit("LOGIN")
+        expect(b"Username: ", start)
+        start = len(log)
+        transmit("SYSTEM")
+        expect(b"Password: ", start)
+        start = len(log)
+        transmit("MANAGER")
+        expect(b"DCL source commands active:", start)
+        expect(b"$ ", start)
+        print("PASS: real SYSTEM/MANAGER login reached DCL command prompt", flush=True)
+        start = len(log)
+        transmit('INQUIRE/GLOBAL DEST "Which place"')
+        expect(b"Which place: ", start)
+        start = len(log)
+        transmit("Mars")
+        expect(b"$ ", start)
+        start = len(log)
+        transmit("SHOW SYMBOL DEST")
+        expect(b'DEST = "Mars"', start)
+        expect(b"$ ", start)
+        print("PASS: live DCL INQUIRE stored and read back global string", flush=True)
+        start = len(log)
+        transmit("SET HOST 0")
+        expect(b"DECnet remote terminal service not implemented", start)
+        expect(b"$ ", start)
+        start = len(log)
+        transmit("LOGOUT")
+        expect(b"Process logged out", start)
+        expect(b"PORTLAB> ", start)
+        print("PASS: live DCL LOGOUT returned to parent monitor", flush=True)
+        print(f"PASS: actual QEMU boot + {len(CHECKS)} baseline and {len(STRESS_CHECKS)} stress guest commands plus authenticated DCL session", flush=True)
         return 0
     except (RuntimeError, BrokenPipeError) as exc:
         print("FAIL:", exc, file=sys.stderr, flush=True)
