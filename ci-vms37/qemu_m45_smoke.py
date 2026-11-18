@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the repaired M60 image through expanded 20-command real-guest QEMU checks."""
+"""Run the repaired M61 image through expanded 20-command real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -9,8 +9,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m60-serial.log"
-FLOPPY = ROOT / "vms37lab-m60.ima"
+OUT = ROOT / "qemu-m61-serial.log"
+FLOPPY = ROOT / "vms37lab-m61.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
@@ -47,9 +47,10 @@ CHECKS = (
     ("TEST DCLEXIT", b"PASS: DCL EXIT expression, indirect unstack, rundown, batch logout."),
     ("TEST DCLWAIT", b"PASS: DCL WAIT PIT timer, event 31, elapsed guest ticks."),
     ("TEST DCLSTATUS", b"PASS: DCL STATUS severity, symbols, ON ERROR, EXIT guard, YLEVEL."),
+    ("TEST DCLIF", b"PASS: DCL IF expression, THEN branch, NOSTAT, invalid syntax."),
 )
 
-# M60 stress the already-verified M60 kernel image without weakening any checks.
+# M61 stress the already-verified M61 kernel image without weakening any checks.
 # Each demand test must reclaim all 512 physical frames before the next cycle.
 STRESS_CHECKS = (
     ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
@@ -94,7 +95,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M60 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M61 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
         for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
