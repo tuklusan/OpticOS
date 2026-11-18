@@ -43,6 +43,7 @@ CHECKS = (
     ("TEST FILEIO", b"PASS: FILEIO real COM1 records, UAF password, process names and close."),
     ("TEST LOGINCMD", b"PASS: LOGINCMD username, DISK, CLI, COMMAND defaults and errors."),
     ("TEST INTERACT", b"PASS: INTERACT real COM1 LOGINOUT prompts, UAF password and welcome."),
+    ("TEST SYSTEMLOGIN", b"PASS: SYSTEM authenticated via original VMS UAF record and MANAGER CRC."),
 )
 
 # M58 stress the already-verified M58 kernel image without weakening any checks.
@@ -110,6 +111,15 @@ def run():
             if command == "TEST INTERACT":
                 for prompt, answer in ((b"Username: ", b"labuser\r"),
                                        (b"Password: ", b"password\r")):
+                    if not wait_for(prompt, 15.0, offset):
+                        raise RuntimeError(f"{command}: missing {prompt!r}")
+                    for char in answer:
+                        proc.stdin.write(bytes((char,)))
+                        proc.stdin.flush()
+                        time.sleep(0.02)
+            if command == "TEST SYSTEMLOGIN":
+                for prompt, answer in ((b"Username: ", b"SYSTEM\r"),
+                                       (b"Password: ", b"MANAGER\r")):
                     if not wait_for(prompt, 15.0, offset):
                         raise RuntimeError(f"{command}: missing {prompt!r}")
                     for char in answer:

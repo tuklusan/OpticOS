@@ -32,11 +32,11 @@ jobs:
         run: |
           set -euo pipefail
           xz --decompress --stdout ci-vms37/vms37lab-m58.ima.xz > ci-vms37/vms37lab-m58.ima
-          echo 'b9797750b6787595324ce780d8268d62682683786576c96384c80d60321bcfe0  ci-vms37/vms37lab-m58.ima' | sha256sum --check
-          xz --decompress --stdout ci-vms37/portdisk-m54.img.xz > ci-vms37/portdisk.img
-          echo 'ae86b6b2f3659ae27597233c944c4c0881484d5e38336c54c07656bf4fabe6f6  ci-vms37/portdisk.img' | sha256sum --check
+          echo 'efee881f832847aeca677b1b48909b18282c760e1d5a6288f56913c80cd6e9ee  ci-vms37/vms37lab-m58.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/portdisk-m58-v37uaf.img.xz > ci-vms37/portdisk.img
+          echo 'c70b6b93d3658ddf80886ff9f30383cfbffc6393a2e65668a16f3f55636f1e78  ci-vms37/portdisk.img' | sha256sum --check
 
-      - name: Run M58 kernel 30 checks plus 76 stress commands
+      - name: Run M58 kernel 31 checks plus 76 stress commands
         shell: bash
         run: python3 ci-vms37/qemu_m45_smoke.py
 
