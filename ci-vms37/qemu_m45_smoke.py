@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the repaired M55 image through expanded 20-command real-guest QEMU checks."""
+"""Run the repaired M56 image through expanded 20-command real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -9,8 +9,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m55-serial.log"
-FLOPPY = ROOT / "vms37lab-m55.ima"
+OUT = ROOT / "qemu-m56-serial.log"
+FLOPPY = ROOT / "vms37lab-m56.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
@@ -40,9 +40,10 @@ CHECKS = (
     ("TEST HPWD", b"PASS: HPWD CRC and Purdy login hashes, salt, username, match."),
     ("TEST VALIDATE", b"PASS: VALIDATE indexed UAF disk, search, passwords, DEFAULT, privileges."),
     ("TEST LOGINTIME", b"PASS: LIBDAYWK/LIBHOUR VMS epoch and live PC RTC."),
+    ("TEST FILEIO", b"PASS: FILEIO real COM1 records, UAF password, process names and close."),
 )
 
-# M55 stress the already-verified M55 kernel image without weakening any checks.
+# M56 stress the already-verified M56 kernel image without weakening any checks.
 # Each demand test must reclaim all 512 physical frames before the next cycle.
 STRESS_CHECKS = (
     ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
@@ -87,7 +88,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M55 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M56 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
         for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
@@ -95,6 +96,15 @@ def run():
                 proc.stdin.write(bytes((char,)))
                 proc.stdin.flush()
                 time.sleep(0.02)
+            if command == "TEST FILEIO":
+                for prompt, answer in ((b"FILEIO INPUT> ", b"labuser\r"),
+                                       (b"FILEIO PASSWORD> ", b"password\r")):
+                    if not wait_for(prompt, 15.0, offset):
+                        raise RuntimeError(f"{command}: missing {prompt!r}")
+                    for char in answer:
+                        proc.stdin.write(bytes((char,)))
+                        proc.stdin.flush()
+                        time.sleep(0.02)
             if not wait_for(b"PORTLAB> ", 20.0, offset):
                 raise RuntimeError(f"{command} never returned to guest prompt (QEMU exit {proc.poll()})")
             if expected not in log[offset:]:
