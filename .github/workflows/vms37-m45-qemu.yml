@@ -1,4 +1,4 @@
-name: VMS37 M46 QEMU guest boot
+name: VMS37 M48 QEMU guest boot
 on:
   push:
     branches:
@@ -27,12 +27,12 @@ jobs:
         run: |
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
-      - name: Reconstruct and verify exact M46 image, generate IDE test disk
+      - name: Reconstruct and verify exact M48 image, generate IDE test disk
         shell: bash
         run: |
           set -euo pipefail
-          xz --decompress --stdout ci-vms37/vms37lab-m46.ima.xz > ci-vms37/vms37lab-m46.ima
-          echo 'f58bca2935ffff45c1d725f5b1fce82ed83de560ecac0cf672d3afeb16e96c3a  ci-vms37/vms37lab-m46.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/vms37lab-m48.ima.xz > ci-vms37/vms37lab-m48.ima
+          echo '1ea928a65444d5274957eced582cb97f5b917be51c5f26781eed2679cbf842d6  ci-vms37/vms37lab-m48.ima' | sha256sum --check
           python3 - <<'PY'
           from pathlib import Path
           out = Path('ci-vms37/portdisk.img')
@@ -47,7 +47,7 @@ jobs:
           PY
           echo 'd87446f7a0e3c5f0af5e2e93a105399d0fbbe39f141e33456f85e4c5cbf96e47  ci-vms37/portdisk.img' | sha256sum --check
 
-      - name: Run actual 32-bit x86 QEMU boot and seven serial guest tests
+      - name: Run actual 32-bit x86 QEMU boot and 20 serial guest tests
         shell: bash
         run: python3 ci-vms37/qemu_m45_smoke.py
 
@@ -55,6 +55,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m46-qemu-serial
-          path: ci-vms37/qemu-m46-serial.log
+          name: vms37-m48-qemu-serial
+          path: ci-vms37/qemu-m48-serial.log
           if-no-files-found: warn
