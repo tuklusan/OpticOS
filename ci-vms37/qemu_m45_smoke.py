@@ -26,6 +26,8 @@ CHECKS = (
     ("TEST PREEMPT", b"PASS: PIT preemption, two address spaces, AST IRET trampoline."),
     ("TEST PCB", b"PASS: PCB isolation, private allocated frames, reclaim."),
     ("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
+    ("SHOW VM", b"Demand faults="),
+    ("SHOW MEMORY", b"Physical 4K frames free="),
     ("TEST KSTACK", b"PASS: per-PCB TSS.esp0, ring3 traps, guarded kernel stacks."),
     ("TEST EVENT", b"PASS: event AND block/wakeup, OR immediate, 2 CPL3 tasks."),
     ("TEST QIO", b"PASS: QIO 512-byte read, event flag and completion AST."),
@@ -63,24 +65,23 @@ def run():
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
         print("PASS: M46 protected-mode kernel booted to serial prompt", flush=True)
+        failures = []
         for command, expected in CHECKS:
             offset = len(log)
             for char in (command + "\r").encode("ascii"):
                 proc.stdin.write(bytes((char,)))
                 proc.stdin.flush()
                 time.sleep(0.02)
-            if not wait_for(expected, 20.0, offset):
-                if command == "TEST DISK" and proc.poll() is None:
-                    for char in b"SHOW DISK\r":
-                        proc.stdin.write(bytes((char,)))
-                        proc.stdin.flush()
-                        time.sleep(0.02)
-                    wait_for(b"ATA PIO reads", 5.0, len(log)-1)
-                    wait_for(b"PORTLAB> ", 5.0, len(log)-1)
-                raise RuntimeError(f"{command} did not yield {expected!r} (QEMU exit {proc.poll()})")
-            if not wait_for(b"PORTLAB> ", 15.0, offset):
-                raise RuntimeError(f"{command} did not return to prompt")
-            print(f"PASS: {command}", flush=True)
+            if not wait_for(b"PORTLAB> ", 20.0, offset):
+                raise RuntimeError(f"{command} never returned to guest prompt (QEMU exit {proc.poll()})")
+            if expected not in log[offset:]:
+                failures.append(command)
+                print(f"FAIL: {command}: wanted {expected!r}", flush=True)
+                print("Guest output:", log[offset:].decode("ascii", "replace")[-1200:], flush=True)
+            else:
+                print(f"PASS: {command}", flush=True)
+        if failures:
+            raise RuntimeError(f"{len(failures)} failed guest checks: {', '.join(failures)}")
         print(f"PASS: actual QEMU boot + {len(CHECKS)} guest commands", flush=True)
         return 0
     except (RuntimeError, BrokenPipeError) as exc:
