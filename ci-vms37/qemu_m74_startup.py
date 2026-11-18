@@ -30,11 +30,11 @@ with disk.open("rb") as f:
     mfd=f.read(512)
     f.seek(30 * 512)
     sysexe_data=f.read(512)
-if (index_bitmap[:2] != b"\\xff\\x03" or
-    sysexe_header[8:12] != b"\\x0a\\x00\\x0a\\x00" or
+if (index_bitmap[:2] != b"\xff\x03" or
+    sysexe_header[8:12] != b"\x0a\x00\x0a\x00" or
     sysexe_header[76:88] != b"SYSEXE.DIR;1" or
     b"SYSEXE.DIR" not in mfd or
-    sysexe_data[:2] != b"\\xff\\xff"):
+    sysexe_data[:2] != b"\xff\xff"):
     raise RuntimeError("SYSBOOT disk lacks the real Files-11 SYSEXE directory")
 print("PASS: Files-11 index, MFD, and SYSEXE directory are present",flush=True)
 data=bytearray()
