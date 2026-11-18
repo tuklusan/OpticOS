@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the repaired M57 image through expanded 20-command real-guest QEMU checks."""
+"""Run the repaired M58 image through expanded 20-command real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -9,8 +9,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m57-serial.log"
-FLOPPY = ROOT / "vms37lab-m57.ima"
+OUT = ROOT / "qemu-m58-serial.log"
+FLOPPY = ROOT / "vms37lab-m58.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
@@ -42,9 +42,10 @@ CHECKS = (
     ("TEST LOGINTIME", b"PASS: LIBDAYWK/LIBHOUR VMS epoch and live PC RTC."),
     ("TEST FILEIO", b"PASS: FILEIO real COM1 records, UAF password, process names and close."),
     ("TEST LOGINCMD", b"PASS: LOGINCMD username, DISK, CLI, COMMAND defaults and errors."),
+    ("TEST INTERACT", b"PASS: INTERACT real COM1 LOGINOUT prompts, UAF password and welcome."),
 )
 
-# M57 stress the already-verified M57 kernel image without weakening any checks.
+# M58 stress the already-verified M58 kernel image without weakening any checks.
 # Each demand test must reclaim all 512 physical frames before the next cycle.
 STRESS_CHECKS = (
     ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
@@ -89,7 +90,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M57 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M58 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
         for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
@@ -100,6 +101,15 @@ def run():
             if command == "TEST FILEIO":
                 for prompt, answer in ((b"FILEIO INPUT> ", b"labuser\r"),
                                        (b"FILEIO PASSWORD> ", b"password\r")):
+                    if not wait_for(prompt, 15.0, offset):
+                        raise RuntimeError(f"{command}: missing {prompt!r}")
+                    for char in answer:
+                        proc.stdin.write(bytes((char,)))
+                        proc.stdin.flush()
+                        time.sleep(0.02)
+            if command == "TEST INTERACT":
+                for prompt, answer in ((b"Username: ", b"labuser\\r"),
+                                       (b"Password: ", b"password\\r")):
                     if not wait_for(prompt, 15.0, offset):
                         raise RuntimeError(f"{command}: missing {prompt!r}")
                     for char in answer:
