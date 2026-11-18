@@ -143,7 +143,7 @@ def run():
             raise RuntimeError(f"{len(failures)} failed guest checks: {', '.join(failures)}")
         # Real LOGINOUT authentication followed by live DCL command input/output.
         def transmit(line):
-            for ch in (line + "\\r").encode("ascii"):
+            for ch in (line + chr(13)).encode("ascii"):
                 proc.stdin.write(bytes((ch,)))
                 proc.stdin.flush()
                 time.sleep(0.02)
