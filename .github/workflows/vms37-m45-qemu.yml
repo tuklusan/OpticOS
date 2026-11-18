@@ -1,4 +1,4 @@
-name: VMS37 M54 QEMU repeated guest stress
+name: VMS37 M55 QEMU repeated guest stress
 on:
   push:
     branches:
@@ -27,16 +27,16 @@ jobs:
         run: |
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
-      - name: Reconstruct and verify exact M54 image, generate IDE test disk
+      - name: Reconstruct and verify exact M55 image, generate IDE test disk
         shell: bash
         run: |
           set -euo pipefail
-          xz --decompress --stdout ci-vms37/vms37lab-m54.ima.xz > ci-vms37/vms37lab-m54.ima
-          echo 'dcbd01101be3d9a8f6b3c9a73069692f6b53c5e7390e07527f84d1c3376ba17a  ci-vms37/vms37lab-m54.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/vms37lab-m55.ima.xz > ci-vms37/vms37lab-m55.ima
+          echo 'dcfa87abc7dcd30e8af6caa99ba5160925c8da2e670a71476afc6ea164b8d5c2  ci-vms37/vms37lab-m55.ima' | sha256sum --check
           xz --decompress --stdout ci-vms37/portdisk-m54.img.xz > ci-vms37/portdisk.img
           echo 'ae86b6b2f3659ae27597233c944c4c0881484d5e38336c54c07656bf4fabe6f6  ci-vms37/portdisk.img' | sha256sum --check
 
-      - name: Run M54 kernel 26 checks plus 76 stress commands
+      - name: Run M55 kernel 27 checks plus 76 stress commands
         shell: bash
         run: python3 ci-vms37/qemu_m45_smoke.py
 
@@ -44,6 +44,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m54-qemu-serial
-          path: ci-vms37/qemu-m54-serial.log
+          name: vms37-m55-qemu-serial
+          path: ci-vms37/qemu-m55-serial.log
           if-no-files-found: warn
