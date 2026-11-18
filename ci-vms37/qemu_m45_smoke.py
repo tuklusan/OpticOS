@@ -59,6 +59,13 @@ def run():
                 proc.stdin.flush()
                 time.sleep(0.02)
             if not wait_for(expected, 12.0, offset):
+                if command == "TEST DISK" and proc.poll() is None:
+                    for char in b"SHOW DISK\r":
+                        proc.stdin.write(bytes((char,)))
+                        proc.stdin.flush()
+                        time.sleep(0.02)
+                    wait_for(b"ATA PIO reads", 5.0, len(log)-1)
+                    wait_for(b"PORTLAB> ", 5.0, len(log)-1)
                 raise RuntimeError(f"{command} did not yield {expected!r} (QEMU exit {proc.poll()})")
             if not wait_for(b"PORTLAB> ", 12.0, offset):
                 raise RuntimeError(f"{command} did not return to prompt")
@@ -67,6 +74,7 @@ def run():
         return 0
     except (RuntimeError, BrokenPipeError) as exc:
         print("FAIL:", exc, file=sys.stderr, flush=True)
+        print("Serial tail:", log[-1800:].decode("ascii", "replace"), file=sys.stderr, flush=True)
         return 1
     finally:
         try:
