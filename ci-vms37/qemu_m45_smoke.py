@@ -28,8 +28,8 @@ def run():
         raise RuntimeError("qemu-system-i386 not installed")
     args = [qemu, "-display", "none", "-monitor", "none", "-serial", "stdio",
             "-m", "128", "-boot", "a", "-no-reboot", "-accel", "tcg",
-            "-drive", f"if=floppy,format=raw,file={FLOPPY},readonly=on",
-            "-drive", f"if=ide,index=0,media=disk,format=raw,file={DISK},readonly=on"]
+            "-drive", f"if=floppy,format=raw,file={FLOPPY},snapshot=on",
+            "-drive", f"if=ide,index=0,media=disk,format=raw,file={DISK},snapshot=on"]
     proc = subprocess.Popen(args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                             stderr=subprocess.STDOUT, bufsize=0)
     log = bytearray()

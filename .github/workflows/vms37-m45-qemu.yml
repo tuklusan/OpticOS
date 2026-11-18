@@ -25,8 +25,7 @@ jobs:
       - name: Install QEMU TCG
         shell: bash
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq qemu-system-x86
+          sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
       - name: Reconstruct and verify exact M45 image, generate IDE test disk
         shell: bash
