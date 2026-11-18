@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the repaired M50 image through expanded 20-command real-guest QEMU checks."""
+"""Run the repaired M51 image through expanded 20-command real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -9,8 +9,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m50-serial.log"
-FLOPPY = ROOT / "vms37lab-m50.ima"
+OUT = ROOT / "qemu-m51-serial.log"
+FLOPPY = ROOT / "vms37lab-m51.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
@@ -34,9 +34,10 @@ CHECKS = (
     ("TEST USRDESC", b"PASS: CPL3 copy-in QIO descriptor and IDE completion."),
     ("TEST USRTEAR", b"PASS: process exit reclaimed owned QIO and channel."),
     ("TEST ASTDEL", b"PASS: ASTDEL process queue, KAST/IPAST, mode gating, swap/remove, wakeups."),
+    ("TEST POSTEF", b"PASS: POSTEF PID/cluster set, AND/OR wake, common sync, backlog."),
 )
 
-# M50 stress the already-verified M50 kernel image without weakening any checks.
+# M51 stress the already-verified M51 kernel image without weakening any checks.
 # Each demand test must reclaim all 512 physical frames before the next cycle.
 STRESS_CHECKS = (
     ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
@@ -47,6 +48,7 @@ STRESS_CHECKS = (
     + (("TEST EVENT", b"PASS: event AND block/wakeup, OR immediate, 2 CPL3 tasks."),) * 4
     + (("TEST SCHED", b"PASS: two CPL3 contexts, cooperative switches and exit."),) * 4
     + (("TEST ASTDEL", b"PASS: ASTDEL process queue, KAST/IPAST, mode gating, swap/remove, wakeups."),) * 12
+    + (("TEST POSTEF", b"PASS: POSTEF PID/cluster set, AND/OR wake, common sync, backlog."),) * 12
 )
 
 def run():
@@ -78,7 +80,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M50 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M51 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
         for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
