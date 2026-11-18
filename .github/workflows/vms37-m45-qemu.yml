@@ -1,4 +1,4 @@
-name: VMS37 M72 QEMU repeated guest stress
+name: VMS37 M73 QEMU repeated guest stress
 on:
   push:
     branches:
@@ -27,24 +27,24 @@ jobs:
         run: |
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
-      - name: Reconstruct and verify exact M72 image, generate IDE test disk
+      - name: Reconstruct and verify native M73 floppy and Files-11 IDE disk
         shell: bash
         run: |
           set -euo pipefail
-          xz --decompress --stdout ci-vms37/vms37lab-m72.ima.xz > ci-vms37/vms37lab-m72.ima
-          echo 'f33c8fb58cc18c56de073d551344938b9962e1c135c4d90449cc80b06245adca  ci-vms37/vms37lab-m72.ima' | sha256sum --check
-          xz --decompress --stdout ci-vms37/portdisk-m68.img.xz > ci-vms37/portdisk.img
-          echo '3ffffed461988f32de775e538734913b4c4b35b8afcbe218c610f4fd655db91e  ci-vms37/portdisk.img' | sha256sum --check
+          xz --decompress --stdout ci-vms37/vms37lab-m73.ima.xz > ci-vms37/vms37lab-m73.ima
+          echo 'b053bd78ec47618409978c7c4962e7c43db022fcdb0ab4b99d5b5134adf26fd5  ci-vms37/vms37lab-m73.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/portdisk-m73.img.xz > ci-vms37/portdisk.img
+          echo 'fa1ff3df48f7693b68fe88ad344f6f882c7b092aa04071b741d209e933a318ff  ci-vms37/portdisk.img' | sha256sum --check
 
-      - name: Check M72 SYSBOOT physical disk mount, reject non-Files-11 before SYS.EXE
+      - name: Boot M73 using real Files-11 ODS-2 disk and assert SYSBOOT requires SYS.EXE
         shell: bash
-        run: python3 ci-vms37/qemu_m72_startup.py
+        run: python3 ci-vms37/qemu_m73_startup.py
 
       - name: Preserve QEMU serial transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m72-qemu-serial
+          name: vms37-m73-qemu-serial
           path: |
-            ci-vms37/qemu-m72-serial.log
+            ci-vms37/qemu-m73-serial.log
           if-no-files-found: warn
