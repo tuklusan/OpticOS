@@ -1,4 +1,4 @@
-name: VMS37 M53 QEMU repeated guest stress
+name: VMS37 M54 QEMU repeated guest stress
 on:
   push:
     branches:
@@ -27,27 +27,16 @@ jobs:
         run: |
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
-      - name: Reconstruct and verify exact M53 image, generate IDE test disk
+      - name: Reconstruct and verify exact M54 image, generate IDE test disk
         shell: bash
         run: |
           set -euo pipefail
-          xz --decompress --stdout ci-vms37/vms37lab-m53.ima.xz > ci-vms37/vms37lab-m53.ima
-          echo '9bf7967390f1911358cd41c70df9c882476ece2c13612d077bce4c1a49d04fc5  ci-vms37/vms37lab-m53.ima' | sha256sum --check
-          python3 - <<'PY'
-          from pathlib import Path
-          out = Path('ci-vms37/portdisk.img')
-          data = bytearray(8*16*63*512)
-          for lba in (1, 2):
-              sector = bytearray(512)
-              sector[:16] = f'VMS37LAB-LBA{lba:04d}'.encode('ascii')
-              sector[16:] = bytes(((i*7)+(lba*11)) & 255 for i in range(16, 512))
-              data[lba*512:(lba+1)*512] = sector
-          out.write_bytes(data)
-          print(f'IDE diagnostic: {len(data)} bytes')
-          PY
-          echo 'd87446f7a0e3c5f0af5e2e93a105399d0fbbe39f141e33456f85e4c5cbf96e47  ci-vms37/portdisk.img' | sha256sum --check
+          xz --decompress --stdout ci-vms37/vms37lab-m54.ima.xz > ci-vms37/vms37lab-m54.ima
+          echo 'dcbd01101be3d9a8f6b3c9a73069692f6b53c5e7390e07527f84d1c3376ba17a  ci-vms37/vms37lab-m54.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/portdisk-m54.img.xz > ci-vms37/portdisk.img
+          echo 'ae86b6b2f3659ae27597233c944c4c0881484d5e38336c54c07656bf4fabe6f6  ci-vms37/portdisk.img' | sha256sum --check
 
-      - name: Run M53 kernel 25 checks plus 76 stress commands
+      - name: Run M54 kernel 26 checks plus 76 stress commands
         shell: bash
         run: python3 ci-vms37/qemu_m45_smoke.py
 
@@ -55,6 +44,6 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m53-qemu-serial
-          path: ci-vms37/qemu-m53-serial.log
+          name: vms37-m54-qemu-serial
+          path: ci-vms37/qemu-m54-serial.log
           if-no-files-found: warn

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the repaired M53 image through expanded 20-command real-guest QEMU checks."""
+"""Run the repaired M54 image through expanded 20-command real-guest QEMU checks."""
 import os
 from pathlib import Path
 import select
@@ -9,8 +9,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m53-serial.log"
-FLOPPY = ROOT / "vms37lab-m53.ima"
+OUT = ROOT / "qemu-m54-serial.log"
+FLOPPY = ROOT / "vms37lab-m54.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
@@ -38,9 +38,10 @@ CHECKS = (
     ("TEST MUTEX", b"PASS: MUTEX read/write, pending writers, wait queues, resources, IO mutex, priority."),
     ("TEST MUTEXCPL3", b"PASS: two CPL3 tasks, contested mutex, queued wake, RWAIT/RAVAIL, release."),
     ("TEST HPWD", b"PASS: HPWD CRC and Purdy login hashes, salt, username, match."),
+    ("TEST VALIDATE", b"PASS: VALIDATE indexed UAF disk, search, passwords, DEFAULT, privileges."),
 )
 
-# M53 stress the already-verified M53 kernel image without weakening any checks.
+# M54 stress the already-verified M54 kernel image without weakening any checks.
 # Each demand test must reclaim all 512 physical frames before the next cycle.
 STRESS_CHECKS = (
     ((("TEST DEMAND", b"PASS: 4 demand faults, zeroed pages, CR3 isolation, reclaim."),
@@ -85,7 +86,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M53 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M54 protected-mode kernel booted to serial prompt", flush=True)
         failures = []
         for command, expected in CHECKS + STRESS_CHECKS:
             offset = len(log)
