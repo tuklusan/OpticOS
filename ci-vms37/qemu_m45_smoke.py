@@ -95,7 +95,7 @@ def run():
                 mon.settimeout(2)
                 mon.connect(str(MONITOR))
                 mon.recv(4096)
-                mon.sendall(("screendump " + str(LOGIN_IMAGE) + "\\r\\n").encode("ascii"))
+                mon.sendall(("screendump " + str(LOGIN_IMAGE) + "\r\n").encode("ascii"))
                 mon.recv(4096)
         except OSError:
             pass

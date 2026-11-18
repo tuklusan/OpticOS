@@ -32,7 +32,7 @@ jobs:
         run: |
           set -euo pipefail
           xz --decompress --stdout ci-vms37/vms37lab-m67.ima.xz > ci-vms37/vms37lab-m67.ima
-          echo 'e089ce5b2ef5f03832b7cdfdce2aff1ca418e7e24e16acbd58686ff706cd9412  ci-vms37/vms37lab-m67.ima' | sha256sum --check
+          echo '7ad24dc605c88ba39feada80052d51f34d3fa6d6e775a4c5484b86b43a902027  ci-vms37/vms37lab-m67.ima' | sha256sum --check
           xz --decompress --stdout ci-vms37/portdisk-m66.img.xz > ci-vms37/portdisk.img
           echo 'b1e4f739b92c2db35605399ac3389ab1ce622a16360b3007158615470f0b8ee2  ci-vms37/portdisk.img' | sha256sum --check
 
