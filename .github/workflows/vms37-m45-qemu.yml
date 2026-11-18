@@ -1,14 +1,14 @@
-name: VMS37 M45 QEMU guest boot
+name: VMS37 M46 QEMU guest boot
 on:
   push:
     branches:
-      - vms37-x86-qemu-m45-ci
+      - vms37-x86-qemu-m46-ci
   workflow_dispatch:
 
 # One executing workflow instance across all branches/attempts.
 # GitHub queues later pushes rather than running two emulators at once.
 concurrency:
-  group: vms37-native-x86-m45-qemu-singleton
+  group: vms37-native-x86-qemu-singleton
   cancel-in-progress: false
 
 permissions:
@@ -27,12 +27,12 @@ jobs:
         run: |
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
-      - name: Reconstruct and verify exact M45 image, generate IDE test disk
+      - name: Reconstruct and verify exact M46 image, generate IDE test disk
         shell: bash
         run: |
           set -euo pipefail
-          xz --decompress --stdout ci-vms37/vms37lab-m45.ima.xz > ci-vms37/vms37lab-m45.ima
-          echo '951f98330dfd4e3f19c0001f2781da6765ad0f809b2b1994aa2cbdaa8a6e9a53  ci-vms37/vms37lab-m45.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/vms37lab-m46.ima.xz > ci-vms37/vms37lab-m46.ima
+          echo 'f58bca2935ffff45c1d725f5b1fce82ed83de560ecac0cf672d3afeb16e96c3a  ci-vms37/vms37lab-m46.ima' | sha256sum --check
           python3 - <<'PY'
           from pathlib import Path
           out = Path('ci-vms37/portdisk.img')
@@ -49,12 +49,12 @@ jobs:
 
       - name: Run actual 32-bit x86 QEMU boot and seven serial guest tests
         shell: bash
-        run: python3 ci-vms37/qemu_m45_smoke.py
+        run: python3 ci-vms37/qemu_m46_smoke.py
 
       - name: Preserve QEMU serial transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m45-qemu-serial
-          path: ci-vms37/qemu-m45-serial.log
+          name: vms37-m46-qemu-serial
+          path: ci-vms37/qemu-m46-serial.log
           if-no-files-found: warn

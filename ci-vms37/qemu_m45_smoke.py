@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run the exact M45 floppy on a real QEMU system emulator, via COM1."""
+"""Run the exact M46 floppy on a real QEMU system emulator, via COM1."""
 import os
 from pathlib import Path
 import select
@@ -9,8 +9,8 @@ import sys
 import time
 
 ROOT = Path(__file__).resolve().parent
-OUT = ROOT / "qemu-m45-serial.log"
-FLOPPY = ROOT / "vms37lab-m45.ima"
+OUT = ROOT / "qemu-m46-serial.log"
+FLOPPY = ROOT / "vms37lab-m46.ima"
 DISK = ROOT / "portdisk.img"
 CHECKS = (
     ("SHOW CLOCK", b"PIT IRQ0 ticks"),
@@ -51,7 +51,7 @@ def run():
     try:
         if not wait_for(b"PORTLAB> ", 45.0):
             raise RuntimeError("no guest PORTLAB serial prompt (QEMU exit %s)" % proc.poll())
-        print("PASS: M45 protected-mode kernel booted to serial prompt", flush=True)
+        print("PASS: M46 protected-mode kernel booted to serial prompt", flush=True)
         for command, expected in CHECKS:
             offset = len(log)
             for char in (command + "\r").encode("ascii"):
@@ -70,7 +70,7 @@ def run():
             if not wait_for(b"PORTLAB> ", 12.0, offset):
                 raise RuntimeError(f"{command} did not return to prompt")
             print(f"PASS: {command}", flush=True)
-        print("PASS: actual M45 QEMU boot + seven guest commands", flush=True)
+        print("PASS: actual M46 QEMU boot + seven guest commands", flush=True)
         return 0
     except (RuntimeError, BrokenPipeError) as exc:
         print("FAIL:", exc, file=sys.stderr, flush=True)
