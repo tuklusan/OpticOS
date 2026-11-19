@@ -1,0 +1,314 @@
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -9,10 +9,11 @@
+ #include "vms_ini_procvec.h"
+ #include "vms_ini_phv_swap.h"
+ #include "vms_ini_mpw.h"
++#include "vms_ini_pflvec.h"
+ #include "vms_exe_sched.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=8u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=9u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -21,7 +22,13 @@
+        PORT_SYS_EXEC_INIT_LOCKDB=4u, PORT_SYS_EXEC_LOCK_RESULT_TAG=0x4b434f4cu,
+        PORT_SYS_EXEC_INIT_PROCVEC=5u, PORT_SYS_EXEC_PV_RESULT_TAG=0x56424350u,
+        PORT_SYS_EXEC_INIT_PHVSWAP=6u, PORT_SYS_EXEC_PHV_RESULT_TAG=0x56574850u,
+-       PORT_SYS_EXEC_INIT_MPW=7u, PORT_SYS_EXEC_MPW_RESULT_TAG=0x57504d50u };
++       PORT_SYS_EXEC_INIT_MPW=7u, PORT_SYS_EXEC_MPW_RESULT_TAG=0x57504d50u,
++       PORT_SYS_EXEC_INIT_INTSTKLM=8u,PORT_SYS_EXEC_INTSTK_RESULT_TAG=0x4b54534cu };
++/* The IA-32 privilege-transition stack is the first live counterpart of
++ * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
++struct port_sys_exec_intstack_settings {
++    uint32_t stack_high,stack_pages,lock_extra_bytes;
++};
+ struct port_sys_exec_result {
+     uint32_t signature;
+     uint32_t scheduler_ready_mask;
+@@ -43,6 +50,8 @@
+     uint32_t lock_max_id,lock_hash_slots,lock_process_bitmap_bytes;
+     const struct port_ini_phvswap *process_header_vector;
+     const struct port_ini_mpw *modified_page_writer_map;
++    const struct port_ini_interrupt_stack *interrupt_stack;
++    uint8_t lock_max_resource_depth;
+     const struct port_ini_procvec *process_vector;
+     const struct port_exe_sched_process *system_pcb,*null_pcb;
+ };
+@@ -63,6 +72,7 @@
+     const struct port_ini_proc_settings *proc_settings;
+     const struct port_ini_phvswap_settings *phv_settings;
+     const struct port_ini_mpw_settings *mpw_settings;
++    const struct port_sys_exec_intstack_settings *intstack_settings;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+ #endif
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -31,6 +31,8 @@
+ static uint32_t executive_phvswap_ready;
+ static struct port_ini_mpw executive_mpw;
+ static uint32_t executive_mpw_ready;
++static struct port_ini_interrupt_stack executive_interrupt_stack;
++static uint32_t executive_interrupt_stack_ready;
+ /* Original SYSTEM and NULL PCB slots have distinct persistent resident
+  * storage. Creating these source-derived scheduler descriptors is not a
+  * substitute for actually scheduling SYSTEM or running LOGINOUT. */
+@@ -217,6 +219,28 @@
+         p->result->signature=PORT_SYS_EXEC_MPW_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_INTSTKLM){
++        /* Original INIT.MAR INI_INTSTKLM computes EXE$GL_INTSTKLM and
++         * LCK$GB_MAXDEPTH from the live interrupt-stack top, number of
++         * VAX 512-byte pages and LCK$GL_EXTRASTK. On IA-32 this request
++         * describes the actual 386 TSS privilege-transition stack. It is
++         * not a claim of VAX IPL hardware or an active lock manager. */
++        if(!executive_mpw_ready || executive_interrupt_stack_ready ||
++           !p->intstack_settings)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        const struct port_sys_exec_intstack_settings *s=p->intstack_settings;
++        if(port_ini_interrupt_stack_limits(s->stack_high,s->stack_pages,
++               s->lock_extra_bytes,&executive_interrupt_stack)!=PORT_INI_PFL_OK ||
++           !executive_interrupt_stack.low ||
++           executive_interrupt_stack.high!=s->stack_high)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_interrupt_stack_ready=1u;
++        p->result->interrupt_stack=&executive_interrupt_stack;
++        p->result->lock_max_resource_depth=
++               executive_interrupt_stack.max_resource_depth;
++        p->result->signature=PORT_SYS_EXEC_INTSTK_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_LINK_SYSLOA){
+         /* This is INIT.MAR LINK_VEC/EXE$AL_LOAVEC, in resident SYS.EXE. */
+         if(!p->sysloa_descriptor || !p->sysloa_bytes ||
+@@ -234,6 +258,7 @@
+        p->initialized_images!=3u || !executive_sysloa.loaded ||
+        !executive_lockdb_ready || !executive_procvec_ready ||
+        !executive_phvswap_ready || !executive_mpw_ready ||
++       !executive_interrupt_stack_ready ||
+        !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
+ 
+     /* Hardware-dependent EXE$INIBOOTADP/EXE$INIPROCREG are called through
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2813,6 +2813,40 @@
+     }
+     bootstrap_message("INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.");
+ 
++    /* INIT.MAR INI_INTSTKLM (after INI_PFLVEC, pending a live PFL
++     * service): use the *actual* IA-32 TSS privilege-transition stack,
++     * 4096 bytes = eight original VAX 512-byte pages. Current lock extra
++     * stack charge is zero because the native lock-manager service is
++     * not initialized. This is a verified stack/depth record only. */
++    if(!arch_kstack_protected()){
++        bootstrap_message("INIT: IA-32 privilege transition stack is unprotected.");
++        bootstrap_halt();
++    }
++    static struct port_sys_exec_intstack_settings const intstack_settings={
++        .stack_pages=8u,.lock_extra_bytes=0u};
++    struct port_sys_exec_intstack_settings live_stack=intstack_settings;
++    live_stack.stack_high=arch_kstack_tss_esp0();
++    static struct port_sys_exec_result stack_result;
++    const struct port_sys_exec_start stack_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&stack_result,
++        .phase=PORT_SYS_EXEC_INIT_INTSTKLM,
++        .intstack_settings=&live_stack};
++    if(loaded_sys(&stack_request)!=PORT_SYS_EXEC_NORMAL ||
++       stack_result.signature!=PORT_SYS_EXEC_INTSTK_RESULT_TAG ||
++       !stack_result.interrupt_stack ||
++       stack_result.interrupt_stack->high!=live_stack.stack_high ||
++       stack_result.interrupt_stack->low!=live_stack.stack_high-4096u ||
++       stack_result.lock_max_resource_depth!=255u ||
++       stack_result.interrupt_stack->max_resource_depth!=255u ||
++       (uintptr_t)stack_result.interrupt_stack<PORT_SYS_ELF_START ||
++       (uintptr_t)stack_result.interrupt_stack>
++           PORT_SYS_ELF_LIMIT-sizeof(struct port_ini_interrupt_stack)){
++        bootstrap_message("INIT: resident SYS.EXE interrupt stack depth setup failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.");
++
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+--- a/Makefile
++++ b/Makefile
+@@ -758,7 +758,7 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h src/vms_ini_mpw.h | build
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h src/vms_ini_mpw.h src/vms_ini_pflvec.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_sysboot_pktmem.o: src/vms_sysboot_pktmem.c src/vms_sysboot_pktmem.h src/vms_booparam.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+@@ -772,8 +772,8 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_mpw.o: src/vms_ini_mpw.c src/vms_ini_mpw.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -797,7 +797,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -872,8 +872,8 @@
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_mpw.c tests/test_ini_mpw_host.c -o build/inimpwcheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/inimpwcheck
+ 
+-# M98: source-derived INIT.MAR page/swap file vector and interrupt stack
+-# limit arithmetic. Host-tested and compiled for IA-32, not yet guest-bound.
++# M98: source-derived PFL vectors remain host-only; the source-defined
++# INI_INTSTKLM interrupt-stack depth is executed by guest SYS.EXE from M101.
+ build/vms_ini_pflvec.o: src/vms_ini_pflvec.c src/vms_ini_pflvec.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ .PHONY: inipflveccheck
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1620,7 +1620,7 @@
+     (1069,1089,'src/vms_ini_mpw.c','port_ini_mpw_init','Modified-page-writer PTE and PHV index record allocation, no pager consumer','partial'),
+     (1090,1141,'src/vms_ini_pflvec.c','port_ini_pflvec_init','Source-derived global page-file count and null PFL shell VBN/window arithmetic; host-only, no operational shell WCB yet','partial'),
+     (1142,1165,'src/vms_ini_pflvec.c','port_ini_pflvec_init','Page and swap-file pointer DYN record construction, null-PFL vector entries; host-only, no active pagefile service','partial'),
+-    (1166,1183,'src/vms_ini_pflvec.c','port_ini_interrupt_stack_limits','Source-defined 512-byte interrupt-stack limit and bounded lock resource depth; not bound to VMS scheduler','partial'),
++    (1166,1183,'src/vms_ini_pflvec.c','port_ini_interrupt_stack_limits','Source-defined 512-byte interrupt-stack bounds and bounded lock resource depth executed in loaded guest SYS.EXE using live IA-32 TSS.esp0; native IPL stack and lock manager remain incomplete','partial'),
+     (1184,1188,'src/vms_ini_procvec.c','port_ini_procvec_init','SYSTEM PCB physical process header and process-index setup remains partial','partial'),
+     (1189,1212,'src/vms_ini_syswcb.c','port_ini_syswcb_from_boot_map','Normalize 8-byte SYSBOOT SYS.EXE extents into 6-byte WCB retrieval pointers and overlay linked WCB template; tested only on host pending guest boot CB and WCB template','partial'),
+     (1213,1231,None,None,'Original VAX PR$_NICR/ICCS/ICR clock-counter timing loop needs real IA-32 hardware equivalent','hardware-excluded'),
+--- a/tests/test_sys_exec_entry_host.c
++++ b/tests/test_sys_exec_entry_host.c
+@@ -52,6 +52,14 @@
+     req.initialized_images=3u;
+     CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
+     CHECK(result.signature==PORT_SYS_EXEC_LINK_RESULT_TAG);
++    req.phase=PORT_SYS_EXEC_INIT_INTSTKLM;
++    struct port_sys_exec_intstack_settings live={0x310000u,8u,0u};
++    req.intstack_settings=&live;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    CHECK(result.signature==PORT_SYS_EXEC_LINK_RESULT_TAG);
++    req.intstack_settings=0;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    CHECK(result.signature==PORT_SYS_EXEC_LINK_RESULT_TAG);
+     /* Hardware CPU and ATA callbacks are deliberately unavailable in this
+      * host test; NULL result pointers remain uninitialized on failure. */
+     puts("SYS.EXE resident SYSLOA vector link and fail-closed INIT checks PASS");
+--- /dev/null
++++ b/tools/qemu_sysboot_m101.py
+@@ -0,0 +1,103 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; require source-derived SYS.EXE I/O packet queues.
++
++Only source-derived loaded SYS.EXE INTSTKLM and a deliberate incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M101: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        observed.extend(b'\n=== QEMU stderr ===\n')
++        observed.extend(p.stderr.read(8192))
++        serial_path=ROOT/'qemu-m101-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,101,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M101: SYS.EXE lock structures, IRP queues and live IRQ/IDT/CR3/TSS/Files-11 verified PASS')
++        return 0
++    print('QEMU M101: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
