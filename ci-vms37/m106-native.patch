@@ -314,7 +314,7 @@
      (1240,1255,'src/vms_ini_syslog.c','port_ini_syslog_init','Validated copy of SYS$DISK and SYS$SYSDEVICE LOG records into aligned nonpaged pool and two temporary LOG$AL_LOGTBL slots; host-only until native logical-name service is live','partial'),
 --- /dev/null
 +++ b/tools/qemu_sysboot_m106.py
-@@ -0,0 +1,109 @@
+@@ -0,0 +1,110 @@
 +#!/usr/bin/env python3
 +"""One native IA-32 QEMU boot; check source-ordered real SYS.EXE retrieval map and INIT.
 +
@@ -403,8 +403,8 @@
 +        p.terminate()
 +        try:p.wait(timeout=3)
 +        except subprocess.TimeoutExpired:p.kill();p.wait()
-+        observed.extend(b'\n=== QEMU stderr ===\n')
-+        observed.extend(p.stderr.read(8192))
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
 +        serial_path=ROOT/'qemu-m106-serial.log'
 +        serial_path.write_bytes(observed)
 +        # Always retain the real transcript, including failed QEMU attempts.
@@ -415,12 +415,13 @@
 +                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
 +        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
 +                 if ci_run else '')
-+        capture(ROOT,serial_path,105,identifier,run_url,
++        capture(ROOT,serial_path,106,identifier,run_url,
 +                'harness-pass' if passed else 'harness-fail')
 +    if passed:
 +        print('QEMU M106: SYSBOOT map, loaded SYS.EXE WCB compaction, PFLVEC, lock/IRP and live IRQ/IDT/CR3/TSS/Files-11 verified PASS')
 +        return 0
 +    print('QEMU M106: real guest execution or source-order check failed',file=sys.stderr)
 +    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
 +    return 1
 +if __name__=='__main__':raise SystemExit(main())
