@@ -1,0 +1,368 @@
+--- /dev/null
++++ b/src/vms_ini_pflvec.c
+@@ -0,0 +1,63 @@
++#include "vms_ini_pflvec.h"
++#include <stdint.h>
++static void word(uint8_t *p,uint16_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);}
++static void dword(uint8_t *p,uint32_t v){
++    for(unsigned i=0;i<4u;i++)p[i]=(uint8_t)(v>>(8u*i));
++}
++static uint32_t read32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8)|
++           ((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
++}
++uint32_t port_ini_pflvec_init(void *memory,size_t capacity,
++                 const struct port_ini_pflvec_settings *s,
++                 struct port_ini_pflvec *out){
++    if(!memory||!s||!out||((uintptr_t)memory&3u)||
++       !s->null_pfl_address || (s->null_pfl_address&3u) ||
++       s->page_file_count>UINT16_MAX || s->swap_file_count>=UINT16_MAX ||
++       s->ptr_dyn_type>UINT8_MAX || s->pfl_dyn_type>UINT8_MAX)
++        return PORT_INI_PFL_BADPARAM;
++    uint64_t n=(uint64_t)s->page_file_count+s->swap_file_count;
++    uint64_t size=12u+4u*n;
++    if(!n || size>UINT16_MAX || n>UINT16_MAX)
++        return PORT_INI_PFL_BADPARAM;
++    if(size>capacity)return PORT_INI_PFL_NOMEM;
++    /* INIT_MISC computes shell's starting VBN from page-aligned address:
++     * (SWP$GL_SHELLBAS & 0x7fffffff)/512 + 1 + 1.
++     * Reject a misaligned region and 32-bit overflow, not emulate the VAX
++     * addressing model. The native virtual address is passed explicitly. */
++    uint32_t shell=s->shell_base_address&UINT32_C(0x7fffffff);
++    if(shell&511u)return PORT_INI_PFL_BADPARAM;
++    uint64_t vbn=((uint64_t)shell>>9)+2u;
++    if(vbn>UINT32_MAX)return PORT_INI_PFL_BADPARAM;
++    uint8_t *p=memory;
++    for(uint32_t i=0;i<(uint32_t)size;i++)p[i]=0u;
++    dword(p+4u,(uint32_t)n); /* PTR$L_PTRCNT */
++    word(p+8u,(uint16_t)size); /* PTR$W_SIZE */
++    p[10u]=(uint8_t)s->ptr_dyn_type;
++    p[11u]=(uint8_t)s->pfl_dyn_type;
++    for(uint32_t i=0;i<(uint32_t)n;i++)dword(p+12u+i*4u,s->null_pfl_address);
++    *out=(struct port_ini_pflvec){
++        .pointers=p+12u,.entries=(uint32_t)n,.allocated_bytes=(uint32_t)size,
++        .null_pagefile_vbn=(uint32_t)vbn,
++        .null_pagefile_window=s->shell_system_window,
++        .actual_swapfile_slots=s->swap_file_count+1u,
++        .global_page_file_limit=s->global_page_file_limit};
++    return PORT_INI_PFL_OK;
++}
++uint32_t port_ini_pflvec_entry(const struct port_ini_pflvec *s,uint32_t i){
++    if(!s||!s->pointers||i>=s->entries)return 0u;
++    return read32(s->pointers+4u*i);
++}
++uint32_t port_ini_interrupt_stack_limits(uint32_t high,uint32_t pages,
++                    uint32_t extra,struct port_ini_interrupt_stack *out){
++    if(!out||!pages||pages>UINT16_MAX)return PORT_INI_PFL_BADPARAM;
++    uint64_t bytes=(uint64_t)pages*512u;
++    if(bytes>high)return PORT_INI_PFL_BADPARAM;
++    uint32_t room=extra>=bytes?0u:(uint32_t)(bytes-extra);
++    uint32_t depth=room/16u;
++    if(depth<4u)depth=4u;
++    if(depth>255u)depth=255u;
++    *out=(struct port_ini_interrupt_stack){.low=high-(uint32_t)bytes,
++            .high=high,.max_resource_depth=(uint8_t)depth};
++    return PORT_INI_PFL_OK;
++}
+--- /dev/null
++++ b/src/vms_ini_pflvec.h
+@@ -0,0 +1,36 @@
++#ifndef VMS_INI_PFLVEC_H
++#define VMS_INI_PFLVEC_H
++#include <stdint.h>
++#include <stddef.h>
++/* Partial source counterpart for SYS/SRC/INIT.MAR INI_MISC, INI_PFLVEC
++ * and INI_INTSTKLM. Builds the original page/swap file pointer record
++ * and per-IPL interrupt stack limits; does not activate the page manager
++ * or the executive's real lock manager. */
++enum {PORT_INI_PFL_OK=1u,PORT_INI_PFL_BADPARAM=2u,
++      PORT_INI_PFL_NOMEM=4u};
++struct port_ini_pflvec_settings {
++    uint32_t page_file_count, swap_file_count;
++    uint32_t null_pfl_address;
++    uint16_t ptr_dyn_type, pfl_dyn_type;
++    uint32_t global_page_file_limit;
++    uint32_t shell_base_address, shell_system_window;
++};
++struct port_ini_pflvec {
++    const uint8_t *pointers;
++    uint32_t entries, allocated_bytes;
++    uint32_t null_pagefile_vbn, null_pagefile_window;
++    uint32_t actual_swapfile_slots;
++    uint32_t global_page_file_limit;
++};
++struct port_ini_interrupt_stack {
++    uint32_t low,high;
++    uint8_t max_resource_depth;
++};
++uint32_t port_ini_pflvec_init(void *memory,size_t capacity,
++                const struct port_ini_pflvec_settings *settings,
++                struct port_ini_pflvec *result);
++uint32_t port_ini_pflvec_entry(const struct port_ini_pflvec *s,uint32_t i);
++uint32_t port_ini_interrupt_stack_limits(uint32_t high,
++                uint32_t stack_pages,uint32_t extra_stack_bytes,
++                struct port_ini_interrupt_stack *out);
++#endif
+--- /dev/null
++++ b/tests/test_ini_pflvec_host.c
+@@ -0,0 +1,44 @@
++#include "vms_ini_pflvec.h"
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++int main(void){
++    uint32_t memory[512];memset(memory,0xa5,sizeof memory);
++    struct port_ini_pflvec_settings s={.page_file_count=4,.swap_file_count=2,
++        .null_pfl_address=0x320080u,.ptr_dyn_type=7u,.pfl_dyn_type=9u,
++        .global_page_file_limit=500u,.shell_base_address=0x28000u,
++        .shell_system_window=0x3200a0u};
++    struct port_ini_pflvec p={0};
++    CHECK(port_ini_pflvec_init(memory,8u,&s,&p)==PORT_INI_PFL_NOMEM);
++    CHECK(memory[0]==0xa5a5a5a5u&&p.pointers==0);
++    CHECK(port_ini_pflvec_init(memory,sizeof memory,&s,&p)==PORT_INI_PFL_OK);
++    CHECK(p.entries==6u&&p.allocated_bytes==36u);
++    const uint8_t *b=(const uint8_t *)memory;
++    CHECK(b[4u]==6u&&b[8u]==36u&&b[10u]==7u&&b[11u]==9u);
++    CHECK(p.pointers==b+12u);
++    for(uint32_t i=0;i<6u;i++)CHECK(port_ini_pflvec_entry(&p,i)==0x320080u);
++    CHECK(port_ini_pflvec_entry(&p,6u)==0u);
++    CHECK(p.null_pagefile_vbn==(0x28000u/512u+2u));
++    CHECK(p.null_pagefile_window==0x3200a0u&&p.actual_swapfile_slots==3u);
++    CHECK(p.global_page_file_limit==500u&&b[36u]==0xa5u);
++    s.page_file_count=0;s.swap_file_count=0;
++    CHECK(port_ini_pflvec_init(memory,sizeof memory,&s,&p)==PORT_INI_PFL_BADPARAM);
++    s.page_file_count=UINT16_MAX;s.swap_file_count=UINT16_MAX;
++    CHECK(port_ini_pflvec_init(memory,sizeof memory,&s,&p)==PORT_INI_PFL_BADPARAM);
++    s.page_file_count=1;s.swap_file_count=1;s.shell_base_address=0x28100u;
++    CHECK(port_ini_pflvec_init(memory,sizeof memory,&s,&p)==PORT_INI_PFL_BADPARAM);
++    s.shell_base_address=0x28000u;
++    CHECK(port_ini_pflvec_init(memory,sizeof memory,&s,&p)==PORT_INI_PFL_OK);
++    struct port_ini_interrupt_stack stk={0};
++    CHECK(port_ini_interrupt_stack_limits(0x310000u,4u,0u,&stk)==PORT_INI_PFL_OK);
++    CHECK(stk.low==0x30f800u&&stk.high==0x310000u&&stk.max_resource_depth==128u);
++    CHECK(port_ini_interrupt_stack_limits(0x310000u,4u,2048u,&stk)==PORT_INI_PFL_OK);
++    CHECK(stk.max_resource_depth==4u);
++    CHECK(port_ini_interrupt_stack_limits(0x310000u,40u,0u,&stk)==PORT_INI_PFL_OK);
++    CHECK(stk.max_resource_depth==255u);
++    CHECK(port_ini_interrupt_stack_limits(100u,1u,0u,&stk)==PORT_INI_PFL_BADPARAM);
++    CHECK(port_ini_interrupt_stack_limits(1000u,0u,0u,&stk)==PORT_INI_PFL_BADPARAM);
++    puts("INIT.MAR live page/swap PFL pointer vector and interrupt-stack lock depth PASS");
++    return 0;
++}
+--- a/tests/test_disk_image.py
++++ b/tests/test_disk_image.py
+@@ -1,39 +1,61 @@
+ from pathlib import Path
+ from struct import unpack_from
+ 
+-# M91: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
+-# diagnostic-sector fixture. Do not assume USER or SYSTEM accounts exist.
++# Read the Files-11 INDEXF map and each file header. SYS.EXE grows as
++# original-source code is added; hardcoded LBN 115 is not a Files-11 rule.
+ volume=(Path(__file__).resolve().parents[1]/'portdisk.img').read_bytes()
+-assert len(volume)==8*16*63*512
++BLOCK=512
++TOTAL=8*16*63
++assert len(volume)==TOTAL*BLOCK
+ 
+ def block(lbn):
+-    assert 0<=lbn<8*16*63
+-    return volume[lbn*512:(lbn+1)*512]
++    assert 0<=lbn<TOTAL
++    return volume[lbn*BLOCK:(lbn+1)*BLOCK]
+ 
+-def checksum(block_bytes,at):
+-    return sum(unpack_from('<H',block_bytes,p)[0]
+-               for p in range(0,at,2))&0xffff
++def word(b,n):
++    return unpack_from('<H',b,n)[0]
++
++def checksum(b,at):
++    return sum(word(b,p) for p in range(0,at,2))&0xffff
++
++def valid_header(b,fid):
++    assert b[:2]==b'\x26\x41'
++    assert word(b,8)==fid and word(b,10)==fid
++    assert checksum(b,510)==word(b,510)
++    assert b[58]==2 # one format-1 extent, as installed by native image tools
++    first=word(b,132)
++    blocks=1+(word(b,130)&0xff)
++    assert 0<first<TOTAL and first+blocks<=TOTAL
++    return first,blocks
+ 
+ assert block(0)[510:512]==b'\x55\xaa'
+-for n in (3,6):
+-    home=block(n)
+-    assert unpack_from('<I',home,0)[0]==n
+-    assert checksum(home,58)==unpack_from('<H',home,58)[0]
+-    assert checksum(home,510)==unpack_from('<H',home,510)[0]
+-index_header=block(13)
+-assert index_header[:2]==b'\x26\x41'
+-assert unpack_from('<H',index_header,8)[0]==1
+-assert checksum(index_header,510)==unpack_from('<H',index_header,510)[0]
++for home_lbn in (3,6):
++    h=block(home_lbn)
++    assert unpack_from('<I',h,0)[0]==home_lbn
++    assert checksum(h,58)==word(h,58)
++    assert checksum(h,510)==word(h,510)
++index=block(13)
++assert index[:2]==b'\x26\x41'
++assert word(index,8)==1
++assert checksum(index,510)==word(index,510)
++assert word(index,130)==0x4017 and word(index,132)==0
++assert word(index,134)==0x4002
++index_extension=word(index,136)
++assert 24<=index_extension<TOTAL-2
+ index_bitmap=block(12)
+-assert (unpack_from('<H',index_bitmap,0)[0]&0x1fff)==0x1fff
+-system_dir=block(30)
+-assert all(name in system_dir for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
+-sysloa_header=block(115)
+-assert unpack_from('<H',sysloa_header,8)[0]==13
+-assert unpack_from('<H',sysloa_header,10)[0]==13
+-assert checksum(sysloa_header,510)==unpack_from('<H',sysloa_header,510)[0]
+-for lbn in (33,117,129):
+-    image=block(lbn)
+-    assert image[:5]==b'\x7fELF\x01'
+-    assert unpack_from('<H',image,18)[0]==3  # IA-32 machine
+-print('Files-11 ODS-2 SYS, SYSLOA386, INILOA disk records and ELF32 bytes PASS')
++assert (word(index_bitmap,0)&0x1fff)==0x1fff
++directory=block(30)
++assert all(name in directory for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
++# FID11 resides in INDEXF's initial mapped extent (LBN23).
++# FIDs12 and 13 use contiguous blocks 0 and 1 of its later extent.
++seen=[]
++for fid,header_lbn in ((11,23),(12,index_extension),(13,index_extension+1)):
++    data_lbn,blocks=valid_header(block(header_lbn),fid)
++    seen.append((data_lbn,data_lbn+blocks))
++    elf=block(data_lbn)
++    assert elf[:5]==b'\x7fELF\x01'
++    assert word(elf,18)==3 # ELF32 IA-32 CPU
++for i,(start,end) in enumerate(seen):
++    for j,(a,b) in enumerate(seen):
++        assert i==j or end<=a or b<=start
++print('Files-11 INDEXF-mapped SYS, SYSLOA386 and INILOA ELF32 images PASS')
+--- a/tests/test_sysloa386_disk_image.py
++++ b/tests/test_sysloa386_disk_image.py
+@@ -1,39 +1,61 @@
+ from pathlib import Path
+ from struct import unpack_from
+ 
+-# M91: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
+-# diagnostic-sector fixture. Do not assume USER or SYSTEM accounts exist.
++# Read the Files-11 INDEXF map and each file header. SYS.EXE grows as
++# original-source code is added; hardcoded LBN 115 is not a Files-11 rule.
+ volume=(Path(__file__).resolve().parents[1]/'portdisk.img').read_bytes()
+-assert len(volume)==8*16*63*512
++BLOCK=512
++TOTAL=8*16*63
++assert len(volume)==TOTAL*BLOCK
+ 
+ def block(lbn):
+-    assert 0<=lbn<8*16*63
+-    return volume[lbn*512:(lbn+1)*512]
++    assert 0<=lbn<TOTAL
++    return volume[lbn*BLOCK:(lbn+1)*BLOCK]
+ 
+-def checksum(block_bytes,at):
+-    return sum(unpack_from('<H',block_bytes,p)[0]
+-               for p in range(0,at,2))&0xffff
++def word(b,n):
++    return unpack_from('<H',b,n)[0]
++
++def checksum(b,at):
++    return sum(word(b,p) for p in range(0,at,2))&0xffff
++
++def valid_header(b,fid):
++    assert b[:2]==b'\x26\x41'
++    assert word(b,8)==fid and word(b,10)==fid
++    assert checksum(b,510)==word(b,510)
++    assert b[58]==2 # one format-1 extent, as installed by native image tools
++    first=word(b,132)
++    blocks=1+(word(b,130)&0xff)
++    assert 0<first<TOTAL and first+blocks<=TOTAL
++    return first,blocks
+ 
+ assert block(0)[510:512]==b'\x55\xaa'
+-for n in (3,6):
+-    home=block(n)
+-    assert unpack_from('<I',home,0)[0]==n
+-    assert checksum(home,58)==unpack_from('<H',home,58)[0]
+-    assert checksum(home,510)==unpack_from('<H',home,510)[0]
+-index_header=block(13)
+-assert index_header[:2]==b'\x26\x41'
+-assert unpack_from('<H',index_header,8)[0]==1
+-assert checksum(index_header,510)==unpack_from('<H',index_header,510)[0]
++for home_lbn in (3,6):
++    h=block(home_lbn)
++    assert unpack_from('<I',h,0)[0]==home_lbn
++    assert checksum(h,58)==word(h,58)
++    assert checksum(h,510)==word(h,510)
++index=block(13)
++assert index[:2]==b'\x26\x41'
++assert word(index,8)==1
++assert checksum(index,510)==word(index,510)
++assert word(index,130)==0x4017 and word(index,132)==0
++assert word(index,134)==0x4002
++index_extension=word(index,136)
++assert 24<=index_extension<TOTAL-2
+ index_bitmap=block(12)
+-assert (unpack_from('<H',index_bitmap,0)[0]&0x1fff)==0x1fff
+-system_dir=block(30)
+-assert all(name in system_dir for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
+-sysloa_header=block(115)
+-assert unpack_from('<H',sysloa_header,8)[0]==13
+-assert unpack_from('<H',sysloa_header,10)[0]==13
+-assert checksum(sysloa_header,510)==unpack_from('<H',sysloa_header,510)[0]
+-for lbn in (33,117,129):
+-    image=block(lbn)
+-    assert image[:5]==b'\x7fELF\x01'
+-    assert unpack_from('<H',image,18)[0]==3  # IA-32 machine
+-print('Files-11 ODS-2 SYS, SYSLOA386, INILOA disk records and ELF32 bytes PASS')
++assert (word(index_bitmap,0)&0x1fff)==0x1fff
++directory=block(30)
++assert all(name in directory for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
++# FID11 resides in INDEXF's initial mapped extent (LBN23).
++# FIDs12 and 13 use contiguous blocks 0 and 1 of its later extent.
++seen=[]
++for fid,header_lbn in ((11,23),(12,index_extension),(13,index_extension+1)):
++    data_lbn,blocks=valid_header(block(header_lbn),fid)
++    seen.append((data_lbn,data_lbn+blocks))
++    elf=block(data_lbn)
++    assert elf[:5]==b'\x7fELF\x01'
++    assert word(elf,18)==3 # ELF32 IA-32 CPU
++for i,(start,end) in enumerate(seen):
++    for j,(a,b) in enumerate(seen):
++        assert i==j or end<=a or b<=start
++print('Files-11 INDEXF-mapped SYS, SYSLOA386 and INILOA ELF32 images PASS')
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1618,8 +1618,10 @@
+     (993,1031,'src/vms_ini_procvec.c','port_ini_procvec_init','Resident PCB pointer and sequence array layout with SYSTEM and NULL descriptors; actual process activation not yet running','partial'),
+     (1032,1068,'src/vms_ini_phv_swap.c','port_ini_phvswap_init','Native PHV/system slot and swapper PTE map DYN record construction; pager and swapper process are not running','partial'),
+     (1069,1089,'src/vms_ini_mpw.c','port_ini_mpw_init','Modified-page-writer PTE and PHV index record allocation, no pager consumer','partial'),
+-    (1090,1165,None,None,'Physical PCB/PFN mapping and working set initialization unresolved','unresolved'),
+-    (1166,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB, kernel clock, queue setup and live CPU register verification only; no real process activation','partial'),
++    (1090,1141,'src/vms_ini_pflvec.c','port_ini_pflvec_init','Source-derived global page-file count and null PFL shell VBN/window arithmetic; host-only, no operational shell WCB yet','partial'),
++    (1142,1165,'src/vms_ini_pflvec.c','port_ini_pflvec_init','Page and swap-file pointer DYN record construction, null-PFL vector entries; host-only, no active pagefile service','partial'),
++    (1166,1183,'src/vms_ini_pflvec.c','port_ini_interrupt_stack_limits','Source-defined 512-byte interrupt-stack limit and bounded lock resource depth; not bound to VMS scheduler','partial'),
++    (1184,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB, kernel clock, queue setup and live CPU register verification only; no real process activation','partial'),
+     (1301,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
+ parts=[]
+ for first,last,path,symbol,purpose,status in init_parts:
+--- a/Makefile
++++ b/Makefile
+@@ -871,3 +871,12 @@
+ inimpwcheck: | build
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_mpw.c tests/test_ini_mpw_host.c -o build/inimpwcheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/inimpwcheck
++
++# M98: source-derived INIT.MAR page/swap file vector and interrupt stack
++# limit arithmetic. Host-tested and compiled for IA-32, not yet guest-bound.
++build/vms_ini_pflvec.o: src/vms_ini_pflvec.c src/vms_ini_pflvec.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: inipflveccheck
++inipflveccheck: build/vms_ini_pflvec.o | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_pflvec.c tests/test_ini_pflvec_host.c -o build/inipflveccheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/inipflveccheck
