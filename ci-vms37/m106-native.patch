@@ -1,0 +1,332 @@
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -11,9 +11,10 @@
+ #include "vms_ini_mpw.h"
+ #include "vms_ini_pflvec.h"
+ #include "vms_exe_sched.h"
++#include "vms_ini_syswcb.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=10u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=11u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -24,9 +25,20 @@
+        PORT_SYS_EXEC_INIT_PHVSWAP=6u, PORT_SYS_EXEC_PHV_RESULT_TAG=0x56574850u,
+        PORT_SYS_EXEC_INIT_MPW=7u, PORT_SYS_EXEC_MPW_RESULT_TAG=0x57504d50u,
+        PORT_SYS_EXEC_INIT_INTSTKLM=8u,PORT_SYS_EXEC_INTSTK_RESULT_TAG=0x4b54534cu,
+-       PORT_SYS_EXEC_INIT_PFLVEC=9u,PORT_SYS_EXEC_PFL_RESULT_TAG=0x564c4650u };
++       PORT_SYS_EXEC_INIT_PFLVEC=9u,PORT_SYS_EXEC_PFL_RESULT_TAG=0x564c4650u,
++       PORT_SYS_EXEC_INIT_SYSWCB=10u,PORT_SYS_EXEC_SYSWCB_RESULT_TAG=0x42435753u };
+ /* The IA-32 privilege-transition stack is the first live counterpart of
+  * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
++/* SYSBOOT passes the genuine Files-11 SYS.EXE extent map through the
++ * source BOO$L_SYS_MAP interface.  The native header below is explicitly
++ * an incomplete WCB until original DEC layout constants are established. */
++struct port_sys_exec_wcb_settings {
++    uint8_t *normalized_boot_map;
++    uint32_t boot_map_capacity;
++    uint32_t expected_extent_count;
++    uint32_t expected_first_lbn;
++    uint32_t expected_total_blocks;
++};
+ struct port_sys_exec_intstack_settings {
+     uint32_t stack_high,stack_pages,lock_extra_bytes;
+ };
+@@ -53,6 +65,7 @@
+     const struct port_ini_mpw *modified_page_writer_map;
+     const struct port_ini_interrupt_stack *interrupt_stack;
+     const struct port_ini_pflvec *pagefile_vector;
++    const struct port_ini_syswcb *system_wcb;
+     uint8_t lock_max_resource_depth;
+     const struct port_ini_procvec *process_vector;
+     const struct port_exe_sched_process *system_pcb,*null_pcb;
+@@ -76,6 +89,7 @@
+     const struct port_ini_mpw_settings *mpw_settings;
+     const struct port_sys_exec_intstack_settings *intstack_settings;
+     const struct port_ini_pflvec_settings *pfl_settings;
++    const struct port_sys_exec_wcb_settings *syswcb_settings;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+ #endif
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -39,6 +39,12 @@
+ static uint32_t executive_nullpfl_uninitialized[16];
+ static struct port_ini_interrupt_stack executive_interrupt_stack;
+ static uint32_t executive_interrupt_stack_ready;
++/* INIT overlays BOO$L_SYS_MAP with the retrieval-pointer front in place.
++ * Persistent result lives in SYS.EXE; BOO$ storage remains SYSBOOT-owned.
++ * Header offsets are temporary native metadata; WCB consumers are blocked. */
++static uint8_t executive_wcb_header[48] __attribute__((aligned(4)));
++static struct port_ini_syswcb executive_system_wcb;
++static uint32_t executive_system_wcb_ready;
+ /* Original SYSTEM and NULL PCB slots have distinct persistent resident
+  * storage. Creating these source-derived scheduler descriptors is not a
+  * substitute for actually scheduling SYSTEM or running LOGINOUT. */
+@@ -281,6 +287,74 @@
+         p->result->signature=PORT_SYS_EXEC_INTSTK_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_SYSWCB){
++        /* Source INIT.MAR 1194-1212.  Real on-disk normalized map
++         * produced by the guest's SYSBOOT, consumed by resident SYS.EXE.
++         * WCB's remaining type/flags/fields need their real DEC layout;
++         * do not advertise an ACP-capable window or paged shell. */
++        if(!executive_interrupt_stack_ready || !executive_pflvec_ready ||
++           executive_system_wcb_ready || !p->syswcb_settings)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        const struct port_sys_exec_wcb_settings *s=p->syswcb_settings;
++        if(!s->normalized_boot_map || !s->boot_map_capacity ||
++           !s->expected_extent_count || !s->expected_total_blocks ||
++           !s->expected_first_lbn || (uintptr_t)s->normalized_boot_map&3u)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        /* Do not permit the caller to supply an invented count. */
++        uint32_t bytes=(uint32_t)s->normalized_boot_map[0] |
++           ((uint32_t)s->normalized_boot_map[1]<<8) |
++           ((uint32_t)s->normalized_boot_map[2]<<16) |
++           ((uint32_t)s->normalized_boot_map[3]<<24);
++        if(bytes>UINT32_MAX-4u || (bytes&7u) ||
++           bytes/8u!=s->expected_extent_count ||
++           (uint64_t)bytes+4u>s->boot_map_capacity)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        uint32_t blocks=0u,first_lbn=0u;
++        for(uint32_t i=0u;i<s->expected_extent_count;i++){
++            const uint8_t *slot=s->normalized_boot_map+4u+8u*i;
++            uint32_t n=(uint32_t)slot[0]|((uint32_t)slot[1]<<8)|
++                 ((uint32_t)slot[2]<<16)|((uint32_t)slot[3]<<24);
++            uint32_t l=(uint32_t)slot[4]|((uint32_t)slot[5]<<8)|
++                 ((uint32_t)slot[6]<<16)|((uint32_t)slot[7]<<24);
++            if(!n || n>65535u || l>UINT32_MAX-n ||
++               blocks>UINT32_MAX-n)
++                return PORT_SYS_EXEC_BAD_PARAMETERS;
++            if(!i)first_lbn=l;
++            blocks+=n;
++        }
++        if(first_lbn!=s->expected_first_lbn ||
++           blocks!=s->expected_total_blocks)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        /* The guest's own linked SYS.EXE header is deliberately limited
++         * to tested structural fields. This is NOT the full VAX WCB. */
++        for(uint32_t i=0u;i<sizeof executive_wcb_header;i++)
++            executive_wcb_header[i]=0u;
++        executive_wcb_header[4]=sizeof executive_wcb_header;
++        const struct port_ini_syswcb_layout layout={
++            sizeof executive_wcb_header,4u,6u};
++        if(port_ini_syswcb_from_boot_map(s->normalized_boot_map,
++                 s->boot_map_capacity,executive_wcb_header,
++                 sizeof executive_wcb_header,&layout,
++                 &executive_system_wcb)!=PORT_INI_SYSWCB_OK ||
++           executive_system_wcb.mapping_count!=s->expected_extent_count ||
++           executive_system_wcb.record_length!=
++                sizeof executive_wcb_header+6u*s->expected_extent_count)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        uint32_t check=0u;
++        for(uint32_t i=0u;i<executive_system_wcb.mapping_count;i++){
++            uint16_t n=0u;uint32_t l=0u;
++            if(port_ini_syswcb_retrieval(&executive_system_wcb,i,
++                  &n,&l)!=PORT_INI_SYSWCB_OK || !n ||
++               (i==0u && l!=first_lbn) || check>UINT32_MAX-n)
++                return PORT_SYS_EXEC_BAD_PARAMETERS;
++            check+=n;
++        }
++        if(check!=blocks)return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_system_wcb_ready=1u;
++        p->result->system_wcb=&executive_system_wcb;
++        p->result->signature=PORT_SYS_EXEC_SYSWCB_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_LINK_SYSLOA){
+         /* This is INIT.MAR LINK_VEC/EXE$AL_LOAVEC, in resident SYS.EXE. */
+         if(!p->sysloa_descriptor || !p->sysloa_bytes ||
+@@ -299,7 +373,7 @@
+        !executive_lockdb_ready || !executive_procvec_ready ||
+        !executive_phvswap_ready || !executive_mpw_ready ||
+        !executive_pflvec_ready || !executive_interrupt_stack_ready ||
+-       !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
++       !executive_system_wcb_ready || !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
+ 
+     /* Hardware-dependent EXE$INIBOOTADP/EXE$INIPROCREG are called through
+      * the self-relative vectors that were linked into SYS.EXE. */
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2906,6 +2906,32 @@
+     }
+     bootstrap_message("INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.");
+ 
++    /* Original INIT.MAR INI_SYSPCB: pass the actual SYSBOOT-constructed
++     * BOO$L_SYS_MAP to the loaded SYS.EXE. WCB header is still the
++     * documented incomplete native header, with no paging or ACP. */
++    static struct port_sys_exec_result wcb_result;
++    const struct port_sys_exec_wcb_settings wcb_settings={
++        .normalized_boot_map=(uint8_t *)sys_normalized_words,
++        .boot_map_capacity=sizeof sys_normalized_words,
++        .expected_extent_count=sys_extent_count,
++        .expected_first_lbn=sys_extents[0].lbn,
++        .expected_total_blocks=sys_extent_blocks};
++    const struct port_sys_exec_start wcb_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&wcb_result,
++        .phase=PORT_SYS_EXEC_INIT_SYSWCB,.syswcb_settings=&wcb_settings};
++    if(loaded_sys(&wcb_request)!=PORT_SYS_EXEC_NORMAL ||
++       wcb_result.signature!=PORT_SYS_EXEC_SYSWCB_RESULT_TAG ||
++       !wcb_result.system_wcb ||
++       wcb_result.system_wcb->mapping_count!=sys_extent_count ||
++       (uintptr_t)wcb_result.system_wcb<PORT_SYS_ELF_START ||
++       (uintptr_t)wcb_result.system_wcb>
++                    PORT_SYS_ELF_LIMIT-sizeof(struct port_ini_syswcb)){
++        bootstrap_message("INIT: resident SYS.EXE SYSWCB map overlay validation failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.");
++
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+--- a/Makefile
++++ b/Makefile
+@@ -758,7 +758,7 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h src/vms_ini_mpw.h src/vms_ini_pflvec.h | build
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h src/vms_ini_mpw.h src/vms_ini_pflvec.h src/vms_ini_syswcb.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_sysboot_pktmem.o: src/vms_sysboot_pktmem.c src/vms_sysboot_pktmem.h src/vms_booparam.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+@@ -772,8 +772,8 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_mpw.o: src/vms_ini_mpw.c src/vms_ini_mpw.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -797,7 +797,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+--- a/tests/test_sys_exec_entry_host.c
++++ b/tests/test_sys_exec_entry_host.c
+@@ -67,6 +67,11 @@
+     req.intstack_settings=0;
+     CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
+     CHECK(result.signature==PORT_SYS_EXEC_LINK_RESULT_TAG);
++    req.phase=PORT_SYS_EXEC_INIT_SYSWCB;
++    struct port_sys_exec_wcb_settings wcb={0};
++    req.syswcb_settings=&wcb;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    CHECK(result.signature==PORT_SYS_EXEC_LINK_RESULT_TAG);
+     /* Hardware CPU and ATA callbacks are deliberately unavailable in this
+      * host test; NULL result pointers remain uninitialized on failure. */
+     puts("SYS.EXE resident SYSLOA vector link and fail-closed INIT checks PASS");
+--- a/tests/test_rtl85_host.c
++++ b/tests/test_rtl85_host.c
+@@ -109,8 +109,68 @@
+     assert(port_sys_cvt_otb(1,(const uint8_t *)"8",&v)==0);
+     assert(port_sys_cvt_dtb(0,(const uint8_t *)"",&v)==0);
+ }
++/* This batch rechecks all 25 original RTL/SRC/LIB*.MAR equivalents.
++ * These seven FNV-1a constants were calculated directly from all 256
++ * source .BYTE values at the pinned DEC revision. Only checksums, not
++ * any copy of the original DEC source files, are retained here. */
++static uint32_t rtl_fnv32(const uint8_t *p,unsigned count){
++    uint32_t h=UINT32_C(2166136261);
++    for(unsigned i=0;i<count;i++)h=(h^p[i])*UINT32_C(16777619);
++    return h;
++}
++static void test_original_rtl_tables_all_bytes(void){
++    assert(rtl_fnv32(port_lib_ab_cvt_o_u,256u)==UINT32_C(0xc5ce4a2a));
++    assert(rtl_fnv32(port_lib_ab_cvtpt_u,256u)==UINT32_C(0xb39a9e43));
++    assert(rtl_fnv32(port_lib_ab_cvttp_u,256u)==UINT32_C(0x53d9ee6d));
++    assert(rtl_fnv32(port_lib_ab_cvtpt_o,256u)==UINT32_C(0x5f39f845));
++    assert(rtl_fnv32(port_lib_ab_cvttp_o,256u)==UINT32_C(0x179248de));
++    assert(rtl_fnv32(port_lib_ab_cvtpt_z,256u)==UINT32_C(0x4ce08143));
++    assert(rtl_fnv32(port_lib_ab_cvttp_z,256u)==UINT32_C(0x54bd2327));
++    const char overpunch[]="{ABCDEFGHI}JKLMNOPQR";
++    for(unsigned i=0;i<sizeof overpunch-1u;i++)
++        assert(port_lib_ab_cvt_u_o[i]==(uint8_t)overpunch[i]);
++    for(unsigned i=0;i<256u;i++){
++        unsigned expected=i;
++        if(i>='a' && i<='z')expected-=('a'-'A');
++        assert(port_lib_ab_upcase[i]==expected);
++    }
++}
++static void test_rtl_16_functions_boundary_cases(void){
++    uint8_t bits[12]={0};uint32_t value=UINT32_C(0xFFFFFFFF);
++    int32_t sx=0;
++    assert(port_lib_insv(UINT32_C(0x8fffffff),8,32,bits)==PORT_RTL_NORMAL);
++    assert(port_lib_extzv(8,32,bits,&value)==PORT_RTL_NORMAL &&
++           value==UINT32_C(0x8fffffff));
++    assert(port_lib_extv(8,32,bits,&sx)==PORT_RTL_NORMAL &&
++           (uint32_t)sx==UINT32_C(0x8fffffff));
++    assert(port_lib_ffs(8,32,bits,&value)==PORT_RTL_NORMAL && value==8u);
++    assert(port_lib_ffc(8,32,bits,&value)==PORT_RTL_NORMAL && value==36u);
++    assert(port_lib_ffc(8,0,bits,0)==PORT_RTL_NOTFOU);
++    assert(port_lib_ffs(8,0,bits,0)==PORT_RTL_NOTFOU);
++    assert(port_lib_extzv(0,32,0,&value)==PORT_RTL_INVSTRDES);
++    assert(port_lib_insv(1,0,32,0)==PORT_RTL_INVSTRDES);
++    assert(port_lib_ffs(0,8,0,&value)==PORT_RTL_INVSTRDES);
++    const char *literal="ABABABCD";
++    struct port_rtl_desc longstr=desc(literal),pattern=desc("ABCD");
++    assert(port_lib_index(&longstr,&pattern)==5u);
++    assert(port_lib_matchc(&pattern,&longstr)==5u);
++    struct port_rtl_desc zero=desc("");
++    assert(port_lib_index(&longstr,&zero)==1u);
++    assert(port_lib_len(&longstr)==8u && port_lib_ichar(&longstr)=='A');
++    assert(port_lib_locc(&pattern,&longstr)==1u);
++    assert(port_lib_skpc(&pattern,&longstr)==2u);
++    uint8_t all[256]={0};all['A']=0x40u;all['B']=0x80u;
++    assert(port_lib_scanc(&longstr,all,0x80u)==2u);
++    assert(port_lib_spanc(&longstr,all,0x40u)==2u);
++    char overlap[16]="abcdefghi";
++    assert(port_lib_movc3(7,overlap,overlap+2)==PORT_RTL_NORMAL);
++    assert(memcmp(overlap,"ababcdefg",9)==0);
++    assert(port_lib_movc5(4,overlap,'X',8,overlap+1)==PORT_RTL_NORMAL);
++    assert(memcmp(overlap,"aababXXXX",9)==0);
++}
+ int main(void){
+     test_desc();test_strings();test_bits();test_tables();test_radix();
+-    puts("VMS 3.7 RTL and CVTATB full-source behavior checks PASS");
++    test_original_rtl_tables_all_bytes();test_rtl_16_functions_boundary_cases();
++    puts("VMS 3.7 RTL 25 original source modules: full-byte tables and directed routines PASS");
+     return 0;
+ }
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1622,7 +1622,7 @@
+     (1142,1165,'src/vms_ini_pflvec.c','port_ini_pflvec_init','Page and swap-file PTR record in loaded SYS.EXE, anchored to resident uninitialized NULLPFL storage; guest-checked, no actual pagefile service, SYSGEN values or shell WCB','partial'),
+     (1166,1183,'src/vms_ini_pflvec.c','port_ini_interrupt_stack_limits','Source-defined 512-byte interrupt-stack bounds and bounded lock resource depth executed in loaded guest SYS.EXE using live IA-32 TSS.esp0; native IPL stack and lock manager remain incomplete','partial'),
+     (1184,1188,'src/vms_ini_procvec.c','port_ini_procvec_init','SYSTEM PCB physical process header and process-index setup remains partial','partial'),
+-    (1189,1212,'src/vms_ini_syswcb.c','port_ini_syswcb_from_boot_map','Normalize 8-byte SYSBOOT SYS.EXE extents into 6-byte WCB retrieval pointers and overlay linked WCB template; tested only on host pending guest boot CB and WCB template','partial'),
++    (1189,1212,'src/vms_ini_syswcb.c','port_ini_syswcb_from_boot_map','Actual guest-executed 8-to-6 byte extent compaction in resident SYS.EXE from real Files-11 BOO$L_SYS_MAP, with resident partial native WCB header; original WCB constants and ACP consumers still unresolved','partial'),
+     (1213,1231,None,None,'Original VAX PR$_NICR/ICCS/ICR clock-counter timing loop needs real IA-32 hardware equivalent','hardware-excluded'),
+     (1232,1239,'src/vms_ini_dptlist.c','port_ini_dpt_attach_three','32-bit VAX INSQUE source-ordered MB, NL, OP DPT prologue list layout; host-tested but actual driver records and guest IOC attachment remain unresolved','partial'),
+     (1240,1255,'src/vms_ini_syslog.c','port_ini_syslog_init','Validated copy of SYS$DISK and SYS$SYSDEVICE LOG records into aligned nonpaged pool and two temporary LOG$AL_LOGTBL slots; host-only until native logical-name service is live','partial'),
+--- a/tools/qemu_sysboot_m101.py
++++ b/tools/qemu_sysboot_m101.py
+@@ -39,6 +39,7 @@
+         b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
+         b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
+         b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
+         b'INIT: loaded SYS.EXE resident entry executed and verified.',
+         b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
+         b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
+@@ -56,6 +57,7 @@
+         b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
+         b'INIT: resident SYS.EXE modified-page writer record validation failed.',
+         b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
+         b'INIT: SYS.EXE resident initialization failed.',
+         b'INIT: SYS.EXE PIT clock handoff failed.',
+         b'INIT: live SYS.EXE PIT clock did not advance.',
