@@ -1,0 +1,367 @@
+--- a/src/vms_sysboot_map.c
++++ b/src/vms_sysboot_map.c
+@@ -49,3 +49,69 @@
+     }
+     return PORT_F11_HOME_OK;
+ }
++
++/* SYSBOOT's source-defined BOO$L_SYS_MAP byte stream is not an
++ * instruction emulator. Every word is encoded as native little-endian
++ * 32-bit data for INIT's later 8-to-6-byte retrieval-pointer conversion. */
++static uint32_t normalized_get32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8)|
++           ((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
++}
++static void normalized_put32(uint8_t *p,uint32_t value){
++    p[0]=(uint8_t)value;p[1]=(uint8_t)(value>>8);
++    p[2]=(uint8_t)(value>>16);p[3]=(uint8_t)(value>>24);
++}
++uint32_t port_sysboot_build_normalized_map(uint8_t *destination,
++    size_t capacity,const struct port_f11_extent *extents,
++    uint32_t extent_count,uint32_t minimum_blocks,
++    struct port_sysboot_normalized_map *out){
++    if(!destination||!extents||!out||!extent_count||!minimum_blocks||
++       extent_count>UINT32_MAX/8u||
++       (uintptr_t)destination&3u)return PORT_F11_HOME_BADARG;
++    uint32_t extent_bytes=extent_count*8u;
++    if(extent_bytes>UINT32_MAX-4u ||
++       (uint64_t)extent_bytes+4u>capacity)
++        return PORT_F11_FILE_BAD_MAP;
++    uint64_t total=0u;
++    for(uint32_t i=0u;i<extent_count;i++){
++        uint32_t blocks=extents[i].blocks,lbn=extents[i].lbn;
++        if(!blocks || blocks>UINT32_MAX-lbn ||
++           total+blocks>UINT32_MAX)
++            return PORT_F11_FILE_BAD_MAP;
++        total+=blocks;
++    }
++    if(total<minimum_blocks)return PORT_F11_FILE_BAD_MAP;
++    normalized_put32(destination,extent_bytes);
++    for(uint32_t i=0;i<extent_count;i++){
++        normalized_put32(destination+4u+8u*i,extents[i].blocks);
++        normalized_put32(destination+8u+8u*i,extents[i].lbn);
++    }
++    *out=(struct port_sysboot_normalized_map){
++        .record=destination,.extent_count=extent_count,
++        .normalized_bytes=extent_bytes,.total_blocks=(uint32_t)total};
++    return PORT_F11_HOME_OK;
++}
++uint32_t port_sysboot_check_normalized_map(const uint8_t *record,
++    size_t capacity,uint32_t minimum_blocks,
++    struct port_sysboot_normalized_map *out){
++    if(!record||!out||capacity<12u||!minimum_blocks ||
++       (uintptr_t)record&3u)return PORT_F11_HOME_BADARG;
++    uint32_t bytes=normalized_get32(record);
++    if(!bytes || (bytes&7u) || (uint64_t)bytes+4u>capacity)
++        return PORT_F11_FILE_BAD_MAP;
++    uint32_t count=bytes/8u;
++    uint64_t total=0u;
++    for(uint32_t i=0;i<count;i++){
++        uint32_t blocks=normalized_get32(record+4u+8u*i);
++        uint32_t lbn=normalized_get32(record+8u+8u*i);
++        if(!blocks || blocks>UINT32_MAX-lbn ||
++           total+blocks>UINT32_MAX)
++            return PORT_F11_FILE_BAD_MAP;
++        total+=blocks;
++    }
++    if(total<minimum_blocks)return PORT_F11_FILE_BAD_MAP;
++    *out=(struct port_sysboot_normalized_map){
++        .record=record,.extent_count=count,
++        .normalized_bytes=bytes,.total_blocks=(uint32_t)total};
++    return PORT_F11_HOME_OK;
++}
+--- a/src/vms_sysboot_map.h
++++ b/src/vms_sysboot_map.h
+@@ -1,6 +1,7 @@
+ #ifndef VMS_SYSBOOT_MAP_H
+ #define VMS_SYSBOOT_MAP_H
+ #include <stdint.h>
++#include <stddef.h>
+ #include "vms_boot_files11.h"
+ /* BOO$MAPVBN and BOO$SETMAP, SYSBOOT.MAR. One-origin file VBNs.
+  * Extents use the original normalized count/LBN representation. */
+@@ -8,6 +9,23 @@
+                               uint32_t count,uint32_t vbn,
+                               uint32_t *lbn,uint32_t *remaining,
+                               uint32_t *next_index);
++/* BOOTS/SRC/SYSBOOT.MAR BOO$L_SYS_MAP. The first longword holds
++ * the byte length of normalized {32-bit block count, 32-bit LBN}
++ * retrieval records. SYSBOOT reserves extra space for later INIT WCB
++ * overlay; this builder does not claim a live WCB or pager. */
++struct port_sysboot_normalized_map {
++    const uint8_t *record;
++    uint32_t extent_count;
++    uint32_t normalized_bytes;
++    uint32_t total_blocks;
++};
++uint32_t port_sysboot_build_normalized_map(uint8_t *destination,
++    size_t capacity,const struct port_f11_extent *extents,
++    uint32_t extent_count,uint32_t minimum_blocks,
++    struct port_sysboot_normalized_map *out);
++uint32_t port_sysboot_check_normalized_map(const uint8_t *record,
++    size_t capacity,uint32_t minimum_blocks,
++    struct port_sysboot_normalized_map *out);
+ uint32_t port_sysboot_setmap(const struct port_f11_extent *map,
+                              uint32_t count,uint32_t first_vbn,
+                              uint32_t requested,
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2,6 +2,7 @@
+ #include "vms_iniloa_entry.h"
+ #include "vms_ini_pc_bus.h"
+ #include "vms_sys_executive_entry.h"
++#include "vms_sysboot_map.h"
+ #include "vms_sysloa386.h"
+ /* Native VMS 3.7 port research monitor. NOT VAX/VMS or a VMS implementation.
+  * It uses VGA text memory and 8042 keyboard-controller I/O directly.
+@@ -2536,6 +2537,32 @@
+         bootstrap_message("-F-Unable to locate SYS.EXE");
+         bootstrap_halt();
+     }
++    /* SYSBOOT BOO$L_SYS_MAP: preserve the actual Files-11 SYS.EXE
++     * allocation as 32-bit normalized retrieval pointers. Its resident
++     * WCB template overlay and window consumers are still unported. */
++    static struct port_f11_extent sys_extents[48];
++    static uint32_t sys_normalized_words[128];
++    static struct port_sysboot_normalized_map sys_normalized_map;
++    uint32_t sys_extent_count=0u,sys_extent_blocks=0u;
++    uint32_t sys_first_contiguous=0u;
++    if(port_f11_collect_file_extents(boot_io,1u,&bootstrap_volume,
++          sys_file,sys_extents,48u,&sys_extent_count,&sys_extent_blocks,
++          &sys_first_contiguous)!=PORT_F11_HOME_OK ||
++       !sys_extent_count || sys_extent_blocks<sys_blocks ||
++       (first_lbn && sys_first_contiguous &&
++        first_lbn!=sys_first_contiguous) ||
++       port_sysboot_build_normalized_map((uint8_t *)sys_normalized_words,
++          sizeof sys_normalized_words,sys_extents,sys_extent_count,
++          sys_blocks,&sys_normalized_map)!=PORT_F11_HOME_OK ||
++       port_sysboot_check_normalized_map((const uint8_t *)sys_normalized_words,
++          sizeof sys_normalized_words,sys_blocks,
++          &sys_normalized_map)!=PORT_F11_HOME_OK ||
++       sys_normalized_map.extent_count!=sys_extent_count ||
++       sys_normalized_map.total_blocks!=sys_extent_blocks){
++        bootstrap_message("SYSBOOT: SYS.EXE retrieval map invalid.");
++        bootstrap_halt();
++    }
++    bootstrap_message("SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.");
+     /* SYSBOOT LOAD_CODE: map the distinct IA-32 executive's ELF PT_LOAD
+      * segments from the Files-11 file using FIL$READVBN.  Neither stage-2
+      * floppy sectors nor diagnostic test functions provide SYS.EXE bytes. */
+--- a/Makefile
++++ b/Makefile
+@@ -923,3 +923,9 @@
+ inittybindcheck: build/vms_ini_ttydrv.o | build
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_ttydrv.c tests/test_ini_ttybind_host.c -o build/inittybindcheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/inittybindcheck
++
++# M105: source-ordered SYSBOOT BOO$L_SYS_MAP on genuine Files-11 SYS.EXE.
++.PHONY: sysnormalizedmapcheck
++sysnormalizedmapcheck: portdisk.img | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysboot_map.c src/vms_boot_files11.c src/vms_bootio.c tests/test_sysboot_normalized_map.c -o build/sysnormalizedmapcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/sysnormalizedmapcheck portdisk.img
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -873,7 +873,7 @@
+ result['files'].append({'original_file':'BOOTS/SRC/SYSBOOT.MAR',
+                        'original_lines':2897,'sections':sections,
+                        'platform_changes':['Native IA-32 SYS.EXE is a separately linked ELF32 file installed in the original Files-11 directory; the VAX image record format is CPU-specific', 'SYSBOOT ELF32 LOAD_CODE streams real PT_LOAD bytes from the F11 VBN map into reserved supervisor RAM'],
+-                       'unresolved_integration':'SYSBOOT packet-pool address calculations are partial; actual PFN/SPT mapping, SYSPARAM and GETCURRENT processing remain incomplete. SYS.EXE and INILOA load into guest RAM but other images/entry points are still missing.'})
++                       'unresolved_integration':'SYSBOOT normalized BOO$L_SYS_MAP retrieval pointers now derive from live Files-11 SYS.EXE extents. WCB overlay and packet pool PFN/SPT mapping remain incomplete; SYSPARAM and process startup are unresolved.'})
+ 
+ fileread_sections=[
+     (1,740,None,None,'other FILEREAD declarations, cache setup, full filename parser and open logic','missing'),
+--- /dev/null
++++ b/tests/test_sysboot_normalized_map.c
+@@ -0,0 +1,82 @@
++#include "vms_sysboot_map.h"
++#include "vms_boot_files11.h"
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#define CHECK(x) do {if(!(x)){fprintf(stderr,"FAIL %s:%u: %s\n",__FILE__,__LINE__,#x);return 1;}} while(0)
++static uint32_t get32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8)|
++           ((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
++}
++struct disk {FILE *file;};
++static uint32_t read_sector(void *ctx,uint32_t mode,uint32_t fn,
++                            uint32_t lbn,uint32_t size,void *data){
++    struct disk *d=ctx;
++    if(mode || fn!=1u || size!=512u || !data ||
++       fseek(d->file,(long)lbn*512L,SEEK_SET) ||
++       fread(data,1,512u,d->file)!=512u)return BOO_IO_FAILED;
++    return BOO_IO_NORMAL;
++}
++int main(int argc,char **argv){
++    CHECK(argc==2);
++    uint32_t memory[128];
++    uint8_t *m=(uint8_t *)memory;
++    struct port_f11_extent e[3]={{7u,128u},{10u,140u},{3u,160u}};
++    struct port_sysboot_normalized_map out={0};
++    memset(memory,0xa5,sizeof memory);
++    CHECK(port_sysboot_build_normalized_map(m,20u,e,3u,20u,&out)==PORT_F11_FILE_BAD_MAP);
++    for(size_t i=0;i<sizeof memory;i++)CHECK(m[i]==0xa5u);
++    CHECK(port_sysboot_build_normalized_map(m,sizeof memory,e,3u,21u,&out)==PORT_F11_FILE_BAD_MAP);
++    for(size_t i=0;i<sizeof memory;i++)CHECK(m[i]==0xa5u);
++    CHECK(port_sysboot_build_normalized_map(m,sizeof memory,e,3u,20u,&out)==PORT_F11_HOME_OK);
++    CHECK(get32(m)==24u && out.extent_count==3u && out.normalized_bytes==24u && out.total_blocks==20u);
++    for(uint32_t i=0;i<3u;i++){
++       CHECK(get32(m+4u+8u*i)==e[i].blocks);
++       CHECK(get32(m+8u+8u*i)==e[i].lbn);
++    }
++    CHECK(m[28u]==0xa5u);
++    struct port_sysboot_normalized_map second={0};
++    CHECK(port_sysboot_check_normalized_map(m,sizeof memory,20u,&second)==PORT_F11_HOME_OK);
++    CHECK(second.record==m && second.total_blocks==20u && second.extent_count==3u);
++    m[0]=7u;
++    CHECK(port_sysboot_check_normalized_map(m,sizeof memory,20u,&second)==PORT_F11_FILE_BAD_MAP);
++    m[0]=24u;
++    e[1].blocks=0u;
++    memset(memory,0xa5,sizeof memory);
++    CHECK(port_sysboot_build_normalized_map(m,sizeof memory,e,3u,20u,&out)==PORT_F11_FILE_BAD_MAP);
++    for(size_t i=0;i<sizeof memory;i++)CHECK(m[i]==0xa5u);
++    e[1].blocks=10u;
++    e[0].lbn=UINT32_MAX;
++    CHECK(port_sysboot_build_normalized_map(m,sizeof memory,e,3u,20u,&out)==PORT_F11_FILE_BAD_MAP);
++    e[0].lbn=128u;
++    CHECK(port_sysboot_build_normalized_map(m,sizeof memory,e,0u,20u,&out)==PORT_F11_HOME_BADARG);
++    CHECK(port_sysboot_build_normalized_map(m+1u,sizeof memory-1u,e,3u,20u,&out)==PORT_F11_HOME_BADARG);
++    struct disk d={fopen(argv[1],"rb")};CHECK(d.file);
++    struct boo_io_driver disk={read_sector,&d,0u};
++    struct port_f11_volume volume={0};
++    CHECK(port_f11_mount(&disk,1u,&volume)==PORT_F11_HOME_OK);
++    struct port_f11_fid fid={0};
++    uint8_t header[512];
++    uint32_t first_lbn=0u,alloc=0u;
++    CHECK(port_f11_open_named_file(&disk,1u,&volume,"[SYSEXE]SYS.EXE",
++       &fid,header,&first_lbn,&alloc)==PORT_F11_HOME_OK);
++    CHECK(fid.number==11u && alloc>0u);
++    struct port_f11_extent original[48]={0};
++    uint32_t count=0u,blocks=0u,contiguous=0u;
++    CHECK(port_f11_collect_file_extents(&disk,1u,&volume,fid,
++       original,48u,&count,&blocks,&contiguous)==PORT_F11_HOME_OK);
++    CHECK(count>0u && count<=48u && blocks>=alloc);
++    CHECK(port_sysboot_build_normalized_map(m,sizeof memory,
++       original,count,alloc,&out)==PORT_F11_HOME_OK);
++    CHECK(port_sysboot_check_normalized_map(m,sizeof memory,
++       alloc,&second)==PORT_F11_HOME_OK);
++    CHECK(second.total_blocks==blocks && second.extent_count==count);
++    for(uint32_t i=0;i<count;i++){
++        CHECK(get32(m+4u+i*8u)==original[i].blocks);
++        CHECK(get32(m+8u+i*8u)==original[i].lbn);
++    }
++    if(contiguous)CHECK(contiguous==first_lbn);
++    fclose(d.file);
++    puts("Native SYSBOOT guest BOO$L_SYS_MAP normalized real Files-11 SYS.EXE extents PASS");
++    return 0;
++}
+--- /dev/null
++++ b/tools/qemu_sysboot_m105.py
+@@ -0,0 +1,107 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; check source-ordered real SYS.EXE retrieval map and INIT.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M105: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        observed.extend(b'\n=== QEMU stderr ===\n')
++        observed.extend(p.stderr.read(8192))
++        serial_path=ROOT/'qemu-m105-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,105,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M105: SYSBOOT normalized SYS.EXE map, PFLVEC record, lock/IRP and live IRQ/IDT/CR3/TSS/Files-11 verified PASS')
++        return 0
++    print('QEMU M105: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
