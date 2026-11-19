@@ -1,4 +1,4 @@
-name: VMS37 M74 QEMU repeated guest stress
+name: VMS37 M75 QEMU repeated guest stress
 on:
   push:
     branches:
@@ -27,24 +27,24 @@ jobs:
         run: |
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
-      - name: Reconstruct and verify native M74 floppy and Files-11 IDE disk
+      - name: Reconstruct and verify native M75 floppy and Files-11 IDE disk
         shell: bash
         run: |
           set -euo pipefail
-          xz --decompress --stdout ci-vms37/vms37lab-m74.ima.xz > ci-vms37/vms37lab-m74.ima
-          echo 'dd0c523c139987f0536ab1a757feedd3572e2d1fec39edd58296dd32270a5847  ci-vms37/vms37lab-m74.ima' | sha256sum --check
-          xz --decompress --stdout ci-vms37/portdisk-m74.img.xz > ci-vms37/portdisk.img
-          echo 'ee019370f367b87f62bc1d88b834befe7e23f26518eb7b2910d33be7fd9b8400  ci-vms37/portdisk.img' | sha256sum --check
+          xz --decompress --stdout ci-vms37/vms37lab-m75.ima.xz > ci-vms37/vms37lab-m75.ima
+          echo '08df524c6ad60a1761ef429cf26b7cfb84bd0b69fdefa2e14201dada39c8828c  ci-vms37/vms37lab-m75.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/portdisk-m75.img.xz > ci-vms37/portdisk.img
+          echo 'e38b443c7145e0a81d8d4fa9fa4a1cd37341448e62e075c3eb8c43d7a176524e  ci-vms37/portdisk.img' | sha256sum --check
 
-      - name: Boot with original Files-11 SYSEXE directory, then require SYS.EXE
+      - name: Check counted BIOS bootstrap and native SYSBOOT against real Files-11 disk
         shell: bash
-        run: python3 ci-vms37/qemu_m74_startup.py
+        run: python3 ci-vms37/qemu_m75_startup.py
 
       - name: Preserve QEMU serial transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m74-qemu-serial
+          name: vms37-m75-qemu-serial
           path: |
-            ci-vms37/qemu-m74-serial.log
+            ci-vms37/qemu-m75-serial.log
           if-no-files-found: warn
