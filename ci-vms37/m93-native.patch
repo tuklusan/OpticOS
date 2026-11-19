@@ -1,0 +1,933 @@
+--- a/Makefile
++++ b/Makefile
+@@ -202,7 +202,7 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_phys.o: src/vms_phys.c src/vms_phys.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/kernel.o: src/kernel.c src/vms_login_interact.h src/vms_logincmd.h src/vms_login_fileio.h src/vms_login_uart.h src/vms_hpwd.h src/vms_validate.h src/vms_logintime.h src/vms_dcl_exit.h src/vms_dcl_readrec.h src/vms_dcl_initial.h src/vms_dcl_command.h src/vms_rem_protocol.h src/vms_bootio.h src/vms_boot_files11.h src/vms_vmbargs.h src/vms_vmb_rpb.h src/vms_sysmount.h src/vms_sysboot_elf.h src/vms_dcl_goto.h src/vms_ast.h src/vms_astdel.h src/vms_postef.h src/vms_mutex.h src/vms_condition.h | build
++build/kernel.o: src/kernel.c src/vms_sys_executive_entry.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_login_interact.h src/vms_logincmd.h src/vms_login_fileio.h src/vms_login_uart.h src/vms_hpwd.h src/vms_validate.h src/vms_logintime.h src/vms_dcl_exit.h src/vms_dcl_readrec.h src/vms_dcl_initial.h src/vms_dcl_command.h src/vms_rem_protocol.h src/vms_bootio.h src/vms_boot_files11.h src/vms_vmbargs.h src/vms_vmb_rpb.h src/vms_sysmount.h src/vms_sysboot_elf.h src/vms_dcl_goto.h src/vms_ast.h src/vms_astdel.h src/vms_postef.h src/vms_mutex.h src/vms_condition.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_pc_bus.o: src/vms_ini_pc_bus.c src/vms_ini_pc_bus.h src/vms_iniloa_iomap.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+@@ -758,10 +758,14 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h | build
+-	$(CC) $(CFLAGS) -c $< -o $@
+-build/sys.exe: build/vms_sys_executive_entry.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/executive-partial.o
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/vms_sysboot_pktmem.o: src/vms_sysboot_pktmem.c src/vms_sysboot_pktmem.h src/vms_booparam.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/vms_ini_packet_queues.o: src/vms_ini_packet_queues.c src/vms_ini_packet_queues.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -772,7 +776,7 @@
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysnative_hosttest portdisk.img build/sys.exe build/iniloa.exe build/sysloa386.exe
+ .PHONY: qemu-sysnative
+ qemu-sysnative: vms37lab.ima portdisk.img
+-	python3 tools/qemu_sysboot_m92.py
++	python3 tools/qemu_sysboot_m93.py
+ 
+ # M89: original INILOA load order, with native IA-32 I/O-map counterpart.
+ build/vms_iniloa_iomap.o: src/vms_iniloa_iomap.c src/vms_iniloa_iomap.h | build
+@@ -785,7 +789,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -818,3 +822,20 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c tests/test_sysloa386_image_host.c -o build/sysloa386imagecheck
+ 	./build/sysloa386imagecheck build/sysloa386.exe
+ 
++# Recoverable checkpoints retain the exact COM1 bytes of every known run.
++.PHONY: seriallogcheck seriallogtest checkpointzip
++seriallogcheck:
++	python3 tools/checkpoint_serial_logs.py verify
++seriallogtest:
++	python3 tests/test_checkpoint_serial_logs.py
++checkpointzip: seriallogtest seriallogcheck
++	python3 tools/checkpoint_serial_logs.py bundle --output ../$(notdir $(CURDIR))-current.zip
++
++# M93: original BOOTS SYSBOOT packet carve and INIT.MAR lookaside queue headers.
++.PHONY: pktlayoutcheck packetqueuecheck
++pktlayoutcheck: | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysboot_pktmem.c tests/test_sysboot_pktmem_host.c -o build/pktlayoutcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/pktlayoutcheck
++packetqueuecheck: | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_packet_queues.c tests/test_ini_packet_queues_host.c -o build/packetqueuecheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/packetqueuecheck
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2552,6 +2552,38 @@
+         bootstrap_halt();
+     }
+     bootstrap_message("SYSBOOT: Files-11 SYS.EXE native image loaded.");
++    /* BOOTS/SRC/SYSBOOT.MAR: carved lookaside packet pages are provided to
++     * SYS.EXE before the CPU-specific load vector table is linked. These
++     * counts and sizes are a temporary native startup profile, not yet read
++     * from a complete SYSGEN image. No QIO process is started here. */
++    static const struct port_boo_packet_settings packet_profile={
++        .irp_length=160u,.irp_count=8u,.irp_virtual_count=8u,
++        .lrp_requested_size=512u,.lrp_count=2u,.lrp_virtual_count=2u,
++        .srp_requested_size=128u,.srp_count=8u,.srp_virtual_count=8u};
++    static struct port_sys_exec_result packet_result;
++    const struct port_sys_exec_start packet_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&packet_result,
++        .phase=PORT_SYS_EXEC_INIT_IOQUEUES,.packet_settings=&packet_profile};
++    uint32_t (*initial_loaded_sys)(const struct port_sys_exec_start *)=
++        (uint32_t (*)(const struct port_sys_exec_start *))(uintptr_t)sys_entry;
++    if(initial_loaded_sys(&packet_request)!=PORT_SYS_EXEC_NORMAL ||
++       packet_result.signature!=PORT_SYS_EXEC_PACKET_RESULT_TAG ||
++       !packet_result.irp_queue || !packet_result.lrp_queue ||
++       !packet_result.srp_queue ||
++       packet_result.irp_count!=8u || packet_result.lrp_count!=2u ||
++       packet_result.srp_count!=8u ||
++       packet_result.irp_queue->next==0u ||
++       packet_result.lrp_queue->next==0u ||
++       packet_result.srp_queue->next==0u ||
++       packet_result.irp_queue->packet_bytes!=160u ||
++       packet_result.lrp_queue->packet_bytes!=576u ||
++       packet_result.srp_queue->packet_bytes!=128u ||
++       packet_result.lrp_queue->minimum_bytes!=480u){
++        bootstrap_message("INIT: SYS.EXE packet queue initialization failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.");
+     /* Original SYSBOOT loads the CPU-specific SYSLOAxxx image, then INIT
+      * links its self-relative entries into the resident SYS.EXE vector table
+      * before loading INILOA. SYSLOA386 is the native IA-32 processor type. */
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -3,6 +3,7 @@
+ #include "vms_exe_scbvector.h"
+ #include "vms_exe_gettim.h"
+ #include "vms_sysloavec.h"
++#include <stdint.h>
+ /* All state belongs to SYS.EXE's separately loaded resident supervisor
+  * segment, not to the SYSBOOT monitor or a pretend VAX processor. */
+ static struct port_exe_scheduler executive_scheduler;
+@@ -13,12 +14,85 @@
+     port_exe_systime_tick(&executive_clock);
+ }
+ static struct port_sysloa_table executive_sysloa;
++/* This memory is genuinely loaded and zeroed by the SYSBOOT ELF loader,
++ * mapped supervisor-only in the guest. Replacing its provisional size
++ * limits with SYSGEN-selected BOO$ offsets remains later integration. */
++static uint8_t executive_packet_pages[8192] __attribute__((aligned(512)));
++static struct port_ini_packet_list executive_irps,executive_lrps,executive_srps;
++static uint32_t executive_packet_ready;
++
++static uint32_t port_exe_initialize_lookaside(const struct port_sys_exec_start *p){
++    /* INIT.MAR INI_IRP/INI_LRP/INI_SRP must finish before LINK_VEC. The
++     * BOOTS/SRC/SYSBOOT.MAR allocation calculation defines these spans. */
++    uintptr_t start=(uintptr_t)executive_packet_pages;
++    uintptr_t top=start+sizeof executive_packet_pages;
++    if(start>UINT32_MAX || top>UINT32_MAX ||
++       !p->packet_settings || executive_packet_ready)
++        return PORT_SYS_EXEC_BAD_PARAMETERS;
++    struct port_boo_packet_settings settings=*p->packet_settings;
++    settings.top_address=(uint32_t)top;
++    /* A future SYSBOOT page-table mapper must support virtual-count gaps;
++     * this restricted stage has only the physically backed resident pages. */
++    if(settings.irp_count!=settings.irp_virtual_count ||
++       settings.lrp_count!=settings.lrp_virtual_count ||
++       settings.srp_count!=settings.srp_virtual_count ||
++       settings.nonpaged_dynamic_bytes || settings.nonpaged_virtual_bytes ||
++       settings.paged_dynamic_bytes)
++        return PORT_SYS_EXEC_BAD_PARAMETERS;
++    struct port_boo_packet_layout m={0};
++    struct port_boo_parameters boo={0};
++    if(port_boo_packet_layout(&settings,&m,&boo)!=PORT_BOO_PACKET_OK ||
++       m.lrp.first_address<start || m.srp.reserved_end>top ||
++       m.nonpaged_start<start ||
++       m.srp.resident_end>top ||
++       m.irp.resident_end>top || m.lrp.resident_end>top)
++        return PORT_SYS_EXEC_BAD_PARAMETERS;
++    struct port_ini_packet_area areas[3]={
++        {(uint8_t *)(uintptr_t)m.irp.first_address,m.irp.first_address,
++         m.irp.resident_end-m.irp.first_address,boo.irp_count,m.irp.packet_bytes,
++         m.irp.packet_bytes,(uint32_t)(uintptr_t)&executive_irps.next},
++        {(uint8_t *)(uintptr_t)m.lrp.first_address,m.lrp.first_address,
++         m.lrp.resident_end-m.lrp.first_address,boo.lrp_count,m.lrp.packet_bytes,
++         boo.lrp_minimum>480u?boo.lrp_minimum:480u,
++         (uint32_t)(uintptr_t)&executive_lrps.next},
++        {(uint8_t *)(uintptr_t)m.srp.first_address,m.srp.first_address,
++         m.srp.resident_end-m.srp.first_address,boo.srp_count,m.srp.packet_bytes,
++         m.srp.packet_bytes/2u,(uint32_t)(uintptr_t)&executive_srps.next}
++    };
++    /* Prevalidate all three pools before modifying any resident bytes. */
++    for(unsigned i=0;i<3u;i++){
++        const struct port_ini_packet_area *a=&areas[i];
++        uint64_t used=(uint64_t)a->count*a->packet_bytes;
++        uint32_t remain=(a->count && ((a->address+used)&511u))?
++                    512u-(uint32_t)((a->address+used)&511u):0u;
++        if(a->minimum_bytes>a->packet_bytes ||
++           used+remain>a->available_bytes ||
++           a->packet_bytes<16u || a->packet_bytes>UINT16_MAX)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++    }
++    if(port_ini_packet_init(&areas[0],&executive_irps)!=PORT_INI_PACKETS_OK ||
++       port_ini_packet_init(&areas[1],&executive_lrps)!=PORT_INI_PACKETS_OK ||
++       port_ini_packet_init(&areas[2],&executive_srps)!=PORT_INI_PACKETS_OK)
++        return PORT_SYS_EXEC_BAD_PARAMETERS;
++    executive_packet_ready=1u;
++    p->result->irp_queue=&executive_irps;
++    p->result->lrp_queue=&executive_lrps;
++    p->result->srp_queue=&executive_srps;
++    p->result->irp_count=executive_irps.packet_count;
++    p->result->lrp_count=executive_lrps.packet_count;
++    p->result->srp_count=executive_srps.packet_count;
++    p->result->signature=PORT_SYS_EXEC_PACKET_RESULT_TAG;
++    return PORT_SYS_EXEC_NORMAL;
++}
++
+ 
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *p){
+     if(!p || p->signature!=PORT_SYS_EXEC_SIGNATURE ||
+        p->version!=PORT_SYS_EXEC_VERSION || !p->result || p->reserved ||
+        p->pcb_type!=PORT_SYS_EXEC_PCB_KIND)
+         return PORT_SYS_EXEC_BAD_PARAMETERS;
++    if(p->phase==PORT_SYS_EXEC_INIT_IOQUEUES)
++        return port_exe_initialize_lookaside(p);
+     if(p->phase==PORT_SYS_EXEC_LINK_SYSLOA){
+         /* This is INIT.MAR LINK_VEC/EXE$AL_LOAVEC, in resident SYS.EXE. */
+         if(!p->sysloa_descriptor || !p->sysloa_bytes ||
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -3,13 +3,16 @@
+ #include <stdint.h>
+ #include "vms_sysloa386.h"
+ #include "vms_exe_gettim.h"
++#include "vms_sysboot_pktmem.h"
++#include "vms_ini_packet_queues.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+ enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=4u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+-       PORT_SYS_EXEC_LINK_RESULT_TAG=0x4b4e4c53u };
++       PORT_SYS_EXEC_LINK_RESULT_TAG=0x4b4e4c53u,
++       PORT_SYS_EXEC_INIT_IOQUEUES=3u,PORT_SYS_EXEC_PACKET_RESULT_TAG=0x51504b54u };
+ struct port_sys_exec_result {
+     uint32_t signature;
+     uint32_t scheduler_ready_mask;
+@@ -25,6 +28,8 @@
+     uint32_t sysloa_cr0;
+     const struct port_exe_systime *resident_clock;
+     void (*pit_tick)(void);
++    const struct port_ini_packet_list *irp_queue,*lrp_queue,*srp_queue;
++    uint32_t irp_count,lrp_count,srp_count;
+ };
+ struct port_sys_exec_start {
+     uint32_t signature,version;
+@@ -38,6 +43,7 @@
+     uint32_t sysloa_bytes;
+     const struct port_sysloa386_cpu_ops *cpu_ops;
+     const struct port_sysloa386_boot_ops *boot_ops;
++    const struct port_boo_packet_settings *packet_settings;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+ #endif
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -843,7 +843,11 @@
+     (657,674,'src/vms_sysboot_read.c','port_sysboot_getcurrent','GETCURRENT locates SYS.EXE through Files-11','mapped'),
+     (675,724,'src/vms_sysboot_read.c','port_sysboot_getcurrent','SYS.EXE file header and executable region','mapped'),
+     (725,750,'src/vms_sysboot_read.c','port_sysboot_getcurrent','SYSPARAM VBN mapping and disk block transfer','mapped'),
+-    (751,1958,None,None,'remaining early SYSBOOT setup, memory, CPU and image driver startup','missing'),
++    (751,1082,None,None,'SYSBOOT parameter parsing and early memory preparation unresolved','missing'),
++    (1083,1135,'src/vms_sysboot_pktmem.c','port_boo_packet_layout','16-byte aligned virtual packet-pool sizing, page-rounded IRP/LRP/SRP reservation (partial)','partial'),
++    (1136,1359,None,None,'SYSBOOT PFN calculation, page tables and physical memory setup unresolved','missing'),
++    (1360,1430,'src/vms_sysboot_pktmem.c','port_boo_packet_layout','Source-ordered SRP/IRP/LRP resident allocation, BOO packet parameters (partial)','partial'),
++    (1431,1958,None,None,'SYSBOOT paging, pool, CPU and image driver startup unresolved','missing'),
+     (1959,1992,'src/vms_sysboot_read.c','port_sysboot_image_init','IMAGE_OPEN resolves the image and its file header','mapped'),
+     (1993,2008,None,None,'fatal scattered-file messages and IMAGE_INIT description','missing'),
+     (2009,2056,'src/vms_sysboot_read.c','port_sysboot_image_init','IMAGE_INIT reads file image header and executable block range','mapped'),
+@@ -863,13 +867,13 @@
+         line=line_for_symbol(path,symbol)
+         if line is None:missing+=1
+         sections.append({'original_lines':[first,last],
+-                         'status':'mapped' if line else 'missing',
++                         'status':status if line else 'missing',
+                          'pc_file':path,'pc_symbol':symbol,'pc_line':line,
+                          'function':reason})
+ result['files'].append({'original_file':'BOOTS/SRC/SYSBOOT.MAR',
+                        'original_lines':2897,'sections':sections,
+                        'platform_changes':['Native IA-32 SYS.EXE is a separately linked ELF32 file installed in the original Files-11 directory; the VAX image record format is CPU-specific', 'SYSBOOT ELF32 LOAD_CODE streams real PT_LOAD bytes from the F11 VBN map into reserved supervisor RAM'],
+-                       'unresolved_integration':'Original SYSPARAM/INIT data layout and GETCURRENT processing remain incomplete. SYS.EXE and INILOA load into guest RAM but other images/entry points are still missing.'})
++                       'unresolved_integration':'SYSBOOT packet-pool address calculations are partial; actual PFN/SPT mapping, SYSPARAM and GETCURRENT processing remain incomplete. SYS.EXE and INILOA load into guest RAM but other images/entry points are still missing.'})
+ 
+ fileread_sections=[
+     (1,740,None,None,'other FILEREAD declarations, cache setup, full filename parser and open logic','missing'),
+@@ -892,7 +896,7 @@
+         line=line_for_symbol(path,symbol)
+         if line is None:missing+=1
+         sections.append({'original_lines':[first,last],
+-                         'status':'mapped' if line else 'missing',
++                         'status':status if line else 'missing',
+                          'pc_file':path,'pc_symbol':symbol,'pc_line':line,
+                          'function':reason})
+ result['files'].append({'original_file':'SYS/SRC/FILEREAD.MAR',
+@@ -1605,7 +1609,9 @@
+ init_parts=[
+     (1,427,None,None,'Source header, executive storage and boot tables still need line-by-line work','unresolved'),
+     (428,572,'src/kernel.c','kmain','Physical-memory/bootstrap setup and source-dependent resident entry','partial'),
+-    (573,755,None,None,'Paging, physical memory, nonpaged pool and I/O queues not fully ported','unresolved'),
++    (573,663,None,None,'Paging, PFN and nonpaged pool setup unresolved','unresolved'),
++    (664,730,'src/vms_ini_packet_queues.c','port_ini_packet_init','Live resident IRP/LRP/SRP queue links, sizes and partial-page fragments; IOC$ globals and dynamic pool integration pending','partial'),
++    (731,755,None,None,'IPL transition, FIL$ cache handoff and late INIT requirements unresolved','unresolved'),
+     (756,837,'src/kernel.c','kmain','Source-ordered SYS.EXE, SYSLOA386, INILOA Files-11 loads and live SYSLOAVEC link; SCSLOA and remaining runtime initialization not complete','partial'),
+     (838,1165,None,None,'SPT, process state, lock tables, resident allocation not fully ported','unresolved'),
+     (1166,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB, kernel clock, queue setup and live CPU register verification only; no real process activation','partial'),
+@@ -1622,7 +1628,7 @@
+             'pc_file':path,'pc_symbol':symbol,'pc_line':line,'function':purpose})
+ result['files'].append({'original_file':'SYS/SRC/INIT.MAR',
+     'original_lines':1906,'sections':parts,
+-    'unresolved_integration':'Source-ordered INIT remains incomplete; SYS.EXE, SYSLOA386 and INILOA execute live native entries but no SYSTEM login, DCL, or network session runs.'})
++    'unresolved_integration':'Source-ordered INIT remains incomplete; resident IRP/LRP/SRP lookaside queues exist in SYS.EXE but are not attached to QIO or ACP processes; no SYSTEM login, DCL or DECnet session runs.'})
+ 
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+--- /dev/null
++++ b/src/vms_sysboot_pktmem.c
+@@ -0,0 +1,76 @@
++#include "vms_sysboot_pktmem.h"
++#include <stddef.h>
++/* Native translation of the reverse-address space carving in SYSBOOT.MAR.
++ * The caller must map actual PFNs into each [first,resident_end) range;
++ * reserved-but-unmapped virtual pages are kept out of the lists. */
++static uint32_t round_to(uint32_t n,uint32_t boundary,uint32_t *out){
++    uint64_t x=(uint64_t)n+boundary-1u;
++    if(!out || x>UINT32_MAX)return 0u;
++    *out=(uint32_t)x & ~(boundary-1u);
++    return 1u;
++}
++static uint32_t carve(uint32_t *top,struct port_boo_packet_range *r,
++                      uint32_t stride,uint32_t count,uint32_t virtual_count){
++    uint64_t bytes=(uint64_t)stride*count;
++    uint64_t reserve=(uint64_t)stride*virtual_count;
++    uint32_t physical,virtual_bytes;
++    if(!stride || stride>UINT16_MAX || count>virtual_count ||
++       bytes>UINT32_MAX || reserve>UINT32_MAX ||
++       !round_to((uint32_t)bytes,512u,&physical) ||
++       !round_to((uint32_t)reserve,512u,&virtual_bytes) ||
++       virtual_bytes>*top)return 0u;
++    r->first_address=*top-virtual_bytes;
++    r->resident_end=r->first_address+physical;
++    r->reserved_end=*top;
++    r->packet_bytes=stride;
++    r->resident_count=count;
++    r->virtual_count=virtual_count;
++    *top=r->first_address;
++    return 1u;
++}
++uint32_t port_boo_packet_layout(const struct port_boo_packet_settings *s,
++                    struct port_boo_packet_layout *layout,
++                    struct port_boo_parameters *booparam){
++    if(!s || !layout || !booparam || (s->top_address&511u) ||
++       !s->top_address || !s->irp_length || !s->srp_requested_size ||
++       !s->lrp_requested_size)return PORT_BOO_PACKET_BADPARAM;
++    uint32_t irp, srp, lrp_req, lrp;
++    if(!round_to(s->irp_length,16u,&irp) ||
++       !round_to(s->srp_requested_size,16u,&srp) ||
++       irp>0xf0u || irp>UINT16_MAX || srp>UINT16_MAX)
++        return PORT_BOO_PACKET_BADPARAM;
++    /* VAX SYSBOOT clamps LRP requested size to IRP rounded size,
++     * then adds 64 bytes and *rounds down* to a 16-byte boundary. */
++    lrp_req=s->lrp_requested_size>irp?s->lrp_requested_size:irp;
++    if(lrp_req>UINT16_MAX-64u)return PORT_BOO_PACKET_BADPARAM;
++    lrp=(lrp_req+64u)&~15u;
++    if(lrp<irp || lrp>UINT16_MAX)return PORT_BOO_PACKET_BADPARAM;
++    uint32_t npaged=s->nonpaged_dynamic_bytes&~511u;
++    uint32_t nvirt=s->nonpaged_virtual_bytes&~511u;
++    uint32_t paged=s->paged_dynamic_bytes&~511u;
++    if(nvirt<npaged)nvirt=npaged;
++    struct port_boo_packet_layout tmp={0};
++    uint32_t top=s->top_address;
++    if(!carve(&top,&tmp.srp,srp,s->srp_count,s->srp_virtual_count) ||
++       !carve(&top,&tmp.irp,irp,s->irp_count,s->irp_virtual_count) ||
++       !carve(&top,&tmp.lrp,lrp,s->lrp_count,s->lrp_virtual_count) ||
++       top<nvirt || top-nvirt<paged)return PORT_BOO_PACKET_NOMEM;
++    tmp.nonpaged_start=top-nvirt;
++    tmp.nonpaged_end=tmp.nonpaged_start+npaged;
++    tmp.nonpaged_virtual_end=top;
++    tmp.paged_dynamic_start=tmp.nonpaged_start-paged;
++    tmp.lrp_minimum=(lrp-(lrp/5u))&~15u;
++    struct port_boo_parameters boo={0};
++    boo.nonpaged_dynamic_bytes=npaged;
++    boo.irp_split_address=tmp.irp.first_address;
++    boo.irp_count=s->irp_count;
++    boo.lrp_size=lrp;
++    boo.lrp_minimum=tmp.lrp_minimum;
++    boo.lrp_split_address=tmp.lrp.first_address;
++    boo.lrp_count=s->lrp_count;
++    boo.srp_split_address=tmp.srp.first_address;
++    boo.srp_count=s->srp_count;
++    *layout=tmp;
++    *booparam=boo;
++    return PORT_BOO_PACKET_OK;
++}
+--- /dev/null
++++ b/src/vms_sysboot_pktmem.h
+@@ -0,0 +1,31 @@
++#ifndef VMS_SYSBOOT_PKTMEM_H
++#define VMS_SYSBOOT_PKTMEM_H
++#include <stdint.h>
++#include "vms_booparam.h"
++/* BOOTS/SRC/SYSBOOT.MAR: NPAGE_SPT, IRP_SPT, LRP_SPT, SRP_SPR and
++ * ALLOC_SRP/ALLOC_IRP/ALLOC_LRP. A 512-byte page and a 16-byte packet
++ * alignment are part of the original boot ABI. Sizes come from SYSGEN;
++ * the native caller, not this routine, supplies the actual mapped pages. */
++enum { PORT_BOO_PACKET_OK=1u, PORT_BOO_PACKET_BADPARAM=2u,
++       PORT_BOO_PACKET_NOMEM=4u, PORT_BOO_PACKET_PAGE=512u };
++struct port_boo_packet_settings {
++    uint32_t top_address;
++    uint32_t irp_length, irp_count, irp_virtual_count;
++    uint32_t lrp_requested_size, lrp_count, lrp_virtual_count;
++    uint32_t srp_requested_size, srp_count, srp_virtual_count;
++    uint32_t nonpaged_dynamic_bytes, nonpaged_virtual_bytes, paged_dynamic_bytes;
++};
++struct port_boo_packet_range {
++    uint32_t first_address, resident_end, reserved_end;
++    uint32_t packet_bytes, resident_count, virtual_count;
++};
++struct port_boo_packet_layout {
++    struct port_boo_packet_range srp, irp, lrp;
++    uint32_t nonpaged_start, nonpaged_end, nonpaged_virtual_end;
++    uint32_t paged_dynamic_start;
++    uint32_t lrp_minimum;
++};
++uint32_t port_boo_packet_layout(const struct port_boo_packet_settings *settings,
++                    struct port_boo_packet_layout *layout,
++                    struct port_boo_parameters *booparam);
++#endif
+--- /dev/null
++++ b/src/vms_ini_packet_queues.c
+@@ -0,0 +1,59 @@
++#include "vms_ini_packet_queues.h"
++#include <stddef.h>
++static void put32(uint8_t *p,uint32_t n){
++    p[0]=(uint8_t)n;p[1]=(uint8_t)(n>>8);
++    p[2]=(uint8_t)(n>>16);p[3]=(uint8_t)(n>>24);
++}
++static void put16(uint8_t *p,uint16_t n){p[0]=(uint8_t)n;p[1]=(uint8_t)(n>>8);}
++uint32_t port_ini_packet_init(const struct port_ini_packet_area *a,
++                             struct port_ini_packet_list *out){
++    if(!a||!out || !a->sentinel_address || (a->sentinel_address&3u) ||
++       (a->address&15u) || !a->packet_bytes ||
++       (a->packet_bytes&15u) || a->packet_bytes<16u ||
++       a->packet_bytes>UINT16_MAX ||
++       a->minimum_bytes>a->packet_bytes ||
++       (a->count && !a->memory))return PORT_INI_PACKETS_BADPARAM;
++    uint64_t used=(uint64_t)a->count*a->packet_bytes;
++    uint64_t end=(uint64_t)a->address+used;
++    if(used>a->available_bytes || end>UINT32_MAX ||
++       (a->count && ((uint64_t)a->sentinel_address>=a->address &&
++        (uint64_t)a->sentinel_address<end)))return PORT_INI_PACKETS_BADPARAM;
++    uint32_t remainder=(a->count && (end&511u))?
++         512u-(uint32_t)(end&511u):0u;
++    /* For the partial-page tail original INIT writes a longword containing
++     * the space left in its allocated page. It is not another packet. */
++    if(used+remainder>a->available_bytes ||
++       (uint64_t)a->address+used+remainder>UINT32_MAX)return PORT_INI_PACKETS_BADPARAM;
++    struct port_ini_packet_list tmp={0};
++    tmp.next=tmp.previous=a->sentinel_address;
++    tmp.packet_count=a->count;
++    tmp.packet_bytes=a->packet_bytes;
++    tmp.minimum_bytes=a->minimum_bytes;
++    tmp.split_address=a->address;
++    /* INSQUE (R0),@IOC$GL_IRPBL: insert at head in increasing addresses.
++     * New head points to old head; old head's previous points to new. */
++    for(uint32_t i=0u;i<a->count;i++){
++        uint32_t at=i*a->packet_bytes;
++        uint32_t va=a->address+at;
++        put32(a->memory+at,tmp.next);
++        put32(a->memory+at+4u,a->sentinel_address);
++        put16(a->memory+at+8u,(uint16_t)a->packet_bytes);
++        if(i){
++            uint32_t old=(i-1u)*a->packet_bytes;
++            put32(a->memory+old+4u,va);
++        } else tmp.previous=va;
++        tmp.next=va;
++    }
++    if(remainder){
++        uint32_t off=(uint32_t)used;
++        put32(a->memory+off,remainder);
++        tmp.remainder_address=(uint32_t)end;
++        tmp.remainder_bytes=remainder;
++    }
++    *out=tmp;
++    return PORT_INI_PACKETS_OK;
++}
++uint32_t port_ini_packet_first(const struct port_ini_packet_list *list,
++                               uint32_t sentinel_address){
++    return list && list->next!=sentinel_address?list->next:0u;
++}
+--- /dev/null
++++ b/src/vms_ini_packet_queues.h
+@@ -0,0 +1,29 @@
++#ifndef VMS_INI_PACKET_QUEUES_H
++#define VMS_INI_PACKET_QUEUES_H
++#include <stdint.h>
++/* SYS/SRC/INIT.MAR INI_IRP/INI_LRP/INI_SRP, the original packet queue
++ * link and IRP$W_SIZE fields use 32-bit address links at +0/+4 and a
++ * 16-bit size at +8. Source-order queue insertion is after the sentinel.
++ * This does not implement EXE$QIO, device scheduling or packet dispatch. */
++enum { PORT_INI_PACKETS_OK=1u,PORT_INI_PACKETS_BADPARAM=2u };
++struct port_ini_packet_area {
++    uint8_t *memory;
++    uint32_t address;         /* Actual IA-32 linear VA in a guest. */
++    uint32_t available_bytes; /* Fully mapped and writable. */
++    uint32_t count;
++    uint32_t packet_bytes;
++    uint32_t minimum_bytes;   /* LRP: BOO$GL_LRPMIN; SRP: unused. */
++    uint32_t sentinel_address;/* VA of queue next/previous pair in SYS.EXE. */
++};
++struct port_ini_packet_list {
++    uint32_t next,previous;  /* Original INSQUE-compatible links. */
++    uint32_t packet_count,packet_bytes,minimum_bytes;
++    uint32_t split_address,remainder_address,remainder_bytes;
++};
++uint32_t port_ini_packet_init(const struct port_ini_packet_area *a,
++                             struct port_ini_packet_list *out);
++/* Each value is the first 12 bytes of a packet; only used for a real
++ * queued packet address after validation by the owning ACP/driver. */
++uint32_t port_ini_packet_first(const struct port_ini_packet_list *list,
++                               uint32_t sentinel_address);
++#endif
+--- /dev/null
++++ b/tests/test_sysboot_pktmem_host.c
+@@ -0,0 +1,61 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_sysboot_pktmem.h"
++#define CHECK(x) do { if(!(x)){fprintf(stderr,"FAIL %s:%d: %s\n",__FILE__,__LINE__,#x);return 1;}} while(0)
++int main(void){
++    struct port_boo_packet_settings s={
++        .top_address=0x350000u,
++        .irp_length=158u,.irp_count=4u,.irp_virtual_count=10u,
++        .lrp_requested_size=511u,.lrp_count=2u,.lrp_virtual_count=5u,
++        .srp_requested_size=72u,.srp_count=7u,.srp_virtual_count=9u,
++        .nonpaged_dynamic_bytes=4900u,.nonpaged_virtual_bytes=6500u,
++        .paged_dynamic_bytes=1700u};
++    struct port_boo_packet_layout b={0};
++    struct port_boo_parameters p={0};
++    CHECK(port_boo_packet_layout(&s,&b,&p)==PORT_BOO_PACKET_OK);
++    CHECK(b.srp.packet_bytes==80u && b.irp.packet_bytes==160u);
++    CHECK(b.lrp.packet_bytes==560u);/* (511 + 64) & ~15 */
++    CHECK(b.srp.first_address==s.top_address-1024u);
++    CHECK(b.srp.resident_end==b.srp.first_address+1024u);
++    CHECK(b.irp.reserved_end==b.srp.first_address);
++    CHECK(b.irp.resident_end==b.irp.first_address+1024u);
++    CHECK(b.irp.reserved_end-b.irp.first_address==2048u);
++    CHECK(b.lrp.reserved_end==b.irp.first_address);
++    CHECK(b.lrp.resident_end==b.lrp.first_address+1536u);
++    CHECK(b.lrp.reserved_end-b.lrp.first_address==3072u);
++    CHECK(b.nonpaged_end==b.nonpaged_start+4608u);
++    CHECK(b.nonpaged_virtual_end==b.lrp.first_address);
++    CHECK(b.nonpaged_virtual_end-b.nonpaged_start==6144u);
++    CHECK(b.paged_dynamic_start==b.nonpaged_start-1536u);
++    CHECK(p.irp_split_address==b.irp.first_address && p.irp_count==4u);
++    CHECK(p.lrp_size==560u && p.lrp_count==2u);
++    CHECK(p.lrp_minimum==448u && b.lrp_minimum==448u);
++    CHECK(p.lrp_split_address==b.lrp.first_address);
++    CHECK(p.srp_count==7u && p.srp_split_address==b.srp.first_address);
++    CHECK(p.nonpaged_dynamic_bytes==4608u);
++    struct port_boo_packet_layout saved=b;
++    struct port_boo_parameters saved_p=p;
++    s.irp_virtual_count=3u;
++    CHECK(port_boo_packet_layout(&s,&b,&p)==PORT_BOO_PACKET_NOMEM);
++    CHECK(memcmp(&b,&saved,sizeof b)==0 && memcmp(&p,&saved_p,sizeof p)==0);
++    s.irp_virtual_count=10u;s.top_address=0x2000u;
++    CHECK(port_boo_packet_layout(&s,&b,&p)==PORT_BOO_PACKET_NOMEM);
++    CHECK(memcmp(&b,&saved,sizeof b)==0);
++    s.top_address=0x350001u;
++    CHECK(port_boo_packet_layout(&s,&b,&p)==PORT_BOO_PACKET_BADPARAM);
++    s.top_address=0x350000u;s.irp_length=UINT32_MAX;
++    CHECK(port_boo_packet_layout(&s,&b,&p)==PORT_BOO_PACKET_BADPARAM);
++    s.irp_length=158u;s.srp_count=UINT32_MAX;
++    CHECK(port_boo_packet_layout(&s,&b,&p)==PORT_BOO_PACKET_NOMEM);
++    s.srp_count=7u;s.srp_virtual_count=9u;
++    s.lrp_requested_size=UINT16_MAX;
++    CHECK(port_boo_packet_layout(&s,&b,&p)==PORT_BOO_PACKET_BADPARAM);
++    CHECK(memcmp(&b,&saved,sizeof b)==0);
++    s.lrp_requested_size=511u;
++    s.nonpaged_dynamic_bytes=100u;s.nonpaged_virtual_bytes=100u;
++    CHECK(port_boo_packet_layout(&s,&b,&p)==PORT_BOO_PACKET_OK);
++    CHECK(p.nonpaged_dynamic_bytes==0u);
++    puts("original SYSBOOT 512-page/16-packet IRP-LRP-SRP virtual and resident allocation PASS");
++    return 0;
++}
+--- /dev/null
++++ b/tests/test_ini_packet_queues_host.c
+@@ -0,0 +1,49 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_ini_packet_queues.h"
++#define CHECK(x) do {if(!(x)){fprintf(stderr,"FAIL %s:%d: %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++static uint32_t get32(const uint8_t *s){
++    return (uint32_t)s[0]|((uint32_t)s[1]<<8)|((uint32_t)s[2]<<16)|((uint32_t)s[3]<<24);
++}
++static uint16_t get16(const uint8_t *s){return (uint16_t)((uint16_t)s[0]|((uint16_t)s[1]<<8));}
++int main(void){
++    uint8_t data[1024];
++    memset(data,0xa5,sizeof data);
++    struct port_ini_packet_area a={.memory=data,.address=0x326000u,
++        .available_bytes=sizeof data,.count=4u,.packet_bytes=176u,
++        .minimum_bytes=176u,.sentinel_address=0x327000u};
++    struct port_ini_packet_list q={0};
++    CHECK(port_ini_packet_init(&a,&q)==PORT_INI_PACKETS_OK);
++    CHECK(q.packet_count==4u && q.packet_bytes==176u);
++    CHECK(q.next==a.address+528u && q.previous==a.address);
++    CHECK(port_ini_packet_first(&q,a.sentinel_address)==q.next);
++    for(unsigned i=0;i<4u;i++){
++        size_t off=i*176u;
++        CHECK(get32(&data[off])==(i? a.address+(i-1u)*176u:a.sentinel_address));
++        CHECK(get32(&data[off+4u])==(i<3u?a.address+(i+1u)*176u:a.sentinel_address));
++        CHECK(get16(&data[off+8u])==176u);
++        CHECK(data[off+11u]==0xa5);
++    }
++    CHECK(q.remainder_address==a.address+704u && q.remainder_bytes==320u);
++    CHECK(get32(&data[704])==320u && data[708]==0xa5);
++    struct port_ini_packet_list saved=q;
++    uint8_t snapshot[1024];memcpy(snapshot,data,sizeof data);
++    a.available_bytes=703u;
++    CHECK(port_ini_packet_init(&a,&q)==PORT_INI_PACKETS_BADPARAM);
++    CHECK(!memcmp(data,snapshot,sizeof data) && !memcmp(&q,&saved,sizeof q));
++    a.available_bytes=sizeof data;
++    a.sentinel_address=a.address+176u;
++    CHECK(port_ini_packet_init(&a,&q)==PORT_INI_PACKETS_BADPARAM);
++    a.sentinel_address=0x327000u;a.packet_bytes=175u;
++    CHECK(port_ini_packet_init(&a,&q)==PORT_INI_PACKETS_BADPARAM);
++    a.packet_bytes=176u;a.count=0u;a.available_bytes=0u;a.memory=NULL;
++    CHECK(port_ini_packet_init(&a,&q)==PORT_INI_PACKETS_OK);
++    CHECK(q.next==a.sentinel_address && q.previous==a.sentinel_address);
++    CHECK(!port_ini_packet_first(&q,a.sentinel_address));
++    CHECK(q.remainder_address==0u && q.remainder_bytes==0u);
++    a.count=UINT32_MAX;a.available_bytes=sizeof data;a.memory=data;
++    CHECK(port_ini_packet_init(&a,&q)==PORT_INI_PACKETS_BADPARAM);
++    puts("original INIT.MAR INSQUE IRP/LRP/SRP packet headers and partial-page remainder PASS");
++    return 0;
++}
+--- /dev/null
++++ b/tools/qemu_sysboot_m93.py
+@@ -0,0 +1,92 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; require source-derived SYS.EXE I/O packet queues.
++
++Only source-derived image execution and a deliberate incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M93: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        observed.extend(b'\n=== QEMU stderr ===\n')
++        observed.extend(p.stderr.read(8192))
++        serial_path=ROOT/'qemu-m93-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,93,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M93: SYS.EXE packet queues, SYSLOA386 and live IRQ/IDT/CR3/TSS/Files-11 verified PASS')
++        return 0
++    print('QEMU M93: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
+--- /dev/null
++++ b/tools/checkpoint_serial_logs.py
+@@ -0,0 +1,153 @@
++#!/usr/bin/env python3
++"""Keep raw, cumulative QEMU COM1 logs inside every recoverable source ZIP.
++
++This tool never edits serial bytes.  No log is called a successful boot merely
++because it appears in the manifest.  `bundle` carries the full source/build
++working tree, including its disk images, tests and scripts.
++"""
++import argparse
++from datetime import datetime, timezone
++import hashlib
++import json
++from pathlib import Path
++import re
++import sys
++from zipfile import ZipFile, ZIP_DEFLATED
++
++STORE = Path('logs/serial')
++MANIFEST = STORE / 'manifest.json'
++REQUIRED = ('Makefile', 'source-coverage.json', 'resume.md',
++            'vms37lab.ima', 'portdisk.img')
++NAME = re.compile(r'^qemu-m([0-9]+)-run-([0-9]+(?:-attempt[0-9]+)?|local-[0-9TZ]+)\.log$')
++
++def sha(data):
++    return hashlib.sha256(data).hexdigest()
++
++def load(root):
++    path = root / MANIFEST
++    if not path.is_file():
++        return {'schema_version': 1, 'kind': 'raw-qemu-serial-archive', 'runs': []}
++    m = json.loads(path.read_text(encoding='utf-8'))
++    if m.get('schema_version') != 1 or m.get('kind') != 'raw-qemu-serial-archive' or not isinstance(m.get('runs'), list):
++        raise ValueError('Unrecognized serial manifest')
++    return m
++
++def capture(root, source, milestone, run_id, run_url, result):
++    if not source.is_file():
++        raise ValueError(f'Missing real QEMU transcript: {source}')
++    data = source.read_bytes()
++    if not data:
++        raise ValueError('Refusing to archive an empty QEMU transcript')
++    milestone = str(milestone).lower().removeprefix('m')
++    run_id = str(run_id)
++    if not milestone.isdecimal() or not (re.fullmatch(r'[0-9]+(?:-attempt[0-9]+)?|local-[0-9TZ]+', run_id)):
++        raise ValueError('Invalid milestone or run identifier')
++    relative = STORE / f'qemu-m{milestone}-run-{run_id}.log'
++    target = root / relative
++    existing = load(root)
++    if target.exists() and target.read_bytes() != data:
++        raise ValueError(f'Log collision (would overwrite history): {relative}')
++    if not target.exists():
++        target.parent.mkdir(parents=True, exist_ok=True)
++        target.write_bytes(data)
++    record = {
++        'milestone': f'M{milestone}', 'run_id': run_id,
++        'run_url': run_url, 'test_result': result,
++        'path': relative.as_posix(), 'bytes': len(data), 'sha256': sha(data)
++    }
++    for old in existing['runs']:
++        if old['path'] == record['path']:
++            if old != record:
++                raise ValueError(f'Conflicting manifest entry: {relative}')
++            return
++    existing['runs'].append(record)
++    existing['runs'].sort(key=lambda r: (int(r['milestone'][1:]), r['run_id']))
++    (root / MANIFEST).write_text(json.dumps(existing, indent=2) + '\n', encoding='utf-8')
++
++def verify(root):
++    m = load(root)
++    if not m['runs']:
++        raise ValueError('Serial history is empty')
++    known = set()
++    for run in m['runs']:
++        rel = run['path']
++        p = Path(rel)
++        if p.is_absolute() or p.parent != STORE or not NAME.fullmatch(p.name):
++            raise ValueError(f'Unsafe serial log path: {rel}')
++        if rel in known:
++            raise ValueError(f'Duplicate serial history entry: {rel}')
++        known.add(rel)
++        data = (root / p).read_bytes()
++        if len(data) != run['bytes'] or sha(data) != run['sha256']:
++            raise ValueError(f'Corrupt or changed raw QEMU serial transcript: {rel}')
++        if run['milestone'].lower() != 'm' + NAME.fullmatch(p.name).group(1):
++            raise ValueError(f'Milestone does not match {rel}')
++        if run['run_id'] != NAME.fullmatch(p.name).group(2):
++            raise ValueError(f'Run ID does not match {rel}')
++    actual = {p.relative_to(root).as_posix() for p in (root / STORE).glob('*.log')}
++    if actual != known:
++        raise ValueError(f'Untracked or absent serial log(s): {actual ^ known}')
++    return m
++
++def bundle(root, destination):
++    m = verify(root)
++    missing = [x for x in REQUIRED if not (root / x).is_file()]
++    missing += [x for x in ('src', 'tools', 'tests', 'build') if not (root / x).is_dir()]
++    if missing:
++        raise ValueError('Source/build checkpoint incomplete: ' + ', '.join(missing))
++    destination = destination.resolve()
++    if root == destination or destination.is_relative_to(root):
++        raise ValueError('ZIP must be written outside the tree being archived')
++    files = sorted(p for p in root.rglob('*') if p.is_file() and '.git' not in p.parts and '__pycache__' not in p.parts)
++    if not files or any(p.is_symlink() for p in files):
++        raise ValueError('Missing files or unsupported symbolic links')
++    destination.parent.mkdir(parents=True, exist_ok=True)
++    with ZipFile(destination, 'w', compression=ZIP_DEFLATED, compresslevel=6) as z:
++        for file in files:
++            z.write(file, f'{root.name}/{file.relative_to(root).as_posix()}')
++    with ZipFile(destination) as z:
++        if z.testzip():
++            raise ValueError('ZIP CRC verification failed')
++        if len(z.namelist()) != len(files):
++            raise ValueError('ZIP file count mismatch')
++        for x in REQUIRED:
++            if f'{root.name}/{x}' not in z.namelist():
++                raise ValueError('Missing checkpoint file in ZIP: ' + x)
++        for run in m['runs']:
++            content = z.read(f'{root.name}/{run["path"]}')
++            if len(content) != run['bytes'] or sha(content) != run['sha256']:
++                raise ValueError('Serial evidence corrupt inside ZIP: ' + run['path'])
++    print(f'Validated complete source/build ZIP: {destination}, {len(files)} files, {len(m["runs"])} QEMU logs')
++
++def main():
++    ap = argparse.ArgumentParser(description=__doc__)
++    ap.add_argument('command', choices=('capture', 'verify', 'bundle'))
++    ap.add_argument('--root', type=Path, default=Path(__file__).resolve().parents[1])
++    ap.add_argument('--source', type=Path)
++    ap.add_argument('--milestone')
++    ap.add_argument('--run-id')
++    ap.add_argument('--run-url', default='')
++    ap.add_argument('--result', default='not-assessed')
++    ap.add_argument('--output', type=Path)
++    args = ap.parse_args()
++    root = args.root.resolve()
++    if args.command == 'capture':
++        if not args.source or not args.milestone:
++            ap.error('capture requires --source and --milestone')
++        stamp = 'local-' + datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%SZ')
++        capture(root, args.source, args.milestone, args.run_id or stamp,
++                args.run_url, args.result)
++        verify(root)
++    elif args.command == 'verify':
++        print(f'QEMU serial manifest verified: {len(verify(root)["runs"])} raw logs')
++    else:
++        if not args.output:
++            ap.error('bundle requires --output')
++        bundle(root, args.output)
++
++if __name__ == '__main__':
++    try:
++        main()
++    except (OSError, ValueError, KeyError, json.JSONDecodeError) as exc:
++        print('Checkpoint serial log error: ' + str(exc), file=sys.stderr)
++        raise SystemExit(1)
+--- /dev/null
++++ b/tests/test_checkpoint_serial_logs.py
+@@ -0,0 +1,53 @@
++#!/usr/bin/env python3
++"""Regression tests: raw serial logs survive bundle and cannot be overwritten."""
++from pathlib import Path
++import json
++import subprocess
++import sys
++import tempfile
++from zipfile import ZipFile
++
++SCRIPT = Path(__file__).resolve().parents[1] / 'tools/checkpoint_serial_logs.py'
++
++def invoke(*args, ok=True):
++    p = subprocess.run([sys.executable, str(SCRIPT), *map(str, args)],
++                       capture_output=True, text=True)
++    assert (p.returncode == 0) == ok, (p.stdout, p.stderr)
++    return p
++
++def main():
++    with tempfile.TemporaryDirectory() as d:
++        root = Path(d) / 'native-m93'
++        root.mkdir()
++        for x in ('src', 'tools', 'tests', 'build'):
++            (root / x).mkdir()
++            (root / x / 'keep.txt').write_text(x)
++        for x in ('Makefile','source-coverage.json','resume.md','vms37lab.ima','portdisk.img'):
++            (root / x).write_text(x)
++        log = Path(d) / 'from-qemu.log'
++        raw = b'COM1\r\r\nCPU initialized\r\n=== QEMU stderr ===\n'
++        log.write_bytes(raw)
++        params = ('capture','--root',root,'--source',log,'--milestone','93',
++                  '--run-id','12345','--run-url','https://github.com/example/actions/runs/12345',
++                  '--result','pass')
++        invoke(*params)
++        invoke(*params)  # Same bytes are safe/idempotent.
++        invoke('verify','--root',root)
++        log.write_bytes(b'DIFFERENT')
++        invoke(*params, ok=False) # Never overwrite old run content.
++        log.write_bytes(raw)
++        bundle = Path(d) / 'new.zip'
++        invoke('bundle','--root',root,'--output',bundle)
++        with ZipFile(bundle) as z:
++            assert z.read('native-m93/logs/serial/qemu-m93-run-12345.log') == raw
++            assert z.read('native-m93/src/keep.txt') == b'src'
++            assert z.read('native-m93/tools/keep.txt') == b'tools'
++            assert z.read('native-m93/portdisk.img') == b'portdisk.img'
++        p = root / 'logs/serial/qemu-m93-run-12345.log'
++        p.write_bytes(b'CORRUPTED')
++        invoke('verify','--root',root,ok=False)
++        invoke('bundle','--root',root,'--output',bundle,ok=False)
++    print('QEMU COM1 evidence capture, anti-overwrite, integrity and full checkpoint ZIP PASS')
++
++if __name__ == '__main__':
++    main()
