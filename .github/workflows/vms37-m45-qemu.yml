@@ -1,4 +1,4 @@
-name: VMS37 native IA-32 M103 terminal class DPT relocator and OPA0 UCB host tests, M101 QEMU regression
+name: VMS37 native IA-32 M104 loaded pagefile pointer vector and source-ordered QEMU regression
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M103
+      - name: Rebuild pinned native source through M104
         shell: bash
         run: |
           set -euo pipefail
@@ -47,6 +47,7 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m101-native.patch
           patch --batch -p1 < ../ci-vms37/m102-native.patch
           patch --batch -p1 < ../ci-vms37/m103-native.patch
+          patch --batch -p1 < ../ci-vms37/m104-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           make -j2 all
@@ -59,17 +60,17 @@ jobs:
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Regress M101 guest; M102-M103 loaded driver layouts are host-only
+      - name: Verify M104 guest-executed pointer vector; M102-M103 driver layouts remain host-only
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m101.py
+          python3 tools/qemu_sysboot_m104.py
       - name: Preserve actual guest COM1 transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m103-ci-m101-guest-serial
+          name: vms37-m104-ci-m104-guest-serial
           path: |
-            vms37-native-x86-m89/qemu-m101-serial.log
+            vms37-native-x86-m89/qemu-m104-serial.log
           if-no-files-found: warn
