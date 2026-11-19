@@ -1,0 +1,422 @@
+--- /dev/null
++++ b/src/vms_ini_procvec.c
+@@ -0,0 +1,50 @@
++#include "vms_ini_procvec.h"
++#include <stdint.h>
++static void store16(uint8_t *p,uint16_t x){p[0]=(uint8_t)x;p[1]=(uint8_t)(x>>8);}
++static void store32(uint8_t *p,uint32_t x){
++    for(unsigned i=0;i<4u;i++)p[i]=(uint8_t)(x>>(8u*i));
++}
++static uint32_t load32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8)|
++           ((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
++}
++/* Original source: allocation (MAXPRCCT+1)*6+12, last pointer slot
++ * points to the system PCB, all other slots point to NULLPCB, sequence
++ * values all zero; max PIX is MAXPRCCT-1, not MAXPRCCT. */
++uint32_t port_ini_procvec_init(void *memory,size_t capacity,
++                  const struct port_ini_proc_settings *s,
++                  struct port_ini_procvec *out){
++    if(!memory || !s || !out || ((uintptr_t)memory&3u) ||
++       !s->max_processes || s->max_processes>8191u ||
++       !s->system_pcb_address || !s->null_pcb_address ||
++       (s->system_pcb_address&3u) || (s->null_pcb_address&3u))
++        return PORT_INI_PROC_BADPARAM;
++    uint32_t count=s->max_processes+1u;
++    uint32_t bytes=12u+6u*count;
++    if(bytes>UINT16_MAX)return PORT_INI_PROC_BADPARAM;
++    if(bytes>capacity)return PORT_INI_PROC_NOMEM;
++    uint8_t *pool=(uint8_t *)memory;
++    for(uint32_t i=0;i<bytes;i++)pool[i]=0u;
++    store16(pool+8u,(uint16_t)bytes);
++    store16(pool+10u,s->dyn_pcbvec_type);
++    uint8_t *pv=pool+12u;
++    uint8_t *sv=pv+4u*count;
++    for(uint32_t i=0;i<s->max_processes;i++){
++        store32(pv+4u*i,s->null_pcb_address);
++        store16(sv+2u*i,0u);
++    }
++    store32(pv+4u*s->max_processes,s->system_pcb_address);
++    store16(sv+2u*s->max_processes,0u);
++    *out=(struct port_ini_procvec){pv,sv,s->max_processes,
++                  s->max_processes-1u,count,bytes};
++    return PORT_INI_PROC_OK;
++}
++uint32_t port_ini_procvec_ptr(const struct port_ini_procvec *p,uint32_t pix){
++    if(!p || !p->pcb_vector || pix>=p->allocated_slots)return 0u;
++    return load32(p->pcb_vector+pix*4u);
++}
++uint16_t port_ini_procvec_seq(const struct port_ini_procvec *p,uint32_t pix){
++    if(!p || !p->sequence_vector || pix>=p->allocated_slots)return UINT16_MAX;
++    const uint8_t *x=p->sequence_vector+pix*2u;
++    return (uint16_t)x[0]|(uint16_t)x[1]<<8;
++}
+--- /dev/null
++++ b/src/vms_ini_procvec.h
+@@ -0,0 +1,24 @@
++#ifndef VMS_INI_PROCVEC_H
++#define VMS_INI_PROCVEC_H
++#include <stddef.h>
++#include <stdint.h>
++/* SYS/SRC/INIT.MAR INI_PSTATE: PCB pointers and sequence vector sharing
++ * one 12-byte DYN record. A separate source-derived scheduler must still
++ * attach the real process headers and the swapper / null process. */
++enum { PORT_INI_PROC_OK=1u,PORT_INI_PROC_BADPARAM=2u,
++       PORT_INI_PROC_NOMEM=4u };
++struct port_ini_proc_settings {
++    uint32_t max_processes;
++    uint32_t system_pcb_address, null_pcb_address;
++    uint16_t dyn_pcbvec_type; /* supplied from original DYNDEF when ported */
++};
++struct port_ini_procvec {
++    const uint8_t *pcb_vector, *sequence_vector;
++    uint32_t system_pix,max_pix,allocated_slots,allocated_bytes;
++};
++uint32_t port_ini_procvec_init(void *pool,size_t capacity,
++                 const struct port_ini_proc_settings *settings,
++                 struct port_ini_procvec *out);
++uint32_t port_ini_procvec_ptr(const struct port_ini_procvec *p,uint32_t pix);
++uint16_t port_ini_procvec_seq(const struct port_ini_procvec *p,uint32_t pix);
++#endif
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -25,6 +25,14 @@
+ static uint32_t executive_free_npages;
+ static struct port_ini_lockdb executive_lockdb;
+ static uint32_t executive_lockdb_ready;
++static struct port_ini_procvec executive_procvec;
++static uint32_t executive_procvec_ready;
++/* Original SYSTEM and NULL PCB slots have distinct persistent resident
++ * storage. Creating these source-derived scheduler descriptors is not a
++ * substitute for actually scheduling SYSTEM or running LOGINOUT. */
++static struct port_exe_sched_process executive_system_pcb;
++static struct port_exe_sched_process executive_null_pcb;
++
+ 
+ 
+ static uint32_t port_exe_initialize_lookaside(const struct port_sys_exec_start *p){
+@@ -119,6 +127,38 @@
+         p->result->signature=PORT_SYS_EXEC_LOCK_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_PROCVEC){
++        /* INIT.MAR INI_PSTATE follows realtime SPT and lock tables.
++         * Real native PCB descriptors are stored in loaded SYS.EXE BSS;
++         * this stage only initializes the PCB/sequence vectors. */
++        if(!executive_lockdb_ready || executive_procvec_ready ||
++           !p->proc_settings)return PORT_SYS_EXEC_BAD_PARAMETERS;
++        uint32_t used=(executive_lockdb.pool_bytes+3u)&~3u;
++        if(used>=executive_free_npages)return PORT_SYS_EXEC_BAD_PARAMETERS;
++        struct port_ini_proc_settings settings=*p->proc_settings;
++        if((uintptr_t)&executive_system_pcb>UINT32_MAX ||
++           (uintptr_t)&executive_null_pcb>UINT32_MAX)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        settings.system_pcb_address=(uint32_t)(uintptr_t)&executive_system_pcb;
++        settings.null_pcb_address=(uint32_t)(uintptr_t)&executive_null_pcb;
++        if(port_ini_procvec_init(executive_packet_pages+used,
++                 executive_free_npages-used,&settings,
++                 &executive_procvec)!=PORT_INI_PROC_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_null_pcb=(struct port_exe_sched_process){0};
++        executive_null_pcb.type=PORT_SYS_EXEC_PCB_KIND;
++        executive_null_pcb.state=PORT_EXE_STATE_OTHER;
++        executive_system_pcb=(struct port_exe_sched_process){0};
++        executive_system_pcb.pid=settings.max_processes;
++        executive_system_pcb.type=PORT_SYS_EXEC_PCB_KIND;
++        executive_system_pcb.state=PORT_EXE_STATE_OTHER;
++        executive_procvec_ready=1u;
++        p->result->process_vector=&executive_procvec;
++        p->result->system_pcb=&executive_system_pcb;
++        p->result->null_pcb=&executive_null_pcb;
++        p->result->signature=PORT_SYS_EXEC_PV_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_LINK_SYSLOA){
+         /* This is INIT.MAR LINK_VEC/EXE$AL_LOAVEC, in resident SYS.EXE. */
+         if(!p->sysloa_descriptor || !p->sysloa_bytes ||
+@@ -134,7 +174,7 @@
+     }
+     if(p->phase!=PORT_SYS_EXEC_INIT_RESIDENT ||
+        p->initialized_images!=3u || !executive_sysloa.loaded ||
+-       !executive_lockdb_ready ||
++       !executive_lockdb_ready || !executive_procvec_ready ||
+        !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
+ 
+     /* Hardware-dependent EXE$INIBOOTADP/EXE$INIPROCREG are called through
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -6,15 +6,18 @@
+ #include "vms_sysboot_pktmem.h"
+ #include "vms_ini_packet_queues.h"
+ #include "vms_ini_lockdb.h"
++#include "vms_ini_procvec.h"
++#include "vms_exe_sched.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=5u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=6u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+        PORT_SYS_EXEC_LINK_RESULT_TAG=0x4b4e4c53u,
+        PORT_SYS_EXEC_INIT_IOQUEUES=3u,PORT_SYS_EXEC_PACKET_RESULT_TAG=0x51504b54u,
+-       PORT_SYS_EXEC_INIT_LOCKDB=4u, PORT_SYS_EXEC_LOCK_RESULT_TAG=0x4b434f4cu };
++       PORT_SYS_EXEC_INIT_LOCKDB=4u, PORT_SYS_EXEC_LOCK_RESULT_TAG=0x4b434f4cu,
++       PORT_SYS_EXEC_INIT_PROCVEC=5u, PORT_SYS_EXEC_PV_RESULT_TAG=0x56424350u };
+ struct port_sys_exec_result {
+     uint32_t signature;
+     uint32_t scheduler_ready_mask;
+@@ -34,6 +37,8 @@
+     uint32_t irp_count,lrp_count,srp_count;
+     const struct port_ini_lockdb *lock_database;
+     uint32_t lock_max_id,lock_hash_slots,lock_process_bitmap_bytes;
++    const struct port_ini_procvec *process_vector;
++    const struct port_exe_sched_process *system_pcb,*null_pcb;
+ };
+ struct port_sys_exec_start {
+     uint32_t signature,version;
+@@ -49,6 +54,7 @@
+     const struct port_sysloa386_boot_ops *boot_ops;
+     const struct port_boo_packet_settings *packet_settings;
+     const struct port_ini_lock_settings *lock_settings;
++    const struct port_ini_proc_settings *proc_settings;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+ #endif
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2733,6 +2733,34 @@
+     }
+     bootstrap_message("INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.");
+ 
++    /* INIT.MAR INI_PSTATE establishes SCH$GL_PCBVEC and SCH$GL_SEQVEC.
++     * The source-derived NULL/SYSTEM resident PCB descriptors are not yet
++     * runnable; no process activation, login or DCL is claimed here. */
++    static const struct port_ini_proc_settings proc_settings={
++        .max_processes=32u,.dyn_pcbvec_type=0u};
++    static struct port_sys_exec_result proc_result;
++    const struct port_sys_exec_start proc_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&proc_result,
++        .phase=PORT_SYS_EXEC_INIT_PROCVEC,.proc_settings=&proc_settings};
++    if(loaded_sys(&proc_request)!=PORT_SYS_EXEC_NORMAL ||
++       proc_result.signature!=PORT_SYS_EXEC_PV_RESULT_TAG ||
++       !proc_result.process_vector ||
++       proc_result.process_vector->allocated_slots!=33u ||
++       proc_result.process_vector->system_pix!=32u ||
++       proc_result.process_vector->max_pix!=31u ||
++       !proc_result.system_pcb || !proc_result.null_pcb ||
++       proc_result.system_pcb->pid!=32u ||
++       proc_result.system_pcb->state!=PORT_EXE_STATE_OTHER ||
++       *(const uint32_t *)(const void *)(proc_result.process_vector->pcb_vector+128u)!=
++                (uint32_t)(uintptr_t)proc_result.system_pcb ||
++       *(const uint32_t *)(const void *)(proc_result.process_vector->pcb_vector)!=
++                (uint32_t)(uintptr_t)proc_result.null_pcb){
++        bootstrap_message("INIT: resident SYS.EXE PCB sequence vectors failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.");
++
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+--- /dev/null
++++ b/tools/qemu_sysboot_m95.py
+@@ -0,0 +1,96 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; require source-derived SYS.EXE I/O packet queues.
++
++Only source-derived image execution and a deliberate incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M95: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        observed.extend(b'\n=== QEMU stderr ===\n')
++        observed.extend(p.stderr.read(8192))
++        serial_path=ROOT/'qemu-m95-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,95,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M95: SYS.EXE lock structures, IRP queues and live IRQ/IDT/CR3/TSS/Files-11 verified PASS')
++        return 0
++    print('QEMU M95: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1615,7 +1615,8 @@
+     (756,837,'src/kernel.c','kmain','Source-ordered SYS.EXE, SYSLOA386, INILOA Files-11 loads and live SYSLOAVEC link; SCSLOA and remaining runtime initialization not complete','partial'),
+     (838,859,None,None,'INILOA code deallocation requires full nonpaged pool','unresolved'),
+     (860,992,'src/vms_ini_lockdb.c','port_ini_lockdb_init','Realtime SPT bitmap, lock ID chain, power-of-two resource hash and optional process bitmap structures (DYNDEF and consumers unresolved)','partial'),
+-    (993,1165,None,None,'Process state, PFN mapping and pager/working set initialization not fully ported','unresolved'),
++    (993,1031,'src/vms_ini_procvec.c','port_ini_procvec_init','Resident PCB pointer and sequence array layout with SYSTEM and NULL descriptors; actual process activation not yet running','partial'),
++    (1032,1165,None,None,'Swapper, PHYPCB/PFN mapping and pager/working set initialization not fully ported','unresolved'),
+     (1166,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB, kernel clock, queue setup and live CPU register verification only; no real process activation','partial'),
+     (1301,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
+ parts=[]
+--- /dev/null
++++ b/tests/test_ini_procvec_host.c
+@@ -0,0 +1,34 @@
++#include "vms_ini_procvec.h"
++#include <stdio.h>
++#include <stdint.h>
++#include <string.h>
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++int main(void){
++    uint32_t memory[1024];
++    memset(memory,0xcc,sizeof memory);
++    struct port_ini_procvec v={0};
++    struct port_ini_proc_settings s={
++        .max_processes=32,.system_pcb_address=0x328000u,
++        .null_pcb_address=0x328100u,.dyn_pcbvec_type=0x473bu};
++    CHECK(port_ini_procvec_init(memory,16u,&s,&v)==PORT_INI_PROC_NOMEM);
++    CHECK(memory[0]==0xccccccccu && !v.pcb_vector);
++    CHECK(port_ini_procvec_init(memory,sizeof memory,&s,&v)==PORT_INI_PROC_OK);
++    CHECK(v.allocated_slots==33u && v.allocated_bytes==210u);
++    CHECK(v.system_pix==32u && v.max_pix==31u);
++    CHECK(((uint8_t *)memory)[8]==210u && ((uint8_t *)memory)[10]==0x3bu);
++    CHECK(port_ini_procvec_ptr(&v,0u)==0x328100u);
++    CHECK(port_ini_procvec_ptr(&v,31u)==0x328100u);
++    CHECK(port_ini_procvec_ptr(&v,32u)==0x328000u);
++    CHECK(port_ini_procvec_ptr(&v,33u)==0u);
++    for(unsigned i=0;i<=32u;i++)CHECK(port_ini_procvec_seq(&v,i)==0u);
++    CHECK(port_ini_procvec_seq(&v,33u)==UINT16_MAX);
++    s.max_processes=0u;
++    CHECK(port_ini_procvec_init(memory,sizeof memory,&s,&v)==PORT_INI_PROC_BADPARAM);
++    s.max_processes=8192u;
++    CHECK(port_ini_procvec_init(memory,sizeof memory,&s,&v)==PORT_INI_PROC_BADPARAM);
++    s.max_processes=32u;s.null_pcb_address=0u;
++    CHECK(port_ini_procvec_init(memory,sizeof memory,&s,&v)==PORT_INI_PROC_BADPARAM);
++    CHECK(port_ini_procvec_ptr(&v,0u)==0x328100u); /* failed writes nonmutating */
++    puts("INIT.MAR original PCB vector, SYSTEM PIX, NULLPCB and sequence fields PASS");
++    return 0;
++}
+--- a/Makefile
++++ b/Makefile
+@@ -758,7 +758,7 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h | build
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_sysboot_pktmem.o: src/vms_sysboot_pktmem.c src/vms_sysboot_pktmem.h src/vms_booparam.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+@@ -766,8 +766,10 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_lockdb.o: src/vms_ini_lockdb.c src/vms_ini_lockdb.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
++build/vms_ini_procvec.o: src/vms_ini_procvec.c src/vms_ini_procvec.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -778,7 +780,7 @@
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysnative_hosttest portdisk.img build/sys.exe build/iniloa.exe build/sysloa386.exe
+ .PHONY: qemu-sysnative
+ qemu-sysnative: vms37lab.ima portdisk.img
+-	python3 tools/qemu_sysboot_m94.py
++	python3 tools/qemu_sysboot_m95.py
+ 
+ # M89: original INILOA load order, with native IA-32 I/O-map counterpart.
+ build/vms_iniloa_iomap.o: src/vms_iniloa_iomap.c src/vms_iniloa_iomap.h | build
+@@ -791,7 +793,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -847,3 +849,9 @@
+ inilockdbcheck: | build
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_lockdb.c tests/test_ini_lockdb_host.c -o build/inilockdbcheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/inilockdbcheck
++
++# M95: original INIT.MAR SYSTEM/NULL PCB vector and sequence array layout.
++.PHONY: iniprocveccheck
++iniprocveccheck: | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_procvec.c tests/test_ini_procvec_host.c -o build/iniprocveccheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/iniprocveccheck
