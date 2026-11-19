@@ -1,11 +1,12 @@
-name: VMS37 native IA-32 M92 loaded executive execution QEMU
+name: VMS37 native IA-32 M93 source-derived executive packet queues
 on:
   push:
     branches:
       - vms37-x86-qemu-m45-ci
   workflow_dispatch:
 
-# Keep all guest boots in the existing one-at-a-time QEMU lane.
+# Do not run OpticOS CI in this isolated VMS work branch.
+# All VMS QEMU runs use the same one-at-a-time serialization key.
 concurrency:
   group: vms37-native-x86-qemu-singleton
   cancel-in-progress: false
@@ -25,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Restore exact M89 base and M92 native source patch
+      - name: Rebuild pinned native source through M93
         shell: bash
         run: |
           set -euo pipefail
@@ -35,24 +36,26 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m90-native.patch
           patch --batch -p1 < ../ci-vms37/m91-native.patch
           patch --batch -p1 < ../ci-vms37/m92-native.patch
+          patch --batch -p1 < ../ci-vms37/m93-native.patch
           make -j2 all
           make bootcheck imagecheck sysnativecheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
+          make pktlayoutcheck packetqueuecheck files1186check files1187check
           python3 tools/gen_source_coverage.py
           python3 tests/test_source_audit.py
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Boot single native IA-32 PC and verify loaded code execution
+      - name: Boot single native IA-32 PC and verify resident SYS.EXE packet queues
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m92.py
+          python3 tools/qemu_sysboot_m93.py
       - name: Preserve actual guest COM1 transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m92-qemu-serial
+          name: vms37-m93-qemu-serial
           path: |
-            vms37-native-x86-m89/qemu-m92-serial.log
+            vms37-native-x86-m89/qemu-m93-serial.log
           if-no-files-found: warn
