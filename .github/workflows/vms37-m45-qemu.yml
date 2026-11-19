@@ -40,6 +40,8 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m94-native.patch
           patch --batch -p1 < ../ci-vms37/m95-native.patch
           patch --batch -p1 < ../ci-vms37/m96-native.patch
+          # Both Python tests now resolve INDEXF data/header LBNs dynamically.
+          cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           make -j2 all
           make bootcheck imagecheck sysnativecheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
           make pktlayoutcheck packetqueuecheck inilockdbcheck iniprocveccheck iniphvswapcheck files1186check files1187check
