@@ -1,0 +1,290 @@
+--- a/Makefile
++++ b/Makefile
+@@ -880,3 +880,17 @@
+ inipflveccheck: build/vms_ini_pflvec.o | build
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_pflvec.c tests/test_ini_pflvec_host.c -o build/inipflveccheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/inipflveccheck
++
++# M99: INIT.MAR boot-control-block normalized SYS.EXE map to real WCB
++# retrieval pointers. Host-only pending linked SYSWCB template/boot CB.
++build/vms_ini_syswcb.o: src/vms_ini_syswcb.c src/vms_ini_syswcb.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: inisyswcbcheck
++inisyswcbcheck: build/vms_ini_syswcb.o | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_syswcb.c tests/test_ini_syswcb_host.c -o build/inisyswcbcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/inisyswcbcheck
++
++.PHONY: inisyswcbdiskcheck
++inisyswcbdiskcheck: portdisk.img | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_syswcb.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c tests/test_ini_syswcb_disk.c -o build/inisyswcbdiskcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/inisyswcbdiskcheck portdisk.img
+--- /dev/null
++++ b/src/vms_ini_syswcb.c
+@@ -0,0 +1,88 @@
++#include "vms_ini_syswcb.h"
++#include <stdint.h>
++static uint16_t read16(const uint8_t *p){
++    return (uint16_t)p[0] | (uint16_t)((uint16_t)p[1]<<8);
++}
++static uint32_t read32(const uint8_t *p){
++    return (uint32_t)p[0] | ((uint32_t)p[1]<<8) |
++           ((uint32_t)p[2]<<16) | ((uint32_t)p[3]<<24);
++}
++static void write16(uint8_t *p,uint16_t v){
++    p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);
++}
++static void write32(uint8_t *p,uint32_t v){
++    for(uint32_t i=0;i<4u;i++)p[i]=(uint8_t)(v>>(8u*i));
++}
++uint32_t port_ini_syswcb_from_boot_map(
++    uint8_t *boot_map,size_t capacity,
++    const uint8_t *template_data,size_t template_capacity,
++    const struct port_ini_syswcb_layout *layout,
++    struct port_ini_syswcb *result){
++    if(!boot_map||!template_data||!layout||!result||
++       capacity<4u||layout->header_length<2u||
++       layout->header_length>template_capacity||
++       layout->header_length>UINT16_MAX||
++       layout->size_word_offset>layout->header_length-2u||
++       layout->map_count_word_offset>layout->header_length-2u)
++        return PORT_INI_SYSWCB_BADPARAM;
++    uint32_t a=layout->size_word_offset,b=layout->map_count_word_offset;
++    if((a>b?a-b:b-a)<2u)return PORT_INI_SYSWCB_BADPARAM;
++    /* The WCB template is the prelinked resident constant. It must not
++     * be within the writable boot-map span, even if the caller passed it
++     * as an overlapping pointer with a different object type. */
++    uintptr_t map=(uintptr_t)boot_map,t=(uintptr_t)template_data;
++    if((map<=t && t-map<capacity) ||
++       (t<=map && map-t<layout->header_length))
++        return PORT_INI_SYSWCB_BADPARAM;
++    uint32_t normalized_bytes=read32(boot_map);
++    if(!normalized_bytes || (normalized_bytes&7u))
++        return PORT_INI_SYSWCB_BADMAP;
++    uint32_t count=normalized_bytes>>3;
++    if(count>UINT16_MAX || (uint64_t)normalized_bytes+4u>capacity)
++        return PORT_INI_SYSWCB_BADMAP;
++    uint64_t output_bytes=(uint64_t)layout->header_length+6u*count;
++    if(output_bytes>capacity || output_bytes>UINT32_MAX)
++        return PORT_INI_SYSWCB_NOMEM;
++    uint32_t original_size=read16(template_data+a);
++    if(!original_size || original_size+6u*count>UINT16_MAX)
++        return PORT_INI_SYSWCB_BADMAP;
++    /* Validate all extents before rewriting a byte. INIT says SYS.EXE
++     * cannot need 65536 blocks in a single 16-bit retrieval pointer. */
++    for(uint32_t i=0;i<count;i++){
++        uint32_t n=read32(boot_map+4u+i*8u);
++        uint32_t lbn=read32(boot_map+8u+i*8u);
++        if(!n||n>UINT16_MAX || lbn>UINT32_MAX-n)
++            return PORT_INI_SYSWCB_BADMAP;
++    }
++    for(uint32_t i=0;i<count;i++){
++        const uint8_t *from=boot_map+4u+i*8u;
++        uint16_t blocks=(uint16_t)read32(from);
++        uint32_t lbn=read32(from+4u);
++        uint8_t *to=boot_map+6u*i;
++        write16(to,blocks);
++        write32(to+2u,lbn);
++    }
++    /* Freestanding IA-32 kernel: no libc calls or VAX MOVC3 emulation.
++     * Move from the end because the destination can overlap the source. */
++    for(uint32_t n=6u*count;n>0u;n--)
++        boot_map[layout->header_length+n-1u]=boot_map[n-1u];
++    for(uint32_t n=0u;n<layout->header_length;n++)
++        boot_map[n]=template_data[n];
++    write16(boot_map+a,(uint16_t)(original_size+6u*count));
++    write16(boot_map+b,(uint16_t)count);
++    *result=(struct port_ini_syswcb){
++        .record=boot_map,
++        .retrieval_pointers=boot_map+layout->header_length,
++        .mapping_count=(uint16_t)count,
++        .record_size_field=(uint16_t)(original_size+6u*count),
++        .record_length=(uint32_t)output_bytes};
++    return PORT_INI_SYSWCB_OK;
++}
++uint32_t port_ini_syswcb_retrieval(const struct port_ini_syswcb *wcb,
++        uint32_t index,uint16_t *blocks,uint32_t *starting_lbn){
++    if(!wcb||!wcb->retrieval_pointers||!blocks||!starting_lbn||
++       index>=wcb->mapping_count)return PORT_INI_SYSWCB_BADPARAM;
++    const uint8_t *p=wcb->retrieval_pointers+6u*index;
++    *blocks=read16(p);*starting_lbn=read32(p+2u);
++    return PORT_INI_SYSWCB_OK;
++}
+--- /dev/null
++++ b/src/vms_ini_syswcb.h
+@@ -0,0 +1,38 @@
++#ifndef VMS_INI_SYSWCB_H
++#define VMS_INI_SYSWCB_H
++#include <stddef.h>
++#include <stdint.h>
++/* SYS/SRC/INIT.MAR, INI_SYSPCB, BOO$L_SYS_MAP to SYSWCB transformation.
++ * A BOO$L_SYS_MAP starts with the byte length of an array of normalized
++ * {32-bit block count, 32-bit LBN} retrieval pointers. Original INIT
++ * compacts each to a 6-byte {16-bit count, 32-bit LBN} pointer in place,
++ * shifts them after SYSWCB and overlays the linked WCB template.
++ * This routine does not create a functioning WCB, file-cache service, or
++ * guest process: the original SYSWCB template and boot CB still have to be
++ * wired into resident SYS.EXE before guest execution can be claimed. */
++enum {
++    PORT_INI_SYSWCB_OK=1u,
++    PORT_INI_SYSWCB_BADPARAM=2u,
++    PORT_INI_SYSWCB_NOMEM=4u,
++    PORT_INI_SYSWCB_BADMAP=6u
++};
++struct port_ini_syswcb_layout {
++    uint32_t header_length; /* WCB$C_LENGTH */
++    uint32_t size_word_offset; /* WCB$W_SIZE */
++    uint32_t map_count_word_offset; /* WCB$W_NMAP */
++};
++struct port_ini_syswcb {
++    const uint8_t *record;
++    const uint8_t *retrieval_pointers;
++    uint16_t mapping_count;
++    uint16_t record_size_field;
++    uint32_t record_length;
++};
++uint32_t port_ini_syswcb_from_boot_map(
++    uint8_t *boot_map, size_t boot_map_capacity,
++    const uint8_t *syswcb_template, size_t template_capacity,
++    const struct port_ini_syswcb_layout *layout,
++    struct port_ini_syswcb *result);
++uint32_t port_ini_syswcb_retrieval(const struct port_ini_syswcb *wcb,
++    uint32_t index, uint16_t *blocks, uint32_t *starting_lbn);
++#endif
+--- /dev/null
++++ b/tests/test_ini_syswcb_host.c
+@@ -0,0 +1,55 @@
++#include "vms_ini_syswcb.h"
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#define CHECK(x) do { if(!(x)){fprintf(stderr,"FAIL %s:%d: %s\n",__FILE__,__LINE__,#x);return 1;} } while(0)
++static void wr16(uint8_t *p,uint16_t x){p[0]=(uint8_t)x;p[1]=(uint8_t)(x>>8);}
++static void wr32(uint8_t *p,uint32_t x){for(unsigned i=0;i<4;i++)p[i]=(uint8_t)(x>>(i*8));}
++static void normalized(uint8_t *p,uint32_t count,uint32_t lbn){wr32(p,count);wr32(p+4u,lbn);}
++int main(void){
++    uint8_t diskmap[512],keep[512],tmpl[48];
++    memset(diskmap,0xa5,sizeof diskmap);memset(tmpl,0xcc,sizeof tmpl);
++    struct port_ini_syswcb_layout l={.header_length=sizeof tmpl,.size_word_offset=4,.map_count_word_offset=6};
++    wr16(tmpl+l.size_word_offset,sizeof tmpl);wr16(tmpl+l.map_count_word_offset,0u);
++    /* This 8+8-byte normalized representation is produced by SYSBOOT.
++     * It is not the 6-byte real WCB representation used by the executive. */
++    wr32(diskmap,24u);normalized(diskmap+4u,7u,128u);
++    normalized(diskmap+12u,10u,140u);normalized(diskmap+20u,3u,160u);
++    memcpy(keep,diskmap,sizeof keep);
++    struct port_ini_syswcb wcb={0};
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,40u,tmpl,sizeof tmpl,&l,&wcb)==PORT_INI_SYSWCB_NOMEM);
++    CHECK(!memcmp(diskmap,keep,sizeof keep));
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,sizeof diskmap,tmpl,sizeof tmpl,&l,&wcb)==PORT_INI_SYSWCB_OK);
++    CHECK(wcb.record==diskmap&&wcb.retrieval_pointers==diskmap+sizeof tmpl);
++    CHECK(wcb.mapping_count==3u&&wcb.record_size_field==66u&&wcb.record_length==66u);
++    CHECK(diskmap[0]==0xccu&&diskmap[3]==0xccu&&diskmap[6]==3u&&diskmap[7]==0u);
++    CHECK(diskmap[4]==66u&&diskmap[5]==0u);
++    uint16_t blocks=0u;uint32_t lbn=0u;
++    CHECK(port_ini_syswcb_retrieval(&wcb,0u,&blocks,&lbn)==PORT_INI_SYSWCB_OK && blocks==7u && lbn==128u);
++    CHECK(port_ini_syswcb_retrieval(&wcb,1u,&blocks,&lbn)==PORT_INI_SYSWCB_OK && blocks==10u && lbn==140u);
++    CHECK(port_ini_syswcb_retrieval(&wcb,2u,&blocks,&lbn)==PORT_INI_SYSWCB_OK && blocks==3u && lbn==160u);
++    CHECK(port_ini_syswcb_retrieval(&wcb,3u,&blocks,&lbn)==PORT_INI_SYSWCB_BADPARAM);
++    CHECK(diskmap[66u]==0xa5u && diskmap[511u]==0xa5u);
++
++    /* Reject malformed maps without touching the caller's memory. */
++    memcpy(diskmap,keep,sizeof keep);
++    wr32(diskmap,7u);
++    memcpy(keep,diskmap,sizeof keep);
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,sizeof diskmap,tmpl,sizeof tmpl,&l,&wcb)==PORT_INI_SYSWCB_BADMAP);
++    CHECK(!memcmp(diskmap,keep,sizeof keep));
++    wr32(diskmap,24u);wr32(diskmap+4u,65536u);
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,sizeof diskmap,tmpl,sizeof tmpl,&l,&wcb)==PORT_INI_SYSWCB_BADMAP);
++    wr32(diskmap+4u,7u);wr32(diskmap+8u,UINT32_MAX-3u);
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,sizeof diskmap,tmpl,sizeof tmpl,&l,&wcb)==PORT_INI_SYSWCB_BADMAP);
++    wr32(diskmap+8u,128u);wr32(diskmap+12u,0u);
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,sizeof diskmap,tmpl,sizeof tmpl,&l,&wcb)==PORT_INI_SYSWCB_BADMAP);
++    wr32(diskmap+12u,10u);
++    l.map_count_word_offset=5u;
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,sizeof diskmap,tmpl,sizeof tmpl,&l,&wcb)==PORT_INI_SYSWCB_BADPARAM);
++    l.map_count_word_offset=6u;
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,sizeof diskmap,diskmap,48u,&l,&wcb)==PORT_INI_SYSWCB_BADPARAM);
++    wr16(tmpl+l.size_word_offset,UINT16_MAX);
++    CHECK(port_ini_syswcb_from_boot_map(diskmap,sizeof diskmap,tmpl,sizeof tmpl,&l,&wcb)==PORT_INI_SYSWCB_BADMAP);
++    puts("INIT.MAR original normalized SYS.EXE map to 6-byte WCB records PASS");
++    return 0;
++}
+--- /dev/null
++++ b/tests/test_ini_syswcb_disk.c
+@@ -0,0 +1,63 @@
++#include "vms_ini_syswcb.h"
++#include "vms_boot_files11.h"
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d: %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++struct file_drive { FILE *f; };
++static uint32_t readsector(void *context,uint32_t mode,uint32_t fn,
++                           uint32_t lbn,uint32_t bytes,void *buffer){
++    struct file_drive *d=context;
++    if(mode || fn!=1u || bytes!=512u || !buffer ||
++       fseek(d->f,(long)lbn*512L,SEEK_SET) ||
++       fread(buffer,1,512u,d->f)!=512u)return BOO_IO_FAILED;
++    return BOO_IO_NORMAL;
++}
++static void word(uint8_t *p,uint16_t x){p[0]=(uint8_t)x;p[1]=(uint8_t)(x>>8);}
++static void dword(uint8_t *p,uint32_t x){
++    for(unsigned i=0;i<4u;i++)p[i]=(uint8_t)(x>>(8u*i));
++}
++int main(int argc,char **argv){
++    CHECK(argc==2);
++    struct file_drive d={fopen(argv[1],"rb")};CHECK(d.f);
++    const struct boo_io_driver disk={readsector,&d,0u};
++    struct port_f11_volume volume={0};
++    CHECK(port_f11_mount(&disk,1u,&volume)==PORT_F11_HOME_OK);
++    struct port_f11_fid fid={0};uint8_t header[512];
++    uint32_t first_lbn=0u,allocated_blocks=0u;
++    CHECK(port_f11_open_named_file(&disk,1u,&volume,"[SYSEXE]SYS.EXE",
++       &fid,header,&first_lbn,&allocated_blocks)==PORT_F11_HOME_OK);
++    CHECK(fid.number==11u&&first_lbn>0u&&allocated_blocks>0u);
++    struct port_f11_extent extents[48]={0};uint32_t count=0u;
++    CHECK(port_f11_collect_extents(header,extents,48u,&count)==PORT_F11_HOME_OK);
++    CHECK(count>0u&&count<48u);
++    uint8_t normalized[1024];memset(normalized,0xa5,sizeof normalized);
++    dword(normalized,8u*count);
++    uint32_t total=0;
++    for(uint32_t i=0;i<count;i++){
++        CHECK(extents[i].blocks && extents[i].blocks<=UINT16_MAX);
++        CHECK(extents[i].lbn+extents[i].blocks>extents[i].lbn);
++        dword(normalized+4u+i*8u,extents[i].blocks);
++        dword(normalized+8u+i*8u,extents[i].lbn);
++        total+=extents[i].blocks;
++    }
++    CHECK(total>=allocated_blocks);
++    uint8_t templ[48];memset(templ,0x6a,sizeof templ);
++    const struct port_ini_syswcb_layout layout={48u,4u,6u};
++    word(templ+layout.size_word_offset,48u);
++    struct port_ini_syswcb out={0};
++    CHECK(port_ini_syswcb_from_boot_map(normalized,sizeof normalized,
++       templ,sizeof templ,&layout,&out)==PORT_INI_SYSWCB_OK);
++    CHECK(out.mapping_count==count&&out.record_length==48u+6u*count);
++    CHECK(out.record_size_field==48u+6u*count);
++    for(uint32_t i=0;i<count;i++){
++        uint16_t blocks=0u;uint32_t lbn=0u;
++        CHECK(port_ini_syswcb_retrieval(&out,i,&blocks,&lbn)==PORT_INI_SYSWCB_OK);
++        CHECK(blocks==extents[i].blocks&&lbn==extents[i].lbn);
++    }
++    CHECK(out.retrieval_pointers[out.mapping_count*6u]==0xa5u);
++    fclose(d.f);
++    puts("Real Files-11 SYS.EXE INDEXF extent converted to native INIT WCB record PASS");
++    return 0;
++}
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1621,7 +1621,10 @@
+     (1090,1141,'src/vms_ini_pflvec.c','port_ini_pflvec_init','Source-derived global page-file count and null PFL shell VBN/window arithmetic; host-only, no operational shell WCB yet','partial'),
+     (1142,1165,'src/vms_ini_pflvec.c','port_ini_pflvec_init','Page and swap-file pointer DYN record construction, null-PFL vector entries; host-only, no active pagefile service','partial'),
+     (1166,1183,'src/vms_ini_pflvec.c','port_ini_interrupt_stack_limits','Source-defined 512-byte interrupt-stack limit and bounded lock resource depth; not bound to VMS scheduler','partial'),
+-    (1184,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB, kernel clock, queue setup and live CPU register verification only; no real process activation','partial'),
++    (1184,1188,'src/vms_ini_procvec.c','port_ini_procvec_init','SYSTEM PCB physical process header and process-index setup remains partial','partial'),
++    (1189,1212,'src/vms_ini_syswcb.c','port_ini_syswcb_from_boot_map','Normalize 8-byte SYSBOOT SYS.EXE extents into 6-byte WCB retrieval pointers and overlay linked WCB template; tested only on host pending guest boot CB and WCB template','partial'),
++    (1213,1231,None,None,'Original VAX PR$_NICR/ICCS/ICR clock-counter timing loop needs real IA-32 hardware equivalent','hardware-excluded'),
++    (1232,1300,None,None,'Original DPT registration, SYS$DISK/SYS$SYSDEVICE logical-name pool linkage and terminal initialization not yet implemented','unresolved'),
+     (1301,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
+ parts=[]
+ for first,last,path,symbol,purpose,status in init_parts:
