@@ -1,0 +1,657 @@
+--- /dev/null
++++ b/src/vms_ini_phv_swap.c
+@@ -0,0 +1,70 @@
++#include "vms_ini_phv_swap.h"
++#include <stdint.h>
++
++static void put16(uint8_t *p,uint16_t x){
++    p[0]=(uint8_t)x;
++    p[1]=(uint8_t)(x>>8);
++}
++static uint16_t get16(const uint8_t *p){
++    return (uint16_t)((uint16_t)p[0]|(uint16_t)((uint16_t)p[1]<<8));
++}
++static uint32_t get32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8)|
++           ((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
++}
++/* Original allocation orders are exact: first 12+4*(BALSETCT+1)
++ * bytes for PHV; next 12+4+4*MAXWSCNT bytes for the swapper PTE map.
++ * Header type/size are stored at the same offsets used by INIT.MAR. */
++uint32_t port_ini_phvswap_init(void *pool,size_t capacity,
++        const struct port_ini_phvswap_settings *s,
++        struct port_ini_phvswap *out){
++    if(!pool || !s || !out || ((uintptr_t)pool&3u) ||
++       s->balance_set_count==UINT32_MAX ||
++       s->max_working_set==0u || s->max_working_set>0xFFFFFFu ||
++       s->system_pix>UINT16_MAX)return PORT_INI_PHVSWAP_BADPARAM;
++    uint64_t slots=(uint64_t)s->balance_set_count+1u;
++    uint64_t phvb=12u+4u*slots;
++    uint64_t swapb=16u+4u*s->max_working_set;
++    uint64_t sum=phvb+swapb;
++    /* The DYN size is a WORD. No silently wrapped allocation. */
++    if(phvb>UINT16_MAX || swapb>UINT16_MAX || sum>UINT32_MAX)
++        return PORT_INI_PHVSWAP_BADPARAM;
++    if(sum>capacity)return PORT_INI_PHVSWAP_NOMEM;
++    uint8_t *p=(uint8_t *)pool;
++    for(uint32_t i=0u;i<(uint32_t)sum;i++)p[i]=0u;
++    put16(p+8u,(uint16_t)phvb);
++    put16(p+10u,s->phvec_dyn_type);
++    uint8_t *pix=p+12u;
++    uint8_t *ref=pix+2u*slots;
++    /* INI_PHV: last PHV entry belongs to the system header. All
++     * preceding slots are free with -1 reference count. */
++    for(uint32_t i=0u;i<s->balance_set_count;i++)
++        put16(ref+2u*i,UINT16_MAX);
++    put16(pix+2u*s->balance_set_count,(uint16_t)s->system_pix);
++    put16(ref+2u*s->balance_set_count,1024u);
++    uint8_t *sw=p+(uint32_t)phvb;
++    put16(sw+8u,(uint16_t)swapb);
++    put16(sw+10u,s->swapmap_dyn_type);
++    /* INI_SWAP sets PHD$L_P0BR to the swapper PTE array and inserts
++     * MAXWSCNT in bits 0..23 of PHD$L_P0LRASTL. */
++    *out=(struct port_ini_phvswap){
++        .phv_pix_base=pix,.phv_refcount_base=ref,
++        .swapper_p0br=sw+12u,
++        .phv_slots=(uint32_t)slots,.swapper_p0lr=s->max_working_set,
++        .phv_record_bytes=(uint32_t)phvb,
++        .swapmap_record_bytes=(uint32_t)swapb,
++        .pool_bytes=(uint32_t)sum};
++    return PORT_INI_PHVSWAP_OK;
++}
++uint16_t port_ini_phvswap_pix(const struct port_ini_phvswap *s,uint32_t i){
++    if(!s || !s->phv_pix_base || i>=s->phv_slots)return UINT16_MAX;
++    return get16(s->phv_pix_base+2u*i);
++}
++int16_t port_ini_phvswap_refcount(const struct port_ini_phvswap *s,uint32_t i){
++    if(!s || !s->phv_refcount_base || i>=s->phv_slots)return INT16_MIN;
++    return (int16_t)get16(s->phv_refcount_base+2u*i);
++}
++uint32_t port_ini_phvswap_pte(const struct port_ini_phvswap *s,uint32_t i){
++    if(!s || !s->swapper_p0br || i>=s->swapper_p0lr)return UINT32_MAX;
++    return get32(s->swapper_p0br+4u*i);
++}
+--- /dev/null
++++ b/src/vms_ini_phv_swap.h
+@@ -0,0 +1,36 @@
++#ifndef VMS_INI_PHV_SWAP_H
++#define VMS_INI_PHV_SWAP_H
++#include <stddef.h>
++#include <stdint.h>
++/* SYS/SRC/INIT.MAR INI_PHV and INI_SWAP: source-form storage layout.
++ * These constructors provide initialized records, not an active VMS
++ * pager, PHYPCB, swapper scheduler, or pool allocator. */
++enum {
++    PORT_INI_PHVSWAP_OK=1u,
++    PORT_INI_PHVSWAP_BADPARAM=2u,
++    PORT_INI_PHVSWAP_NOMEM=4u
++};
++struct port_ini_phvswap_settings {
++    uint32_t balance_set_count; /* SGN$GL_BALSETCT, prior to +1 system slot */
++    uint32_t system_pix;        /* SGN$GW_MAXPRCCT */
++    uint32_t max_working_set;   /* SGN$GL_MAXWSCNT */
++    uint16_t phvec_dyn_type;    /* DYN$C_PHVEC / DYN$C_INIT encoding */
++    uint16_t swapmap_dyn_type;  /* DYN$C_SWPMAP / DYN$C_INIT encoding */
++};
++struct port_ini_phvswap {
++    const uint8_t *phv_pix_base;
++    const uint8_t *phv_refcount_base;
++    const uint8_t *swapper_p0br;
++    uint32_t phv_slots;
++    uint32_t swapper_p0lr;
++    uint32_t phv_record_bytes;
++    uint32_t swapmap_record_bytes;
++    uint32_t pool_bytes;
++};
++uint32_t port_ini_phvswap_init(void *pool, size_t capacity,
++                  const struct port_ini_phvswap_settings *settings,
++                  struct port_ini_phvswap *out);
++uint16_t port_ini_phvswap_pix(const struct port_ini_phvswap *s,uint32_t index);
++int16_t port_ini_phvswap_refcount(const struct port_ini_phvswap *s,uint32_t index);
++uint32_t port_ini_phvswap_pte(const struct port_ini_phvswap *s,uint32_t index);
++#endif
+--- /dev/null
++++ b/tests/test_ini_phv_swap_host.c
+@@ -0,0 +1,57 @@
++#include "vms_ini_phv_swap.h"
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#define CHECK(x) do {if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++int main(void){
++    uint32_t storage[2048];
++    memset(storage,0xa5,sizeof storage);
++    struct port_ini_phvswap v={0};
++    const struct port_ini_phvswap_settings s={
++        .balance_set_count=11u,.system_pix=32u,
++        .max_working_set=64u,.phvec_dyn_type=0x1211u,
++        .swapmap_dyn_type=0x3433u};
++    CHECK(port_ini_phvswap_init(storage,24u,&s,&v)==PORT_INI_PHVSWAP_NOMEM);
++    CHECK(storage[0]==0xa5a5a5a5u && !v.phv_pix_base);
++    CHECK(port_ini_phvswap_init(storage,sizeof storage,&s,&v)==PORT_INI_PHVSWAP_OK);
++    CHECK(v.phv_slots==12u && v.phv_record_bytes==60u);
++    CHECK(v.swapmap_record_bytes==272u && v.pool_bytes==332u);
++    const uint8_t *b=(const uint8_t *)storage;
++    CHECK(b[8u]==60u && b[10u]==0x11u && b[11u]==0x12u);
++    CHECK(v.phv_pix_base==b+12u && v.phv_refcount_base==b+36u);
++    CHECK(v.swapper_p0br==b+72u);
++    CHECK(b[68u]==0x10u && b[69u]==1u && b[70u]==0x33u && b[71u]==0x34u);
++    CHECK(v.swapper_p0lr==64u);
++    for(uint32_t i=0;i<11u;i++){
++        CHECK(port_ini_phvswap_pix(&v,i)==0u);
++        CHECK(port_ini_phvswap_refcount(&v,i)==-1);
++    }
++    CHECK(port_ini_phvswap_pix(&v,11u)==32u);
++    CHECK(port_ini_phvswap_refcount(&v,11u)==1024);
++    for(uint32_t i=0;i<v.swapper_p0lr;i++)CHECK(port_ini_phvswap_pte(&v,i)==0u);
++    CHECK(port_ini_phvswap_pix(&v,12u)==UINT16_MAX);
++    CHECK(port_ini_phvswap_refcount(&v,12u)==INT16_MIN);
++    CHECK(port_ini_phvswap_pte(&v,64u)==UINT32_MAX);
++    CHECK(b[v.pool_bytes]==0xa5u); /* no write past allocated storage */
++    struct port_ini_phvswap_settings bad=s;
++    bad.balance_set_count=UINT32_MAX;
++    CHECK(port_ini_phvswap_init(storage,sizeof storage,&bad,&v)==PORT_INI_PHVSWAP_BADPARAM);
++    bad=s;bad.max_working_set=0u;
++    CHECK(port_ini_phvswap_init(storage,sizeof storage,&bad,&v)==PORT_INI_PHVSWAP_BADPARAM);
++    bad=s;bad.system_pix=UINT16_MAX+1u;
++    CHECK(port_ini_phvswap_init(storage,sizeof storage,&bad,&v)==PORT_INI_PHVSWAP_BADPARAM);
++    bad=s;bad.max_working_set=UINT32_MAX;
++    CHECK(port_ini_phvswap_init(storage,sizeof storage,&bad,&v)==PORT_INI_PHVSWAP_BADPARAM);
++    bad=s;bad.balance_set_count=17000u;
++    CHECK(port_ini_phvswap_init(storage,sizeof storage,&bad,&v)==PORT_INI_PHVSWAP_BADPARAM);
++    bad=s;bad.max_working_set=16370u;
++    CHECK(port_ini_phvswap_init(storage,1024u,&bad,&v)==PORT_INI_PHVSWAP_NOMEM);
++    CHECK(port_ini_phvswap_refcount(&v,11u)==1024); /* bad inputs do not mutate */
++    bad=s;bad.balance_set_count=0u;bad.max_working_set=1u;
++    CHECK(port_ini_phvswap_init(storage,sizeof storage,&bad,&v)==PORT_INI_PHVSWAP_OK);
++    CHECK(v.phv_slots==1u && port_ini_phvswap_pix(&v,0u)==32u);
++    CHECK(port_ini_phvswap_refcount(&v,0u)==1024);
++    CHECK(port_ini_phvswap_pte(&v,0u)==0u);
++    puts("INIT.MAR native process header vector, system reference and swap PTE map PASS");
++    return 0;
++}
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -7,17 +7,19 @@
+ #include "vms_ini_packet_queues.h"
+ #include "vms_ini_lockdb.h"
+ #include "vms_ini_procvec.h"
++#include "vms_ini_phv_swap.h"
+ #include "vms_exe_sched.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=6u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=7u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+        PORT_SYS_EXEC_LINK_RESULT_TAG=0x4b4e4c53u,
+        PORT_SYS_EXEC_INIT_IOQUEUES=3u,PORT_SYS_EXEC_PACKET_RESULT_TAG=0x51504b54u,
+        PORT_SYS_EXEC_INIT_LOCKDB=4u, PORT_SYS_EXEC_LOCK_RESULT_TAG=0x4b434f4cu,
+-       PORT_SYS_EXEC_INIT_PROCVEC=5u, PORT_SYS_EXEC_PV_RESULT_TAG=0x56424350u };
++       PORT_SYS_EXEC_INIT_PROCVEC=5u, PORT_SYS_EXEC_PV_RESULT_TAG=0x56424350u,
++       PORT_SYS_EXEC_INIT_PHVSWAP=6u, PORT_SYS_EXEC_PHV_RESULT_TAG=0x56574850u };
+ struct port_sys_exec_result {
+     uint32_t signature;
+     uint32_t scheduler_ready_mask;
+@@ -37,6 +39,7 @@
+     uint32_t irp_count,lrp_count,srp_count;
+     const struct port_ini_lockdb *lock_database;
+     uint32_t lock_max_id,lock_hash_slots,lock_process_bitmap_bytes;
++    const struct port_ini_phvswap *process_header_vector;
+     const struct port_ini_procvec *process_vector;
+     const struct port_exe_sched_process *system_pcb,*null_pcb;
+ };
+@@ -55,6 +58,7 @@
+     const struct port_boo_packet_settings *packet_settings;
+     const struct port_ini_lock_settings *lock_settings;
+     const struct port_ini_proc_settings *proc_settings;
++    const struct port_ini_phvswap_settings *phv_settings;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+ #endif
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -27,6 +27,8 @@
+ static uint32_t executive_lockdb_ready;
+ static struct port_ini_procvec executive_procvec;
+ static uint32_t executive_procvec_ready;
++static struct port_ini_phvswap executive_phvswap;
++static uint32_t executive_phvswap_ready;
+ /* Original SYSTEM and NULL PCB slots have distinct persistent resident
+  * storage. Creating these source-derived scheduler descriptors is not a
+  * substitute for actually scheduling SYSTEM or running LOGINOUT. */
+@@ -159,6 +161,37 @@
+         p->result->signature=PORT_SYS_EXEC_PV_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_PHVSWAP){
++        /* INIT.MAR INI_PHV and INI_SWAP follow the process PCB vector.
++         * Persist both nonpaged DYN records in the actual SYS.EXE's own
++         * supervisor allocation, not in the stage-2 bootloader's memory. */
++        if(!executive_procvec_ready || executive_phvswap_ready ||
++           !p->phv_settings)return PORT_SYS_EXEC_BAD_PARAMETERS;
++        if(p->phv_settings->system_pix!=executive_procvec.system_pix)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        uint32_t lockused=(executive_lockdb.pool_bytes+3u)&~3u;
++        uint32_t pvused=(executive_procvec.allocated_bytes+3u)&~3u;
++        if(lockused>executive_free_npages ||
++           pvused>executive_free_npages-lockused)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        uint32_t used=lockused+pvused;
++        if(used>=executive_free_npages ||
++           port_ini_phvswap_init(executive_packet_pages+used,
++                 executive_free_npages-used,p->phv_settings,
++                 &executive_phvswap)!=PORT_INI_PHVSWAP_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        if(!executive_phvswap.phv_pix_base ||
++           !executive_phvswap.swapper_p0br ||
++           port_ini_phvswap_pix(&executive_phvswap,
++               executive_phvswap.phv_slots-1u)!=executive_procvec.system_pix ||
++           port_ini_phvswap_refcount(&executive_phvswap,
++               executive_phvswap.phv_slots-1u)!=1024)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_phvswap_ready=1u;
++        p->result->process_header_vector=&executive_phvswap;
++        p->result->signature=PORT_SYS_EXEC_PHV_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_LINK_SYSLOA){
+         /* This is INIT.MAR LINK_VEC/EXE$AL_LOAVEC, in resident SYS.EXE. */
+         if(!p->sysloa_descriptor || !p->sysloa_bytes ||
+@@ -175,6 +208,7 @@
+     if(p->phase!=PORT_SYS_EXEC_INIT_RESIDENT ||
+        p->initialized_images!=3u || !executive_sysloa.loaded ||
+        !executive_lockdb_ready || !executive_procvec_ready ||
++       !executive_phvswap_ready ||
+        !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
+ 
+     /* Hardware-dependent EXE$INIBOOTADP/EXE$INIPROCREG are called through
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2761,6 +2761,34 @@
+     }
+     bootstrap_message("INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.");
+ 
++    /* Original INIT.MAR INI_PHV and INI_SWAP reserve the process header
++     * slots and the swapper P0 page-table map. This is *not* a running
++     * swapper or paging process; the original map and refcount state are
++     * inspected directly from the loaded SYS.EXE supervisor pages. */
++    static const struct port_ini_phvswap_settings phv_settings={
++        .balance_set_count=11u,.system_pix=32u,.max_working_set=64u,
++        .phvec_dyn_type=0u,.swapmap_dyn_type=0u};
++    static struct port_sys_exec_result phv_result;
++    const struct port_sys_exec_start phv_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&phv_result,
++        .phase=PORT_SYS_EXEC_INIT_PHVSWAP,.phv_settings=&phv_settings};
++    if(loaded_sys(&phv_request)!=PORT_SYS_EXEC_NORMAL ||
++       phv_result.signature!=PORT_SYS_EXEC_PHV_RESULT_TAG ||
++       !phv_result.process_header_vector ||
++       phv_result.process_header_vector->phv_slots!=12u ||
++       phv_result.process_header_vector->phv_record_bytes!=60u ||
++       phv_result.process_header_vector->swapmap_record_bytes!=272u ||
++       phv_result.process_header_vector->swapper_p0lr!=64u ||
++       *(const uint16_t *)(const void *)(phv_result.process_header_vector->phv_pix_base+22u)!=32u ||
++       *(const uint16_t *)(const void *)(phv_result.process_header_vector->phv_refcount_base+22u)!=1024u ||
++       *(const uint16_t *)(const void *)(phv_result.process_header_vector->phv_refcount_base+20u)!=UINT16_MAX ||
++       *(const uint32_t *)(const void *)(phv_result.process_header_vector->swapper_p0br+252u)!=0u){
++        bootstrap_message("INIT: resident SYS.EXE PHV and swap PTE record validation failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.");
++
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+--- /dev/null
++++ b/tools/qemu_sysboot_m96.py
+@@ -0,0 +1,98 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; require source-derived SYS.EXE I/O packet queues.
++
++Only source-derived image execution and a deliberate incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M96: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        observed.extend(b'\n=== QEMU stderr ===\n')
++        observed.extend(p.stderr.read(8192))
++        serial_path=ROOT/'qemu-m96-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,96,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M96: SYS.EXE lock structures, IRP queues and live IRQ/IDT/CR3/TSS/Files-11 verified PASS')
++        return 0
++    print('QEMU M96: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1616,7 +1616,8 @@
+     (838,859,None,None,'INILOA code deallocation requires full nonpaged pool','unresolved'),
+     (860,992,'src/vms_ini_lockdb.c','port_ini_lockdb_init','Realtime SPT bitmap, lock ID chain, power-of-two resource hash and optional process bitmap structures (DYNDEF and consumers unresolved)','partial'),
+     (993,1031,'src/vms_ini_procvec.c','port_ini_procvec_init','Resident PCB pointer and sequence array layout with SYSTEM and NULL descriptors; actual process activation not yet running','partial'),
+-    (1032,1165,None,None,'Swapper, PHYPCB/PFN mapping and pager/working set initialization not fully ported','unresolved'),
++    (1032,1068,'src/vms_ini_phv_swap.c','port_ini_phvswap_init','Native PHV/system slot and swapper PTE map DYN record construction; pager and swapper process are not running','partial'),
++    (1069,1165,None,None,'Modified page writer, physical PCB/PFN mapping and working set initialization unresolved','unresolved'),
+     (1166,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB, kernel clock, queue setup and live CPU register verification only; no real process activation','partial'),
+     (1301,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
+ parts=[]
+--- a/tests/test_disk_image.py
++++ b/tests/test_disk_image.py
+@@ -1,39 +1,61 @@
+ from pathlib import Path
+ from struct import unpack_from
+ 
+-# M91: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
+-# diagnostic-sector fixture. Do not assume USER or SYSTEM accounts exist.
++# Read the Files-11 INDEXF map and each file header. SYS.EXE grows as
++# original-source code is added; hardcoded LBN 115 is not a Files-11 rule.
+ volume=(Path(__file__).resolve().parents[1]/'portdisk.img').read_bytes()
+-assert len(volume)==8*16*63*512
++BLOCK=512
++TOTAL=8*16*63
++assert len(volume)==TOTAL*BLOCK
+ 
+ def block(lbn):
+-    assert 0<=lbn<8*16*63
+-    return volume[lbn*512:(lbn+1)*512]
++    assert 0<=lbn<TOTAL
++    return volume[lbn*BLOCK:(lbn+1)*BLOCK]
+ 
+-def checksum(block_bytes,at):
+-    return sum(unpack_from('<H',block_bytes,p)[0]
+-               for p in range(0,at,2))&0xffff
++def word(b,n):
++    return unpack_from('<H',b,n)[0]
++
++def checksum(b,at):
++    return sum(word(b,p) for p in range(0,at,2))&0xffff
++
++def valid_header(b,fid):
++    assert b[:2]==b'\x26\x41'
++    assert word(b,8)==fid and word(b,10)==fid
++    assert checksum(b,510)==word(b,510)
++    assert b[58]==2 # one format-1 extent, as installed by native image tools
++    first=word(b,132)
++    blocks=1+(word(b,130)&0xff)
++    assert 0<first<TOTAL and first+blocks<=TOTAL
++    return first,blocks
+ 
+ assert block(0)[510:512]==b'\x55\xaa'
+-for n in (3,6):
+-    home=block(n)
+-    assert unpack_from('<I',home,0)[0]==n
+-    assert checksum(home,58)==unpack_from('<H',home,58)[0]
+-    assert checksum(home,510)==unpack_from('<H',home,510)[0]
+-index_header=block(13)
+-assert index_header[:2]==b'\x26\x41'
+-assert unpack_from('<H',index_header,8)[0]==1
+-assert checksum(index_header,510)==unpack_from('<H',index_header,510)[0]
++for home_lbn in (3,6):
++    h=block(home_lbn)
++    assert unpack_from('<I',h,0)[0]==home_lbn
++    assert checksum(h,58)==word(h,58)
++    assert checksum(h,510)==word(h,510)
++index=block(13)
++assert index[:2]==b'\x26\x41'
++assert word(index,8)==1
++assert checksum(index,510)==word(index,510)
++assert word(index,130)==0x4017 and word(index,132)==0
++assert word(index,134)==0x4002
++index_extension=word(index,136)
++assert 24<=index_extension<TOTAL-2
+ index_bitmap=block(12)
+-assert (unpack_from('<H',index_bitmap,0)[0]&0x1fff)==0x1fff
+-system_dir=block(30)
+-assert all(name in system_dir for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
+-sysloa_header=block(115)
+-assert unpack_from('<H',sysloa_header,8)[0]==13
+-assert unpack_from('<H',sysloa_header,10)[0]==13
+-assert checksum(sysloa_header,510)==unpack_from('<H',sysloa_header,510)[0]
+-for lbn in (33,117,129):
+-    image=block(lbn)
+-    assert image[:5]==b'\x7fELF\x01'
+-    assert unpack_from('<H',image,18)[0]==3  # IA-32 machine
+-print('Files-11 ODS-2 SYS, SYSLOA386, INILOA disk records and ELF32 bytes PASS')
++assert (word(index_bitmap,0)&0x1fff)==0x1fff
++directory=block(30)
++assert all(name in directory for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
++# FID11 resides in INDEXF's initial mapped extent (LBN23).
++# FIDs12 and 13 use contiguous blocks 0 and 1 of its later extent.
++seen=[]
++for fid,header_lbn in ((11,23),(12,index_extension),(13,index_extension+1)):
++    data_lbn,blocks=valid_header(block(header_lbn),fid)
++    seen.append((data_lbn,data_lbn+blocks))
++    elf=block(data_lbn)
++    assert elf[:5]==b'\x7fELF\x01'
++    assert word(elf,18)==3 # ELF32 IA-32 CPU
++for i,(start,end) in enumerate(seen):
++    for j,(a,b) in enumerate(seen):
++        assert i==j or end<=a or b<=start
++print('Files-11 INDEXF-mapped SYS, SYSLOA386 and INILOA ELF32 images PASS')
+--- a/tests/test_sysloa386_disk_image.py
++++ b/tests/test_sysloa386_disk_image.py
+@@ -1,39 +1,61 @@
+ from pathlib import Path
+ from struct import unpack_from
+ 
+-# M91: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
+-# diagnostic-sector fixture. Do not assume USER or SYSTEM accounts exist.
++# Read the Files-11 INDEXF map and each file header. SYS.EXE grows as
++# original-source code is added; hardcoded LBN 115 is not a Files-11 rule.
+ volume=(Path(__file__).resolve().parents[1]/'portdisk.img').read_bytes()
+-assert len(volume)==8*16*63*512
++BLOCK=512
++TOTAL=8*16*63
++assert len(volume)==TOTAL*BLOCK
+ 
+ def block(lbn):
+-    assert 0<=lbn<8*16*63
+-    return volume[lbn*512:(lbn+1)*512]
++    assert 0<=lbn<TOTAL
++    return volume[lbn*BLOCK:(lbn+1)*BLOCK]
+ 
+-def checksum(block_bytes,at):
+-    return sum(unpack_from('<H',block_bytes,p)[0]
+-               for p in range(0,at,2))&0xffff
++def word(b,n):
++    return unpack_from('<H',b,n)[0]
++
++def checksum(b,at):
++    return sum(word(b,p) for p in range(0,at,2))&0xffff
++
++def valid_header(b,fid):
++    assert b[:2]==b'\x26\x41'
++    assert word(b,8)==fid and word(b,10)==fid
++    assert checksum(b,510)==word(b,510)
++    assert b[58]==2 # one format-1 extent, as installed by native image tools
++    first=word(b,132)
++    blocks=1+(word(b,130)&0xff)
++    assert 0<first<TOTAL and first+blocks<=TOTAL
++    return first,blocks
+ 
+ assert block(0)[510:512]==b'\x55\xaa'
+-for n in (3,6):
+-    home=block(n)
+-    assert unpack_from('<I',home,0)[0]==n
+-    assert checksum(home,58)==unpack_from('<H',home,58)[0]
+-    assert checksum(home,510)==unpack_from('<H',home,510)[0]
+-index_header=block(13)
+-assert index_header[:2]==b'\x26\x41'
+-assert unpack_from('<H',index_header,8)[0]==1
+-assert checksum(index_header,510)==unpack_from('<H',index_header,510)[0]
++for home_lbn in (3,6):
++    h=block(home_lbn)
++    assert unpack_from('<I',h,0)[0]==home_lbn
++    assert checksum(h,58)==word(h,58)
++    assert checksum(h,510)==word(h,510)
++index=block(13)
++assert index[:2]==b'\x26\x41'
++assert word(index,8)==1
++assert checksum(index,510)==word(index,510)
++assert word(index,130)==0x4017 and word(index,132)==0
++assert word(index,134)==0x4002
++index_extension=word(index,136)
++assert 24<=index_extension<TOTAL-2
+ index_bitmap=block(12)
+-assert (unpack_from('<H',index_bitmap,0)[0]&0x1fff)==0x1fff
+-system_dir=block(30)
+-assert all(name in system_dir for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
+-sysloa_header=block(115)
+-assert unpack_from('<H',sysloa_header,8)[0]==13
+-assert unpack_from('<H',sysloa_header,10)[0]==13
+-assert checksum(sysloa_header,510)==unpack_from('<H',sysloa_header,510)[0]
+-for lbn in (33,117,129):
+-    image=block(lbn)
+-    assert image[:5]==b'\x7fELF\x01'
+-    assert unpack_from('<H',image,18)[0]==3  # IA-32 machine
+-print('Files-11 ODS-2 SYS, SYSLOA386, INILOA disk records and ELF32 bytes PASS')
++assert (word(index_bitmap,0)&0x1fff)==0x1fff
++directory=block(30)
++assert all(name in directory for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
++# FID11 resides in INDEXF's initial mapped extent (LBN23).
++# FIDs12 and 13 use contiguous blocks 0 and 1 of its later extent.
++seen=[]
++for fid,header_lbn in ((11,23),(12,index_extension),(13,index_extension+1)):
++    data_lbn,blocks=valid_header(block(header_lbn),fid)
++    seen.append((data_lbn,data_lbn+blocks))
++    elf=block(data_lbn)
++    assert elf[:5]==b'\x7fELF\x01'
++    assert word(elf,18)==3 # ELF32 IA-32 CPU
++for i,(start,end) in enumerate(seen):
++    for j,(a,b) in enumerate(seen):
++        assert i==j or end<=a or b<=start
++print('Files-11 INDEXF-mapped SYS, SYSLOA386 and INILOA ELF32 images PASS')
+--- a/Makefile
++++ b/Makefile
+@@ -202,7 +202,7 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_phys.o: src/vms_phys.c src/vms_phys.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/kernel.o: src/kernel.c src/vms_sys_executive_entry.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_login_interact.h src/vms_logincmd.h src/vms_login_fileio.h src/vms_login_uart.h src/vms_hpwd.h src/vms_validate.h src/vms_logintime.h src/vms_dcl_exit.h src/vms_dcl_readrec.h src/vms_dcl_initial.h src/vms_dcl_command.h src/vms_rem_protocol.h src/vms_bootio.h src/vms_boot_files11.h src/vms_vmbargs.h src/vms_vmb_rpb.h src/vms_sysmount.h src/vms_sysboot_elf.h src/vms_dcl_goto.h src/vms_ast.h src/vms_astdel.h src/vms_postef.h src/vms_mutex.h src/vms_condition.h | build
++build/kernel.o: src/kernel.c src/vms_ini_phv_swap.h src/vms_sys_executive_entry.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_login_interact.h src/vms_logincmd.h src/vms_login_fileio.h src/vms_login_uart.h src/vms_hpwd.h src/vms_validate.h src/vms_logintime.h src/vms_dcl_exit.h src/vms_dcl_readrec.h src/vms_dcl_initial.h src/vms_dcl_command.h src/vms_rem_protocol.h src/vms_bootio.h src/vms_boot_files11.h src/vms_vmbargs.h src/vms_vmb_rpb.h src/vms_sysmount.h src/vms_sysboot_elf.h src/vms_dcl_goto.h src/vms_ast.h src/vms_astdel.h src/vms_postef.h src/vms_mutex.h src/vms_condition.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_pc_bus.o: src/vms_ini_pc_bus.c src/vms_ini_pc_bus.h src/vms_iniloa_iomap.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+@@ -758,7 +758,7 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h | build
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_sysboot_pktmem.o: src/vms_sysboot_pktmem.c src/vms_sysboot_pktmem.h src/vms_booparam.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+@@ -768,8 +768,10 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_procvec.o: src/vms_ini_procvec.c src/vms_ini_procvec.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
++build/vms_ini_phv_swap.o: src/vms_ini_phv_swap.c src/vms_ini_phv_swap.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -793,7 +795,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -855,3 +857,9 @@
+ iniprocveccheck: | build
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_procvec.c tests/test_ini_procvec_host.c -o build/iniprocveccheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/iniprocveccheck
++
++# M96: original INIT.MAR INI_PHV and INI_SWAP persistent DYN records.
++.PHONY: iniphvswapcheck
++iniphvswapcheck: | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_phv_swap.c tests/test_ini_phv_swap_host.c -o build/iniphvswapcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/iniphvswapcheck
