@@ -1,4 +1,4 @@
-name: VMS37 native IA-32 M101 loaded SYS.EXE source-derived IA-32 TSS interrupt-stack bounds
+name: VMS37 native IA-32 M102 source-derived DPT linked driver-list host checks plus M101 native guest regression
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M101
+      - name: Rebuild pinned native source through M102
         shell: bash
         run: |
           set -euo pipefail
@@ -45,11 +45,12 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m99-native.patch
           patch --batch -p1 < ../ci-vms37/m100-native.patch
           patch --batch -p1 < ../ci-vms37/m101-native.patch
+          patch --batch -p1 < ../ci-vms37/m102-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           make -j2 all
           make bootcheck imagecheck sysnativecheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
-          make pktlayoutcheck packetqueuecheck inilockdbcheck iniprocveccheck iniphvswapcheck inimpwcheck inipflveccheck inisyswcbcheck inisyswcbdiskcheck inisyslogcheck files1186check files1187check
+          make inidptlistcheck pktlayoutcheck packetqueuecheck inilockdbcheck iniprocveccheck iniphvswapcheck inimpwcheck inipflveccheck inisyswcbcheck inisyswcbdiskcheck inisyslogcheck files1186check files1187check
           python3 tools/gen_source_coverage.py
           python3 tests/test_source_audit.py
           python3 tests/test_disk_image.py
@@ -57,7 +58,7 @@ jobs:
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Boot M101 native guest and verify live SYS.EXE TSS stack limit
+      - name: Regress M101 native SYS.EXE/TSS QEMU guest; M102 DPT list host-only
         shell: bash
         run: |
           set -euo pipefail
@@ -67,7 +68,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m101-qemu-serial
+          name: vms37-m102-ci-m101-guest-serial
           path: |
             vms37-native-x86-m89/qemu-m101-serial.log
           if-no-files-found: warn
