@@ -1,0 +1,507 @@
+--- /dev/null
++++ b/src/vms_ini_pc_bus.c
+@@ -0,0 +1,51 @@
++#include "vms_ini_pc_bus.h"
++/* The original INITADP INI$IOMAP maps adapter registers, then invokes
++ * type-specific setup. IA-32 PIO has no page-table mapping for port space.
++ * The native counterpart probes an *actual* registered ATA driver and
++ * records port ownership only after a successful probe. */
++uint32_t port_ini_pc_describe(uint16_t ata_base,uint16_t uart_base,
++                        struct port_ini_io_descriptor devices[2]) {
++    if(!devices||ata_base!=0x1f0u ||
++       (uart_base && uart_base!=0x3f8u))return 0u;
++    devices[0]=(struct port_ini_io_descriptor){
++        ata_base,8u,PORT_INI_PC_ATA_PIO,0u,14u};
++    if(uart_base){
++        devices[1]=(struct port_ini_io_descriptor){
++            uart_base,8u,PORT_INI_PC_16550_UART,0u,4u};
++        return 2u;
++    }
++    return 1u;
++}
++uint32_t port_ini_pc_probe(void *ctx,const struct port_ini_io_descriptor *device){
++    struct port_ini_pc_bus *bus=(struct port_ini_pc_bus *)ctx;
++    if(!bus||!device)return 0u;
++    ++bus->probe_count;
++    if(device->adapter_kind==PORT_INI_PC_ATA_PIO &&
++       device->io_base==bus->ata_io_port && device->io_count==8u &&
++       bus->ata_read_sector) {
++        /* LBA 0 is the actual Files-11 physical disk's boot sector. */
++        uint16_t words[256];
++        return bus->ata_read_sector(bus->context,0u,words)==0 ? 1u:0u;
++    }
++    if(device->adapter_kind==PORT_INI_PC_16550_UART &&
++       device->io_base==bus->uart_io_port && device->io_count==8u &&
++       bus->uart_ready)return bus->uart_ready(bus->context) ? 1u:0u;
++    return 0u;
++}
++uint32_t port_ini_pc_register(void *ctx,const struct port_ini_io_descriptor *device){
++    struct port_ini_pc_bus *bus=(struct port_ini_pc_bus *)ctx;
++    if(!bus||!device)return 0u;
++    uint32_t bit=0u;
++    if(device->adapter_kind==PORT_INI_PC_ATA_PIO &&
++       device->io_base==bus->ata_io_port && device->io_count==8u &&
++       bus->ata_read_sector)bit=1u;
++    if(device->adapter_kind==PORT_INI_PC_16550_UART &&
++       device->io_base==bus->uart_io_port && device->io_count==8u &&
++       bus->uart_ready && bus->uart_ready(bus->context))bit=2u;
++    if(!bit || (bus->registered_mask&bit))return 0u;
++    /* IA-32 IOPL=0 and ring-0 driver registration protect PIO access.
++     * No VAX PTE, SBI bus address or fictitious interrupt is installed. */
++    bus->registered_mask|=bit;
++    ++bus->register_count;
++    return 1u;
++}
+--- /dev/null
++++ b/src/vms_ini_pc_bus.h
+@@ -0,0 +1,23 @@
++#ifndef VMS_INI_PC_BUS_H
++#define VMS_INI_PC_BUS_H
++#include <stdint.h>
++#include "vms_iniloa_iomap.h"
++/* Native successor to INITADP.MAR's CPU_NEXUSTABLE/INIT_ROUTINES.
++ * On IA-32, PIO adapter resources are controlled by ring-0 I/O privilege,
++ * not the VAX SBI physical-nexus page mapping. The boot disk must exist. */
++enum {PORT_INI_PC_ATA_PIO=0x101u, PORT_INI_PC_16550_UART=0x102u};
++struct port_ini_pc_bus {
++    void *context;
++    int (*ata_read_sector)(void *,uint32_t,uint16_t [256]);
++    int (*uart_ready)(void *);
++    uint32_t registered_mask;
++    uint32_t probe_count;
++    uint32_t register_count;
++    uint16_t ata_io_port;
++    uint16_t uart_io_port;
++};
++uint32_t port_ini_pc_describe(uint16_t ata_base,uint16_t uart_base,
++                        struct port_ini_io_descriptor devices[2]);
++uint32_t port_ini_pc_probe(void *ctx,const struct port_ini_io_descriptor *device);
++uint32_t port_ini_pc_register(void *ctx,const struct port_ini_io_descriptor *device);
++#endif
+--- /dev/null
++++ b/tests/test_ini_pc_bus_host.c
+@@ -0,0 +1,44 @@
++#include <stdio.h>
++#include "vms_ini_pc_bus.h"
++#include "vms_iniloa_iomap.h"
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++struct fake {int ata_ok,uart_ok;unsigned reads;};
++static int disk(void *ctx,uint32_t lba,uint16_t sectors[256]){
++    struct fake *f=(struct fake *)ctx;
++    f->reads++;
++    if(lba!=0u)return -1;
++    for(unsigned i=0;i<256;i++)sectors[i]=0u;
++    return f->ata_ok?0:-1;
++}
++static int uart(void *ctx){return ((struct fake *)ctx)->uart_ok;}
++int main(void){
++    struct port_ini_io_descriptor d[2];
++    CHECK(port_ini_pc_describe(0x1f0u,0x3f8u,d)==2u);
++    CHECK(port_ini_pc_describe(0x170u,0x3f8u,d)==0u);
++    CHECK(port_ini_pc_describe(0x1f0u,0x2f8u,d)==0u);
++    CHECK(port_ini_pc_describe(0x1f0u,0u,d)==1u);
++    CHECK(port_ini_pc_describe(0x1f0u,0x3f8u,d)==2u);
++    struct fake f={1,1,0};
++    struct port_ini_pc_bus b={.context=&f,.ata_read_sector=disk,
++        .uart_ready=uart,.ata_io_port=0x1f0u,.uart_io_port=0x3f8u};
++    const struct port_ini_io_ops ops={&b,port_ini_pc_probe,port_ini_pc_register};
++    struct port_ini_io_state state={0};
++    CHECK(port_ini_iomap(d,2u,0x1f0u,&ops,&state)==PORT_INI_MAP_OK);
++    CHECK(state.num_nexus==2u && state.boot.boot_adapter_number==0u);
++    CHECK(state.confreg[0]==PORT_INI_PC_ATA_PIO && state.sbiconf[0]==0x1f0u);
++    CHECK(state.confreg[1]==PORT_INI_PC_16550_UART && state.sbiconf[1]==0x3f8u);
++    CHECK(b.registered_mask==3u && b.probe_count==2u && b.register_count==2u);
++    CHECK(f.reads==1u);
++    CHECK(port_ini_pc_register(&b,&d[0])==0u);/* no duplicated driver */
++    f.ata_ok=0;
++    b=(struct port_ini_pc_bus){.context=&f,.ata_read_sector=disk,
++        .uart_ready=uart,.ata_io_port=0x1f0u,.uart_io_port=0x3f8u};
++    CHECK(port_ini_iomap(d,2u,0x1f0u,&ops,&state)==PORT_INI_MAP_NO_BOOT_DEVICE);
++    CHECK(b.registered_mask==0u);
++    f.ata_ok=1;f.uart_ok=0;
++    CHECK(port_ini_iomap(d,2u,0x1f0u,&ops,&state)==PORT_INI_MAP_OK);
++    CHECK(state.num_nexus==1u&&b.registered_mask==1u);
++    CHECK(!state.confreg[1]&&!state.sbiconf[1]);
++    puts("PC INITADP native physical ATA/COM1 adapter registration PASS");
++    return 0;
++}
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -2,18 +2,34 @@
+ #include "vms_exe_sched.h"
+ #include "vms_exe_scbvector.h"
+ #include "vms_exe_gettim.h"
+-/* Resident SYS.EXE data. Never share these with the earlier boot monitor. */
++/* Resident SYS.EXE storage. Never overlay it with the boot monitor's data. */
+ static struct port_exe_scheduler executive_scheduler;
+ static struct port_exe_scb_slot executive_scb[PORT_SCB_ENTRIES];
+ static struct port_exe_systime executive_clock;
+-/* The source's INIT sequencing cannot be skipped. Until INILOA is loaded
+- * and mapped, SYS.EXE refuses to start, rather than faking a boot. */
++/* Original INIT.MAR populates the SCB, sets up clock state, then prepares
++ * process scheduling. This restricted entry checks the INILOA handoff and
++ * initializes only those backed IA-32 counterparts. Actual IDT hooks,
++ * physical memory, process image activation and SYSLOGIN remain outstanding. */
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *p){
+     if(!p || p->signature!=PORT_SYS_EXEC_SIGNATURE ||
+        p->version!=PORT_SYS_EXEC_VERSION || !p->initialized_images ||
+-       !p->pcb_type)return PORT_SYS_EXEC_BAD_PARAMETERS;
++       p->pcb_type!=PORT_SYS_EXEC_PCB_KIND || !p->result || p->reserved)
++        return PORT_SYS_EXEC_BAD_PARAMETERS;
+     port_exe_sched_init(&executive_scheduler,p->pcb_type);
+     port_exe_scb_init(executive_scb);
+     port_exe_systime_store(&executive_clock,p->system_time);
++    const struct port_exe_scb_slot *acv=port_exe_scb_get(executive_scb,0x20u);
++    const struct port_exe_scb_slot *pf=port_exe_scb_get(executive_scb,0x24u);
++    if(!acv || !pf || acv->pc_idt_vector!=13u || pf->pc_idt_vector!=14u)
++        return PORT_SYS_EXEC_BAD_PARAMETERS;
++    /* A physical guest readback proves the *loaded* SYS.EXE code ran; a
++     * success string from the bootstrap alone is never treated as proof. */
++    p->result->scheduler_ready_mask=executive_scheduler.ready_mask;
++    p->result->scheduler_pcb_type=executive_scheduler.pcb_type;
++    p->result->scb_access_violation_pc_vector=acv->pc_idt_vector;
++    p->result->scb_page_fault_pc_vector=pf->pc_idt_vector;
++    p->result->system_time_low=executive_clock.low;
++    p->result->system_time_high=executive_clock.high;
++    p->result->signature=PORT_SYS_EXEC_RESULT_TAG;
+     return PORT_SYS_EXEC_NORMAL;
+ }
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -1,16 +1,28 @@
+ #ifndef VMS_SYS_EXECUTIVE_ENTRY_H
+ #define VMS_SYS_EXECUTIVE_ENTRY_H
+ #include <stdint.h>
+-/* SYS.EXE entry handshake.  BOO/INIT must have loaded INILOA and all
+- * dependencies before this entry may initialize resident executive state. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=1u,
+-       PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u };
++/* SYS.EXE's native entry is reached through the address SYSBOOT reads from
++ * the actual ODS-2 SYS.EXE. This entry implements only resident scheduler,
++ * system time and named SCB setup; it cannot start processes or LOGINOUT. */
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=2u,
++       PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
++       PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u };
++struct port_sys_exec_result {
++    uint32_t signature;
++    uint32_t scheduler_ready_mask;
++    uint32_t scheduler_pcb_type;
++    uint32_t scb_access_violation_pc_vector;
++    uint32_t scb_page_fault_pc_vector;
++    uint32_t system_time_low;
++    uint32_t system_time_high;
++};
+ struct port_sys_exec_start {
+     uint32_t signature,version;
+     uint64_t system_time;
+     uint8_t pcb_type;
+     uint8_t initialized_images;
+     uint16_t reserved;
++    struct port_sys_exec_result *result;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+ #endif
+--- /dev/null
++++ b/tests/test_sys_exec_entry_host.c
+@@ -0,0 +1,35 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_sys_executive_entry.h"
++#define CHECK(x) do {if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++int main(void){
++    struct port_sys_exec_result result;
++    memset(&result,0xa5,sizeof result);
++    struct port_sys_exec_start req={
++        .signature=PORT_SYS_EXEC_SIGNATURE,
++        .version=PORT_SYS_EXEC_VERSION,
++        .system_time=UINT64_C(53312345670000000),
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,
++        .initialized_images=1u,.reserved=0u,.result=&result};
++    CHECK(port_sys_executive_entry(0)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    req.initialized_images=0u;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    CHECK(result.signature==0xa5a5a5a5u);
++    req.initialized_images=1u;req.signature=0u;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    req.signature=PORT_SYS_EXEC_SIGNATURE;
++    req.result=0;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    req.result=&result;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_NORMAL);
++    CHECK(result.signature==PORT_SYS_EXEC_RESULT_TAG);
++    CHECK(result.scheduler_pcb_type==PORT_SYS_EXEC_PCB_KIND);
++    CHECK(result.scheduler_ready_mask==0u);
++    CHECK(result.scb_access_violation_pc_vector==13u);
++    CHECK(result.scb_page_fault_pc_vector==14u);
++    CHECK(result.system_time_low==(uint32_t)req.system_time);
++    CHECK(result.system_time_high==(uint32_t)(req.system_time>>32));
++    puts("SYS.EXE resident entry RPB/SCB/time/scheduler readback PASS");
++    return 0;
++}
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -1,4 +1,7 @@
+ #include "vms_sysboot_elf.h"
++#include "vms_iniloa_entry.h"
++#include "vms_ini_pc_bus.h"
++#include "vms_sys_executive_entry.h"
+ /* Native VMS 3.7 port research monitor. NOT VAX/VMS or a VMS implementation.
+  * It uses VGA text memory and 8042 keyboard-controller I/O directly.
+  * BIOS is only used by the stage-1 loader before entering protected mode.
+@@ -2431,6 +2434,16 @@
+     for(uint32_t i=0;i<size;i++)dest[i]=0u;
+     return 1;
+ }
++/* INITADP's PC-specific CPU_ADP table invokes the *actual* protected
++ * boot IDE and COM1 drivers. Disk probing reads the real Files-11 volume. */
++static int native_ini_ata_read(void *ctx,uint32_t lba,uint16_t words[256]){
++    (void)ctx;
++    return port_ata_x86_read28(lba,words);
++}
++static int native_ini_uart_ready(void *ctx){
++    (void)ctx;
++    return port_serial_x86_active();
++}
+ static struct port_f11_volume bootstrap_volume;
+ static void bootstrap_halt(void){
+     for(;;)__asm__ volatile("cli; hlt");
+@@ -2562,10 +2575,69 @@
+         bootstrap_halt();
+     }
+     bootstrap_message("SYSBOOT: Files-11 INILOA.EXE native image loaded.");
+-    /* Original INIT.MAR requires SYSPARAM and I/O database setup before
+-     * the newly loaded INI$IOMAP can operate on real adapters. Those
+-     * dependencies are not linked into guest initialization yet. */
+-    bootstrap_message("SYSBOOT stopped: SYS.EXE / INILOA INIT sequencing incomplete.");
++    /* EXECINIT / INITADP: after the images are resident, INIT sets up the
++     * CPU-specific adapter table and invokes INI$IOMAP through the loaded
++     * image's entry. This is native PC I/O, not simulated VAX nexus I/O. */
++    static struct port_ini_pc_bus bus;
++    static struct port_ini_io_descriptor adapters[2];
++    static struct port_ini_io_state adapter_state;
++    bus=(struct port_ini_pc_bus){.context=0,
++        .ata_read_sector=native_ini_ata_read,.uart_ready=native_ini_uart_ready,
++        .ata_io_port=(uint16_t)boot_rpb.boot_registers[1],
++        .uart_io_port=0x3f8u};
++    uint32_t adapter_count=port_ini_pc_describe(bus.ata_io_port,
++                            port_serial_x86_active()?0x3f8u:0u,adapters);
++    const struct port_ini_io_ops pc_ops={&bus,port_ini_pc_probe,
++                                        port_ini_pc_register};
++    const struct port_iniloa_start adapter_request={
++        .signature=PORT_INILOA_SIGNATURE,.version=PORT_INILOA_VERSION,
++        .boot_io_base=bus.ata_io_port,.adapter_count=(uint16_t)adapter_count,
++        .adapters=adapters,.driver_ops=&pc_ops,.state=&adapter_state};
++    /* Indirect call is to the verified ELF32 entry in the reserved IA-32
++     * supervisor range. Neither kmain nor the floppy contains that code. */
++    uint32_t (*loaded_iniloa)(const struct port_iniloa_start *)=
++        (uint32_t (*)(const struct port_iniloa_start *))(uintptr_t)iniloa_entry;
++    if(!adapter_count || loaded_iniloa(&adapter_request)!=PORT_INI_MAP_OK ||
++       !(bus.registered_mask&1u) ||
++       adapter_state.boot.boot_csr_virtual!=bus.ata_io_port ||
++       adapter_state.boot.boot_adapter_number>=adapter_state.num_nexus){
++        bootstrap_message("INIT: INILOA adapter initialization failed.");
++        bootstrap_halt();
++    }
++    /* Preserve the RPB's native boot I/O port in the VMB sidecar and
++     * publish the original RPB$L_BOOTR1 semantics (adapter table index). */
++    boot_rpb.boot_registers[1]=adapter_state.boot.boot_adapter_number;
++    bootstrap_message("INIT: INILOA IOMAP executed on real IA-32 boot adapter.");
++
++    /* Resident SYS.EXE clock, process queues and SCB setup execute from the
++     * image read through Files-11. This is not a full system startup. */
++    uint64_t native_now=0u;
++    if(!port_rtc_x86_now(0,&native_now)){
++        bootstrap_message("INIT: hardware system clock is unavailable.");
++        bootstrap_halt();
++    }
++    static struct port_sys_exec_result sys_result;
++    const struct port_sys_exec_start sys_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .system_time=native_now,.pcb_type=PORT_SYS_EXEC_PCB_KIND,
++        .initialized_images=1u,.reserved=0u,.result=&sys_result};
++    uint32_t (*loaded_sys)(const struct port_sys_exec_start *)=
++        (uint32_t (*)(const struct port_sys_exec_start *))(uintptr_t)sys_entry;
++    if(loaded_sys(&sys_request)!=PORT_SYS_EXEC_NORMAL ||
++       sys_result.signature!=PORT_SYS_EXEC_RESULT_TAG ||
++       sys_result.scheduler_ready_mask!=0u ||
++       sys_result.scheduler_pcb_type!=PORT_SYS_EXEC_PCB_KIND ||
++       sys_result.scb_access_violation_pc_vector!=13u ||
++       sys_result.scb_page_fault_pc_vector!=14u ||
++       sys_result.system_time_low!=(uint32_t)native_now ||
++       sys_result.system_time_high!=(uint32_t)(native_now>>32)){
++        bootstrap_message("INIT: SYS.EXE resident initialization failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: loaded SYS.EXE resident entry executed and verified.");
++    /* INIT.MAR's remaining SYSLOA, SYSPARAM, SPT, ACP and process-image
++     * prerequisites have not been ported. Stop before login or DCL. */
++    bootstrap_message("INIT stopped: remaining original initialization dependencies incomplete.");
+     bootstrap_halt();
+ 
+ 
+--- a/Makefile
++++ b/Makefile
+@@ -204,8 +204,10 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/kernel.o: src/kernel.c src/vms_login_interact.h src/vms_logincmd.h src/vms_login_fileio.h src/vms_login_uart.h src/vms_hpwd.h src/vms_validate.h src/vms_logintime.h src/vms_dcl_exit.h src/vms_dcl_readrec.h src/vms_dcl_initial.h src/vms_dcl_command.h src/vms_rem_protocol.h src/vms_bootio.h src/vms_boot_files11.h src/vms_vmbargs.h src/vms_vmb_rpb.h src/vms_sysmount.h src/vms_sysboot_elf.h src/vms_dcl_goto.h src/vms_ast.h src/vms_astdel.h src/vms_postef.h src/vms_mutex.h src/vms_condition.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/kernel.elf: build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o linked.ld
+-	$(LD) -m elf_i386 -T linked.ld -o $@ build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o
++build/vms_ini_pc_bus.o: src/vms_ini_pc_bus.c src/vms_ini_pc_bus.h src/vms_iniloa_iomap.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/kernel.elf: build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o build/vms_ini_pc_bus.o linked.ld
++	$(LD) -m elf_i386 -T linked.ld -o $@ build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o build/vms_ini_pc_bus.o
+ build/kernel.bin: build/kernel.elf
+ 	$(OBJCOPY) -O binary $< $@
+ portdisk.img: build/make_f11_disk build/install_sys_image build/sys.exe build/install_iniloa_image build/iniloa.exe
+@@ -769,7 +771,7 @@
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysnative_hosttest portdisk.img build/sys.exe build/iniloa.exe
+ .PHONY: qemu-sysnative
+ qemu-sysnative: vms37lab.ima portdisk.img
+-	python3 tools/qemu_sysboot_m89.py
++	python3 tools/qemu_sysboot_m90.py
+ 
+ # M89: original INILOA load order, with native IA-32 I/O-map counterpart.
+ build/vms_iniloa_iomap.o: src/vms_iniloa_iomap.c src/vms_iniloa_iomap.h | build
+@@ -780,6 +782,14 @@
+ 	$(LD) -m elf_i386 -T iniloa_native.ld -o $@ build/vms_iniloa_entry.o build/vms_iniloa_iomap.o
+ build/install_iniloa_image: tools/install_iniloa_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
++.PHONY: sysexecentrycheck
++sysexecentrycheck: | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sys_executive_entry.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
++.PHONY: inicpbuscheck
++inicpbuscheck: | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_pc_bus.c src/vms_iniloa_iomap.c tests/test_ini_pc_bus_host.c -o build/inicpbuscheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/inicpbuscheck
+ .PHONY: iniloacheck
+ iniloacheck: portdisk.img build/iniloa.exe
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_iniloa_iomap.c tests/test_iniloa_iomap_host.c -o build/iniloa_iomap_hosttest
+--- /dev/null
++++ b/tools/qemu_sysboot_m90.py
+@@ -0,0 +1,70 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU guest; require executed source-derived images.
++
++This checks running code in SYS.EXE and INILOA.EXE, not just printed boot
++load messages. The expected stop is missing the remaining original INIT
++services, not a manufactured SYSTEM login.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M90: no system QEMU installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++       b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++       b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++       b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++       b'INIT: loaded SYS.EXE resident entry executed and verified.',
++       b'INIT stopped: remaining original initialization dependencies incomplete.']
++    reject=[b'SYSBOOT: SYS.EXE native image validation or loading failed.',
++            b'SYSBOOT: INILOA.EXE image validation or loading failed.',
++            b'INIT: INILOA adapter initialization failed.',
++            b'INIT: SYS.EXE resident initialization failed.',
++            b'INIT: hardware system clock is unavailable.',
++            b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in reject):break
++            if all(x in observed for x in expected):
++                # Require exact source-stage order, not just the substrings.
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            readable,_,_=select.select([p.stdout],[],[],0.25)
++            if readable:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        observed.extend(b'\n=== QEMU stderr ===\n')
++        observed.extend(p.stderr.read(8192))
++        (ROOT/'qemu-m90-serial.log').write_bytes(observed)
++    if passed:
++        print('QEMU M90: guest executed real Files-11 INILOA and SYS.EXE entry code PASS')
++        return 0
++    print('QEMU M90: execution evidence absent or failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1570,13 +1570,11 @@
+     exe_mapped_source(orig,total,regions,
+         'Guest ACP process and disk scheduler must attach the real memory and I/O callbacks.')
+ 
+-# M89: INILOA/INITADP port is partial. The VAX-specific nexus and UNIBUS
+-# register programming cannot execute on IA-32 and is not counted as
+-# functional coverage. The source-derived adapter tables and RPB update
+-# have a tested native counterpart, but no guest INIT caller exists yet.
++# M90: INITADP has a native PC CPU nexus replacement and a guest caller.
++# VAX-only hardware setup is excluded; ordinary VMS integration is not.
+ ini_ranges=[
+     (1,450,None,None,'VAX CPU-specific SBI nexus descriptors, history and declarations', 'hardware-excluded'),
+-    (451,605,'src/vms_iniloa_iomap.c','port_ini_iomap','Native IA-32 I/O-port adapter enumeration, CONFREG/SBICONF and boot RPB outputs','partial'),
++    (451,605,'src/vms_iniloa_iomap.c','port_ini_iomap','Guest-executed IA-32 ATA/serial I/O registration, CONFREG/SBICONF and boot RPB outputs','partial'),
+     (606,639,None,None,'VAX 512-byte SPTE mapping and VAX console halt','hardware-excluded'),
+     (640,909,None,None,'VAX UNIBUS adapter I/O address-space mapping, vector and data setup','hardware-excluded'),
+     (910,1053,None,None,'VAX MPM, CI, DR32, MBA adapter hardware initialization','hardware-excluded')
+@@ -1596,7 +1594,32 @@
+     'platform_changes':['VAX SBI nexus and UNIBUS space have no IA-32 hardware counterpart',
+       'IA-32 I/O-port mapper performs explicit discovered device probing',
+       'Original boot RPB fields and adapter-type array outputs are retained'],
+-    'unresolved_integration':'INI$IOMAP has not been called in guest; original VAX-specific initialization branches are excluded only for physically absent VAX hardware; true IA-32 adapter startup and INIT call remain incomplete.'})
++    'unresolved_integration':'IA-32 INI$IOMAP guest entry executes from INILOA.EXE and probes real boot ATA; remaining original adapter types and executive INIT linkages are unfinished.'})
++
++# M90: Track INIT.MAR separately. Only the specific guest-executed
++# counterpart ranges are partial: the rest must remain unresolved until
++# they are implemented. Do not treat line inventory as completed coverage.
++init_parts=[
++    (1,427,None,None,'Source header, executive storage and boot tables still need line-by-line work','unresolved'),
++    (428,572,'src/kernel.c','kmain','Physical-memory/bootstrap setup and source-dependent resident entry','partial'),
++    (573,755,None,None,'Paging, physical memory, nonpaged pool and I/O queues not fully ported','unresolved'),
++    (756,837,'src/kernel.c','kmain','SYSLOA and INILOA Files-11 loading and native entry dispatch','partial'),
++    (838,1165,None,None,'SPT, process state, lock tables, resident allocation not fully ported','unresolved'),
++    (1166,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB and system process state initialization only','partial'),
++    (1301,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
++parts=[]
++for first,last,path,symbol,purpose,status in init_parts:
++    if not path:
++        parts.append({'original_lines':[first,last],'status':status,'reason':purpose})
++    else:
++        line=line_for_symbol(path,symbol)
++        if line is None:missing+=1
++        parts.append({'original_lines':[first,last],
++            'status':status if line else 'missing',
++            'pc_file':path,'pc_symbol':symbol,'pc_line':line,'function':purpose})
++result['files'].append({'original_file':'SYS/SRC/INIT.MAR',
++    'original_lines':1906,'sections':parts,
++    'unresolved_integration':'Source-ordered INIT remains incomplete; the two ELF images execute verified resident entries but no SYSTEM login, DCL, or network session runs.'})
+ 
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
