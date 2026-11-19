@@ -1,4 +1,4 @@
-name: VMS37 native IA-32 M93 source-derived executive packet queues
+name: VMS37 native IA-32 M94 source-derived resident lock database structures
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M93
+      - name: Rebuild pinned native source through M94
         shell: bash
         run: |
           set -euo pipefail
@@ -37,25 +37,26 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m91-native.patch
           patch --batch -p1 < ../ci-vms37/m92-native.patch
           patch --batch -p1 < ../ci-vms37/m93-native.patch
+          patch --batch -p1 < ../ci-vms37/m94-native.patch
           make -j2 all
           make bootcheck imagecheck sysnativecheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
-          make pktlayoutcheck packetqueuecheck files1186check files1187check
+          make pktlayoutcheck packetqueuecheck inilockdbcheck files1186check files1187check
           python3 tools/gen_source_coverage.py
           python3 tests/test_source_audit.py
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Boot single native IA-32 PC and verify resident SYS.EXE packet queues
+      - name: Boot single native IA-32 PC and verify resident SYS.EXE lock records
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m93.py
+          python3 tools/qemu_sysboot_m94.py
       - name: Preserve actual guest COM1 transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m93-qemu-serial
+          name: vms37-m94-qemu-serial
           path: |
-            vms37-native-x86-m89/qemu-m93-serial.log
+            vms37-native-x86-m89/qemu-m94-serial.log
           if-no-files-found: warn
