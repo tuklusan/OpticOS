@@ -33,6 +33,7 @@ jobs:
           unzip -q ci-vms37/vms37-native-x86-m89-current.zip
           cd vms37-native-x86-m89
           patch --batch -p1 < ../ci-vms37/m90-native.patch
+          patch --batch -p1 < ../ci-vms37/m91-native.patch
           patch --batch -p1 < ../ci-vms37/m92-native.patch
           make -j2 all
           make bootcheck imagecheck sysnativecheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
