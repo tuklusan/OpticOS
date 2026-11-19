@@ -28,7 +28,7 @@ if not (0<at<500 and boot.rfind(b"VMSB")==at):
     raise RuntimeError("BOOTBLOCK disk metadata absent")
 blocks=int.from_bytes(boot[at+4:at+6],"little")
 start=int.from_bytes(boot[at+6:at+8],"little")
-if start!=1 or not 1<=blocks<=251 or stage2[:2]!=b"\\xfc\\x31":
+if start!=1 or not 1<=blocks<=251 or stage2[:2]!=bytes((0xfc,0x31)):
     raise RuntimeError("BOOTBLOCK size/LBN/entry mismatch")
 if disk.stat().st_size!=8064*512:
     raise RuntimeError("Files-11 disk is shorter than declared volume")
