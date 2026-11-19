@@ -1,0 +1,304 @@
+--- /dev/null
++++ b/src/vms_ini_ttydrv.c
+@@ -0,0 +1,109 @@
++#include "vms_ini_ttydrv.h"
++/* 32-bit VAX descriptors and native IA-32 pointer words share the same
++ * byte width; the routine executes straight IA-32 address translation,
++ * NOT a VAX instruction emulator. */
++static uint16_t u16(const uint8_t *p){
++    return (uint16_t)p[0]|((uint16_t)p[1]<<8);
++}
++static uint32_t u32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8)|
++           ((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
++}
++static void set32(uint8_t *p,uint32_t v){
++    p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);
++    p[2]=(uint8_t)(v>>16);p[3]=(uint8_t)(v>>24);
++}
++uint32_t port_ini_tty_class_relocate(uint8_t *image,size_t image_capacity,
++    uint32_t guest_image_base,size_t dpt_offset,uint8_t dpt_type_code,
++    uint16_t console_ucb_bytes,struct port_ini_tty_class *out){
++    /* DPTAB offsets are proven from original macro expansion:
++     * +8 size, +10 type, +14 UCB size, +30 relative vector offset. */
++    if(!image||!out || !guest_image_base ||
++       image_capacity<56u || image_capacity>UINT32_MAX ||
++       (uintptr_t)image&3u || (guest_image_base&3u) ||
++       (dpt_offset&3u) || dpt_offset>image_capacity-56u ||
++       (uint64_t)guest_image_base+image_capacity>UINT64_C(0x100000000))
++        return PORT_INI_TTY_BADPARAM;
++    uint8_t *dpt=image+dpt_offset;
++    uint16_t declared_bytes=u16(dpt+8u);
++    if(dpt[10u]!=dpt_type_code || declared_bytes<56u ||
++       declared_bytes>image_capacity-dpt_offset)
++        return PORT_INI_TTY_BAD_DPT;
++    uint16_t ucb_required=u16(dpt+14u);
++    if(console_ucb_bytes<ucb_required)
++        return PORT_INI_TTY_TOO_SMALL_UCB;
++    uint32_t vec_dpt=u16(dpt+30u);
++    if(vec_dpt<56u || (vec_dpt&3u) ||
++       vec_dpt>image_capacity-dpt_offset-28u ||
++       vec_dpt>(uint32_t)declared_bytes-28u)
++        return PORT_INI_TTY_BAD_VECTOR;
++    uint8_t *vec=dpt+vec_dpt;
++    uint32_t count=0u;
++    size_t limit=(image_capacity-dpt_offset-vec_dpt)/4u;
++    /* Original six CLASS_* entries, followed by a zero terminator.
++     * The old code loops over all nonzero entries and leaves zero intact.
++     * No partial relocation if a malformed driver lacks that sentinel. */
++    for(;count<limit;count++){
++        if(u32(vec+4u*count)==0u)break;
++    }
++    if(count<6u || count>=limit)
++        return PORT_INI_TTY_BAD_VECTOR;
++    uint32_t base=guest_image_base+(uint32_t)dpt_offset;
++    for(uint32_t i=0;i<count;i++){
++        uint8_t *cell=vec+4u*i;
++        /* Source ADDL2 R2,(R1)+ relocates a 32-bit word, wrapping exactly as
++         * the native 32-bit instruction when an offset is negative. */
++        set32(cell,u32(cell)+base);
++    }
++    *out=(struct port_ini_tty_class){
++      .dpt_address=base,.vector_address=base+vec_dpt,
++      .ddt_address=u32(vec+16u),
++      .getnext_address=u32(vec),.putnext_address=u32(vec+4u),
++      .relocated_entries=count,.required_console_ucb_bytes=ucb_required};
++    return PORT_INI_TTY_OK;
++}
++
++uint32_t port_ini_tty_bind_console(uint8_t *ddb,size_t ddb_capacity,
++    uint8_t *console_ucb,size_t ucb_capacity,
++    const uint8_t *op_dpt,size_t op_dpt_capacity,uint32_t op_dpt_address,
++    uint8_t expected_dpt_type,
++    const struct port_ini_tty_class *ttyclass,
++    struct port_ini_tty_console_binding *out){
++    /* DEVICEDAT.MAR: DDB$L_DDT = 12, UCB$L_DDT = 120. UCB size
++     * and vector offsets derive from TTYDEF.MAR after standard 132-byte
++     * UCB: GETNXT=200, PUTNXT=204, CLASS=208, PORT=212. */
++    enum {DDB_DDT=12u,UCB_DDT=120u,UCB_GETNXT=200u,
++          UCB_PUTNXT=204u,UCB_CLASS=208u,UCB_PORT=212u};
++    if(!ddb||!console_ucb||!op_dpt||!ttyclass||!out ||
++       ddb_capacity<DDB_DDT+4u || ucb_capacity<UCB_PORT+4u ||
++       op_dpt_capacity<56u || !op_dpt_address || (op_dpt_address&3u) ||
++       !ttyclass->ddt_address || !ttyclass->vector_address ||
++       !ttyclass->getnext_address || !ttyclass->putnext_address ||
++       ttyclass->relocated_entries<6u ||
++       (uintptr_t)ddb&3u || (uintptr_t)console_ucb&3u ||
++       (uintptr_t)op_dpt&3u)
++        return PORT_INI_TTY_BADPARAM;
++    if(op_dpt[10u]!=expected_dpt_type || u16(op_dpt+8u)<56u)
++        return PORT_INI_TTY_BAD_DPT;
++    uint16_t console_size=u16(console_ucb+8u);
++    if(console_size<ttyclass->required_console_ucb_bytes ||
++       console_size>ucb_capacity || console_size<UCB_PORT+4u)
++        return PORT_INI_TTY_TOO_SMALL_UCB;
++    uint16_t port_offset=u16(op_dpt+30u);
++    if(!port_offset || (port_offset&3u) ||
++       port_offset>UINT32_MAX-op_dpt_address)
++        return PORT_INI_TTY_BAD_VECTOR;
++    const uint32_t port_vector=op_dpt_address+port_offset;
++    /* Source writes the new class DDT to both DDB and UCB, and the
++     * GETNXT/PUTNXT/class/port addresses to the same OPA0 UCB. */
++    set32(ddb+DDB_DDT,ttyclass->ddt_address);
++    set32(console_ucb+UCB_DDT,ttyclass->ddt_address);
++    set32(console_ucb+UCB_GETNXT,ttyclass->getnext_address);
++    set32(console_ucb+UCB_PUTNXT,ttyclass->putnext_address);
++    set32(console_ucb+UCB_CLASS,ttyclass->vector_address);
++    set32(console_ucb+UCB_PORT,port_vector);
++    *out=(struct port_ini_tty_console_binding){
++        .class_ddt_address=ttyclass->ddt_address,
++        .port_vector_address=port_vector};
++    return PORT_INI_TTY_OK;
++}
+--- /dev/null
++++ b/src/vms_ini_ttydrv.h
+@@ -0,0 +1,41 @@
++#ifndef VMS_INI_TTYDRV_H
++#define VMS_INI_TTYDRV_H
++#include <stddef.h>
++#include <stdint.h>
++/* Native counterpart of SYS/SRC/INIT.MAR INI_TTYDRV 1256-1304.
++ * DPT field offsets are defined by SHRLIB/SYSMAR.MAR's DPTAB (56 bytes);
++ * class vector slots by SHRLIB/TTYDEF.MAR (6 longwords followed by zero)
++ * and actual source TTDRVR/SRC/TTYDRVDAT.MAR CLASS_VECTOR.
++ * This transforms a REAL loaded class-driver image. It does not supply
++ * missing TTDRIVER bytecode or initialize real OPA0 I/O by itself. */
++enum {
++    PORT_INI_TTY_OK=1u, PORT_INI_TTY_BADPARAM=2u,
++    PORT_INI_TTY_BAD_DPT=4u, PORT_INI_TTY_TOO_SMALL_UCB=6u,
++    PORT_INI_TTY_BAD_VECTOR=8u
++};
++struct port_ini_tty_class {
++    uint32_t dpt_address;
++    uint32_t vector_address;
++    uint32_t ddt_address;       /* CLASS_DDT: entry 4 */
++    uint32_t getnext_address;   /* CLASS_GETNXT: entry 0 */
++    uint32_t putnext_address;   /* CLASS_PUTNXT: entry 1 */
++    uint32_t relocated_entries;
++    uint16_t required_console_ucb_bytes;
++};
++uint32_t port_ini_tty_class_relocate(uint8_t *image,size_t image_capacity,
++    uint32_t guest_image_base,size_t dpt_offset,uint8_t dpt_type_code,
++    uint16_t console_ucb_bytes,struct port_ini_tty_class *out);
++/* INIT.MAR 1289-1304 attaches the relocated TT class and the prelinked
++ * OP$DPT port vector to the actual OPA0 DDB/UCB. All offsets are sourced
++ * from DEVICEDAT.MAR and SHRLIB/TTYDEF.MAR; no terminal I/O is performed. */
++struct port_ini_tty_console_binding {
++    uint32_t class_ddt_address;
++    uint32_t port_vector_address;
++};
++uint32_t port_ini_tty_bind_console(uint8_t *ddb,size_t ddb_capacity,
++    uint8_t *console_ucb,size_t ucb_capacity,
++    const uint8_t *op_dpt,size_t op_dpt_capacity,uint32_t op_dpt_address,
++    uint8_t expected_dpt_type,
++    const struct port_ini_tty_class *ttyclass,
++    struct port_ini_tty_console_binding *out);
++#endif
+--- /dev/null
++++ b/tests/test_ini_ttydrv_host.c
+@@ -0,0 +1,61 @@
++#include "vms_ini_ttydrv.h"
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++static void w16(uint8_t *p,uint16_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);}
++static void w32(uint8_t *p,uint32_t v){
++    for(unsigned i=0;i<4;i++)p[i]=(uint8_t)(v>>(8u*i));
++}
++static uint32_t r32(const uint8_t *p){
++    return (uint32_t)p[0]|(uint32_t)p[1]<<8|
++           (uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
++}
++int main(void){
++    uint8_t ram[512] __attribute__((aligned(16)));
++    memset(ram,0xa5,sizeof ram);
++    const uint32_t guest=0x360000u;
++    /* A source-format DPTAB at offset 16, 56 bytes long. Class vector
++     * begins 96 bytes after DPT, with six relative entries + zero. */
++    uint8_t *dpt=ram+16u,*vec=dpt+96u;
++    memset(dpt,0,56u);memset(vec,0,28u);
++    w16(dpt+8u,400u);dpt[10u]=0x37u;
++    w16(dpt+14u,188u);w16(dpt+30u,96u);
++    uint32_t original[6]={0x180u,0x1a0u,0x1c0u,0x1d0u,0x200u,0x220u};
++    for(unsigned i=0;i<6;i++)w32(vec+4u*i,original[i]);
++    struct port_ini_tty_class result={0};
++    uint8_t saved[512];memcpy(saved,ram,sizeof ram);
++    CHECK(port_ini_tty_class_relocate(ram,sizeof ram,guest,16u,0x37u,
++                                      187u,&result)==PORT_INI_TTY_TOO_SMALL_UCB);
++    CHECK(!memcmp(ram,saved,sizeof ram));
++    CHECK(port_ini_tty_class_relocate(ram,sizeof ram,guest,16u,0x38u,
++                                      188u,&result)==PORT_INI_TTY_BAD_DPT);
++    CHECK(!memcmp(ram,saved,sizeof ram));
++    CHECK(port_ini_tty_class_relocate(ram,sizeof ram,guest,16u,0x37u,
++                                      188u,&result)==PORT_INI_TTY_OK);
++    CHECK(result.dpt_address==guest+16u&&result.vector_address==guest+112u);
++    CHECK(result.ddt_address==guest+16u+0x200u);
++    CHECK(result.getnext_address==guest+16u+0x180u);
++    CHECK(result.putnext_address==guest+16u+0x1a0u);
++    CHECK(result.relocated_entries==6u&&result.required_console_ucb_bytes==188u);
++    CHECK(r32(vec+24u)==0u);
++    for(unsigned i=0;i<6;i++)CHECK(r32(vec+4u*i)==guest+16u+original[i]);
++    CHECK(ram[15u]==0xa5u&&ram[511u]==0xa5u);
++    memcpy(ram,saved,sizeof ram);
++    w16(dpt+30u,492u);
++    CHECK(port_ini_tty_class_relocate(ram,sizeof ram,guest,16u,0x37u,
++                                      188u,&result)==PORT_INI_TTY_BAD_VECTOR);
++    memcpy(ram,saved,sizeof ram);
++    w32(vec+24u,0x250u);
++    memset(vec+28u,0x11u,sizeof ram-16u-96u-28u);
++    CHECK(port_ini_tty_class_relocate(ram,sizeof ram,guest,16u,0x37u,
++                                      188u,&result)==PORT_INI_TTY_BAD_VECTOR);
++    CHECK(r32(vec)==original[0]);
++    memcpy(ram,saved,sizeof ram);
++    w32(vec+4u,0u);
++    CHECK(port_ini_tty_class_relocate(ram,sizeof ram,guest,16u,0x37u,
++                                      188u,&result)==PORT_INI_TTY_BAD_VECTOR);
++    CHECK(r32(vec)==original[0]);
++    puts("INIT.MAR real DPTAB and TTY CLASS_VECTOR offset relocation PASS");
++    return 0;
++}
+--- /dev/null
++++ b/tests/test_ini_ttybind_host.c
+@@ -0,0 +1,50 @@
++#include "vms_ini_ttydrv.h"
++#include <stdio.h>
++#include <string.h>
++#include <stdint.h>
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++static void w16(uint8_t *p,uint16_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);}
++static uint32_t r32(const uint8_t *p){
++    return (uint32_t)p[0]|(uint32_t)p[1]<<8|
++           (uint32_t)p[2]<<16|(uint32_t)p[3]<<24;
++}
++int main(void){
++    uint32_t ddb_words[24],ucb_words[96],op_dpt_words[24];
++    uint8_t *ddb=(uint8_t *)ddb_words,*ucb=(uint8_t *)ucb_words,*op=(uint8_t *)op_dpt_words;
++    memset(ddb,0xa5,sizeof ddb_words);
++    memset(ucb,0xa5,sizeof ucb_words);
++    memset(op,0xa5,sizeof op_dpt_words);
++    w16(ucb+8u,312u);w16(op+8u,96u);op[10u]=0x37u;w16(op+30u,72u);
++    const struct port_ini_tty_class c={
++       .dpt_address=0x360000u,.vector_address=0x360060u,
++       .ddt_address=0x360200u,.getnext_address=0x360180u,
++       .putnext_address=0x3601a0u,.relocated_entries=6u,
++       .required_console_ucb_bytes=244u};
++    struct port_ini_tty_console_binding out={0};
++    CHECK(port_ini_tty_bind_console(ddb,sizeof ddb_words,ucb,sizeof ucb_words,
++           op,sizeof op_dpt_words,0x320000u,0x37u,&c,&out)==PORT_INI_TTY_OK);
++    CHECK(out.class_ddt_address==c.ddt_address);
++    CHECK(out.port_vector_address==0x320048u);
++    CHECK(r32(ddb+12u)==c.ddt_address&&r32(ucb+120u)==c.ddt_address);
++    CHECK(r32(ucb+200u)==c.getnext_address&&r32(ucb+204u)==c.putnext_address);
++    CHECK(r32(ucb+208u)==c.vector_address&&r32(ucb+212u)==0x320048u);
++    CHECK(ddb[11u]==0xa5u&&ddb[16u]==0xa5u&&ucb[199u]==0xa5u);
++    uint8_t original_ddb[sizeof ddb_words],original_ucb[sizeof ucb_words];
++    memcpy(original_ddb,ddb,sizeof original_ddb);
++    memcpy(original_ucb,ucb,sizeof original_ucb);
++    w16(ucb+8u,200u);
++    CHECK(port_ini_tty_bind_console(ddb,sizeof ddb_words,ucb,sizeof ucb_words,
++           op,sizeof op_dpt_words,0x320000u,0x37u,&c,&out)==PORT_INI_TTY_TOO_SMALL_UCB);
++    CHECK(!memcmp(ddb,original_ddb,sizeof original_ddb));
++    w16(ucb+8u,312u);
++    CHECK(!memcmp(ucb,original_ucb,sizeof original_ucb));
++    CHECK(port_ini_tty_bind_console(ddb,sizeof ddb_words,ucb,sizeof ucb_words,
++           op,sizeof op_dpt_words,0x320000u,0x38u,&c,&out)==PORT_INI_TTY_BAD_DPT);
++    CHECK(!memcmp(ddb,original_ddb,sizeof original_ddb));
++    w16(op+30u,0u);
++    CHECK(port_ini_tty_bind_console(ddb,sizeof ddb_words,ucb,sizeof ucb_words,
++           op,sizeof op_dpt_words,0x320000u,0x37u,&c,&out)==PORT_INI_TTY_BAD_VECTOR);
++    CHECK(!memcmp(ucb,original_ucb,sizeof original_ucb));
++    puts("INIT.MAR original OPA0 DDB/UCB class/port vector binding PASS");
++    return 0;
++}
+--- a/Makefile
++++ b/Makefile
+@@ -910,3 +910,16 @@
+ inidptlistcheck: build/vms_ini_dptlist.o | build
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_dptlist.c tests/test_ini_dptlist_host.c -o build/inidptlistcheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/inidptlistcheck
++
++# M103: source-defined TTDRIVER class-vector relocation; unbound driver.
++build/vms_ini_ttydrv.o: src/vms_ini_ttydrv.c src/vms_ini_ttydrv.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: inittydrvcheck
++inittydrvcheck: build/vms_ini_ttydrv.o | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_ttydrv.c tests/test_ini_ttydrv_host.c -o build/inittydrvcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/inittydrvcheck
++
++.PHONY: inittybindcheck
++inittybindcheck: build/vms_ini_ttydrv.o | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_ini_ttydrv.c tests/test_ini_ttybind_host.c -o build/inittybindcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/inittybindcheck
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1626,7 +1626,8 @@
+     (1213,1231,None,None,'Original VAX PR$_NICR/ICCS/ICR clock-counter timing loop needs real IA-32 hardware equivalent','hardware-excluded'),
+     (1232,1239,'src/vms_ini_dptlist.c','port_ini_dpt_attach_three','32-bit VAX INSQUE source-ordered MB, NL, OP DPT prologue list layout; host-tested but actual driver records and guest IOC attachment remain unresolved','partial'),
+     (1240,1255,'src/vms_ini_syslog.c','port_ini_syslog_init','Validated copy of SYS$DISK and SYS$SYSDEVICE LOG records into aligned nonpaged pool and two temporary LOG$AL_LOGTBL slots; host-only until native logical-name service is live','partial'),
+-    (1256,1304,None,None,'Original TTDRIVER DPT and OPA0 UCB class/port vector registration not yet implemented','unresolved'),
++    (1256,1288,'src/vms_ini_ttydrv.c','port_ini_tty_class_relocate','Source DPTAB prologue type/UCB size checks and class vector self-relative relocation; host tested; terminal service and live IOC/DDB/UCB are pending','partial'),
++    (1289,1304,'src/vms_ini_ttydrv.c','port_ini_tty_bind_console','Original DEVICEDAT/TTYDEF DDB and OPA0 UCB class/port dispatch fields; host-tested but actual TTDRIVER/OP$DPT images and I/O service not running','partial'),
+     (1301,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
+ parts=[]
+ for first,last,path,symbol,purpose,status in init_parts:
