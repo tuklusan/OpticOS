@@ -1,0 +1,1282 @@
+--- a/Makefile
++++ b/Makefile
+@@ -210,10 +210,11 @@
+ 	$(LD) -m elf_i386 -T linked.ld -o $@ build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o build/vms_ini_pc_bus.o
+ build/kernel.bin: build/kernel.elf
+ 	$(OBJCOPY) -O binary $< $@
+-portdisk.img: build/make_f11_disk build/install_sys_image build/sys.exe build/install_iniloa_image build/iniloa.exe
++portdisk.img: build/make_f11_disk build/install_sys_image build/sys.exe build/install_iniloa_image build/iniloa.exe build/install_sysloa386_image build/sysloa386.exe
+ 	./build/make_f11_disk portdisk.img
+ 	./build/install_sys_image portdisk.img build/sys.exe
+ 	./build/install_iniloa_image portdisk.img build/iniloa.exe
++	./build/install_sysloa386_image portdisk.img build/sysloa386.exe
+ vms37lab.ima: build/boot.bin build/kernel.bin
+ 	python3 build_image.py
+ 
+@@ -757,7 +758,7 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h | build
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/sys.exe: build/vms_sys_executive_entry.o build/executive-partial.o sys_native.ld
+ 	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/executive-partial.o
+@@ -766,12 +767,12 @@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysnativecheck
+-sysnativecheck: portdisk.img build/sys.exe build/iniloa.exe | build
++sysnativecheck: portdisk.img build/sys.exe build/iniloa.exe build/sysloa386.exe | build
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysboot_elf.c src/vms_sysboot_read.c src/vms_sysboot_map.c src/vms_boot_files11.c src/vms_bootio.c tests/test_sysboot_elf_host.c -o build/sysnative_hosttest
+-	ASAN_OPTIONS=detect_leaks=1 ./build/sysnative_hosttest portdisk.img build/sys.exe build/iniloa.exe
++	ASAN_OPTIONS=detect_leaks=1 ./build/sysnative_hosttest portdisk.img build/sys.exe build/iniloa.exe build/sysloa386.exe
+ .PHONY: qemu-sysnative
+ qemu-sysnative: vms37lab.ima portdisk.img
+-	python3 tools/qemu_sysboot_m90.py
++	python3 tools/qemu_sysboot_m92.py
+ 
+ # M89: original INILOA load order, with native IA-32 I/O-map counterpart.
+ build/vms_iniloa_iomap.o: src/vms_iniloa_iomap.c src/vms_iniloa_iomap.h | build
+@@ -784,7 +785,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sys_executive_entry.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -794,3 +795,25 @@
+ iniloacheck: portdisk.img build/iniloa.exe
+ 	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_iniloa_iomap.c tests/test_iniloa_iomap_host.c -o build/iniloa_iomap_hosttest
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/iniloa_iomap_hosttest
++
++# M91: real loadable IA-32 SYSLOA386 code in original CPU-dependent order.
++build/vms_sysloa386_cpu.o: src/vms_sysloa386_cpu.c src/vms_sysloa386.h | build
++	$(CC) $(CFLAGS) -DPORT_SYSLOA386_GUEST -c $< -o $@
++build/vms_sysloa386_boot.o: src/vms_sysloa386_boot.c src/vms_sysloa386.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/vms_sysloa386_entry.o: src/vms_sysloa386_entry.c src/vms_sysloa386.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/vms_sysloa386_vectors.o: src/vms_sysloa386_vectors.S | build
++	$(CC) -m32 -c $< -o $@
++build/sysloa386.exe: build/vms_sysloa386_vectors.o build/vms_sysloa386_entry.o build/vms_sysloa386_cpu.o build/vms_sysloa386_boot.o sysloa386_native.ld
++	$(LD) -m elf_i386 -T sysloa386_native.ld -o $@ build/vms_sysloa386_vectors.o build/vms_sysloa386_entry.o build/vms_sysloa386_cpu.o build/vms_sysloa386_boot.o
++build/install_sysloa386_image: tools/install_sysloa386_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
++	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
++.PHONY: sysloa386check
++sysloa386check: | build
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloa386_cpu.c src/vms_sysloa386_boot.c tests/test_sysloa386_host.c -o build/sysloa386check
++	ASAN_OPTIONS=detect_leaks=1 ./build/sysloa386check
++.PHONY: sysloa386imagecheck
++sysloa386imagecheck: build/sysloa386.exe | build
++	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c tests/test_sysloa386_image_host.c -o build/sysloa386imagecheck
++	./build/sysloa386imagecheck build/sysloa386.exe
+--- a/src/arch.c
++++ b/src/arch.c
+@@ -61,6 +61,8 @@
+ extern void arch_probe_int3_after(void);
+ 
+ static volatile uint32_t ticks;
++/* A real 8254 PIT timebase read by loaded SYSLOA386. */
++uint32_t arch_pit_ticks(void){return ticks;}
+ static struct port_exe_systime exe_system_clock;
+ static volatile uint32_t exe_clock_valid;
+ /* After INIT hands off, the actual SYS.EXE residence owns time.  The
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2,6 +2,7 @@
+ #include "vms_iniloa_entry.h"
+ #include "vms_ini_pc_bus.h"
+ #include "vms_sys_executive_entry.h"
++#include "vms_sysloa386.h"
+ /* Native VMS 3.7 port research monitor. NOT VAX/VMS or a VMS implementation.
+  * It uses VGA text memory and 8042 keyboard-controller I/O directly.
+  * BIOS is only used by the stage-1 loader before entering protected mode.
+@@ -2417,22 +2418,22 @@
+     return port_ata_x86_read28(lbn,(uint16_t *)buffer)==0 ?
+         BOO_IO_NORMAL : BOO_IO_FAILED;
+ }
+-/* SYS.EXE and INILOA.EXE are mapped above the 1..3 MiB pool and
++/* SYS.EXE, SYSLOA386.EXE and INILOA.EXE live above the 1..3 MiB pool and
+  * inside the protected-mode supervisor identity aperture (0..4 MiB).
+  * ELF validation checks every target interval before invoking these. */
+ static int bootstrap_executive_write(void *unused,uint32_t phys,
+                                       const uint8_t *src,uint32_t size){
+     (void)unused;
+-    if(!src||phys<PORT_SYS_ELF_START||phys>PORT_INILOA_ELF_LIMIT||
+-       size>PORT_INILOA_ELF_LIMIT-phys)return 0;
++    if(!src||phys<PORT_SYS_ELF_START||phys>PORT_SYSLOA386_ELF_LIMIT||
++       size>PORT_SYSLOA386_ELF_LIMIT-phys)return 0;
+     volatile uint8_t *dest=(volatile uint8_t *)(uintptr_t)phys;
+     for(uint32_t i=0;i<size;i++)dest[i]=src[i];
+     return 1;
+ }
+ static int bootstrap_executive_clear(void *unused,uint32_t phys,uint32_t size){
+     (void)unused;
+-    if(phys<PORT_SYS_ELF_START||phys>PORT_INILOA_ELF_LIMIT||
+-       size>PORT_INILOA_ELF_LIMIT-phys)return 0;
++    if(phys<PORT_SYS_ELF_START||phys>PORT_SYSLOA386_ELF_LIMIT||
++       size>PORT_SYSLOA386_ELF_LIMIT-phys)return 0;
+     volatile uint8_t *dest=(volatile uint8_t *)(uintptr_t)phys;
+     for(uint32_t i=0;i<size;i++)dest[i]=0u;
+     return 1;
+@@ -2446,6 +2447,10 @@
+ static int native_ini_uart_ready(void *ctx){
+     (void)ctx;
+     return port_serial_x86_active();
++}
++extern uint32_t arch_pit_ticks(void);
++static uint32_t native_sysloa_ticks(void *ctx){
++    (void)ctx;return arch_pit_ticks();
+ }
+ static struct port_f11_volume bootstrap_volume;
+ static void bootstrap_halt(void){
+@@ -2547,6 +2552,60 @@
+         bootstrap_halt();
+     }
+     bootstrap_message("SYSBOOT: Files-11 SYS.EXE native image loaded.");
++    /* Original SYSBOOT loads the CPU-specific SYSLOAxxx image, then INIT
++     * links its self-relative entries into the resident SYS.EXE vector table
++     * before loading INILOA. SYSLOA386 is the native IA-32 processor type. */
++    static struct port_f11_fid sysloa_file;
++    static uint8_t sysloa_header[512];
++    uint32_t sysloa_first=0u,sysloa_blocks=0u;
++    uint32_t sysloa_status=port_f11_open_named_file(boot_io,1u,
++                  &bootstrap_volume,"SYS$SYSDEVICE:[SYSEXE]SYSLOA386.EXE",
++                  &sysloa_file,sysloa_header,&sysloa_first,&sysloa_blocks);
++    if(sysloa_status!=PORT_F11_HOME_OK){
++        bootstrap_message("-F-Unable to locate usable SYSLOA386.EXE");
++        bootstrap_halt();
++    }
++    uint32_t sysloa_entry=0u;
++    if(port_sysboot_load_elf_range(boot_io,1u,sysloa_header,sysloa_blocks,
++             &exec_memory,PORT_SYSLOA386_ELF_START,PORT_SYSLOA386_ELF_LIMIT,
++             &sysloa_entry)!=PORT_SYS_ELF_OK ||
++       sysloa_entry<PORT_SYSLOA386_ELF_START ||
++       sysloa_entry>=PORT_SYSLOA386_ELF_LIMIT){
++        bootstrap_message("SYSBOOT: SYSLOA386.EXE image validation or loading failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.");
++    static struct port_sysloa386_load_result sysloa_result;
++    const struct port_sysloa386_load_start sysloa_start={
++        .signature=PORT_SYSLOA386_SIGNATURE,.version=PORT_SYSLOA386_VERSION,
++        .result=&sysloa_result};
++    uint32_t (*sysloa_loaded_entry)(const struct port_sysloa386_load_start *)=
++        (uint32_t (*)(const struct port_sysloa386_load_start *))
++         (uintptr_t)sysloa_entry;
++    if(sysloa_loaded_entry(&sysloa_start)!=PORT_SYSLOA386_OK ||
++       sysloa_result.signature!=PORT_SYSLOA386_RETURN_TAG ||
++       sysloa_result.descriptor_address<PORT_SYSLOA386_ELF_START ||
++       sysloa_result.descriptor_bytes>PORT_SYSLOA386_ELF_LIMIT-
++                  sysloa_result.descriptor_address){
++        bootstrap_message("INIT: SYSLOA386 self-describing vector image invalid.");
++        bootstrap_halt();
++    }
++    static struct port_sys_exec_result sys_link_result;
++    const struct port_sys_exec_start link_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&sys_link_result,
++        .phase=PORT_SYS_EXEC_LINK_SYSLOA,
++        .sysloa_descriptor=(const void *)(uintptr_t)sysloa_result.descriptor_address,
++        .sysloa_bytes=sysloa_result.descriptor_bytes};
++    uint32_t (*loaded_sys)(const struct port_sys_exec_start *)=
++        (uint32_t (*)(const struct port_sys_exec_start *))(uintptr_t)sys_entry;
++    if(loaded_sys(&link_request)!=PORT_SYS_EXEC_NORMAL ||
++       sys_link_result.signature!=PORT_SYS_EXEC_LINK_RESULT_TAG ||
++       sys_link_result.sysloa_linked!=1u){
++        bootstrap_message("INIT: resident SYS.EXE SYSLOA386 vector linking failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE linked live SYSLOA386 processor vectors.");
+     /* Source SYSBOOT must load INILOA.EXE before INIT can call INI$IOMAP.
+      * Its absence is an actual disk-file failure, not a successful INIT. */
+     static struct port_f11_fid iniloa_file;
+@@ -2619,13 +2678,17 @@
+         bootstrap_message("INIT: hardware system clock is unavailable.");
+         bootstrap_halt();
+     }
++    static const struct port_sysloa386_cpu_ops cpu_ops={
++        .context=0,.read_irq_ticks=native_sysloa_ticks};
++    static const struct port_sysloa386_boot_ops boot_ops={
++        .context=0,.read_sector=native_ini_ata_read};
+     static struct port_sys_exec_result sys_result;
+     const struct port_sys_exec_start sys_request={
+         .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
+         .system_time=native_now,.pcb_type=PORT_SYS_EXEC_PCB_KIND,
+-        .initialized_images=1u,.reserved=0u,.result=&sys_result};
+-    uint32_t (*loaded_sys)(const struct port_sys_exec_start *)=
+-        (uint32_t (*)(const struct port_sys_exec_start *))(uintptr_t)sys_entry;
++        .initialized_images=3u,.reserved=0u,.result=&sys_result,
++        .phase=PORT_SYS_EXEC_INIT_RESIDENT,
++        .cpu_ops=&cpu_ops,.boot_ops=&boot_ops};
+     if(loaded_sys(&sys_request)!=PORT_SYS_EXEC_NORMAL ||
+        sys_result.signature!=PORT_SYS_EXEC_RESULT_TAG ||
+        sys_result.scheduler_ready_mask!=0u ||
+@@ -2634,6 +2697,11 @@
+        sys_result.scb_page_fault_pc_vector!=14u ||
+        sys_result.system_time_low!=(uint32_t)native_now ||
+        sys_result.system_time_high!=(uint32_t)(native_now>>32) ||
++       sys_result.sysloa_linked!=1u ||
++       sys_result.sysloa_idtr_base<0x10000u ||
++       sys_result.sysloa_irq_ticks==0u ||
++       sys_result.sysloa_home_lbn!=1u ||
++       (sys_result.sysloa_cr0&0x80010001u)!=0x80010001u ||
+        (uintptr_t)sys_result.resident_clock<PORT_SYS_ELF_START ||
+        (uintptr_t)sys_result.resident_clock>
+            PORT_SYS_ELF_LIMIT-sizeof(struct port_exe_systime) ||
+@@ -2644,9 +2712,9 @@
+         bootstrap_halt();
+     }
+     bootstrap_message("INIT: loaded SYS.EXE resident entry executed and verified.");
+-    /* The actual original SYS.EXE's source-derived system-time longwords
+-     * become the PIT IRQ0 clock. Require asynchronous hardware ticks to
+-     * advance them. No synthetic test tick is allowed on this boot path. */
++    bootstrap_message("INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.");
++    /* The original resident SYS.EXE owns system time after INIT, not the
++     * earlier boot clock. Verify actual IRQ0 interrupts change resident bytes. */
+     if(!arch_adopt_executive_clock(sys_result.resident_clock,
+                                   sys_result.pit_tick) ||
+        arch_exe_systime()!=sys_result.resident_clock){
+@@ -2657,8 +2725,6 @@
+     uint32_t sequence_before=sys_result.resident_clock->sequence;
+     uint64_t time_before=((uint64_t)sys_result.resident_clock->high<<32)|
+                                  sys_result.resident_clock->low;
+-    /* Bounded polling; IRQ0 is enabled by arch_init and is the only writer.
+-     * An interrupt-free machine must fail instead of hanging indefinitely. */
+     uint32_t spins=0;
+     while((uint32_t)(arch_ticks()-pit_before)<3u && spins<30000000u){
+         __asm__ volatile("pause");
+@@ -2675,6 +2741,7 @@
+         bootstrap_halt();
+     }
+     bootstrap_message("INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.");
++
+     /* INIT.MAR's remaining SYSLOA, SYSPARAM, SPT, ACP and process-image
+      * prerequisites have not been ported. Stop before login or DCL. */
+     bootstrap_message("INIT stopped: remaining original initialization dependencies incomplete.");
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -2,25 +2,60 @@
+ #include "vms_exe_sched.h"
+ #include "vms_exe_scbvector.h"
+ #include "vms_exe_gettim.h"
+-/* Resident SYS.EXE storage. Never overlay it with the boot monitor's data. */
++#include "vms_sysloavec.h"
++/* All state belongs to SYS.EXE's separately loaded resident supervisor
++ * segment, not to the SYSBOOT monitor or a pretend VAX processor. */
+ static struct port_exe_scheduler executive_scheduler;
+ static struct port_exe_scb_slot executive_scb[PORT_SCB_ENTRIES];
+ static struct port_exe_systime executive_clock;
+-/* Original SYSGETTIM/SYSCLK tick is now owned by the mapped resident
+- * SYS.EXE, not by the bootstrap monitor's copy of a clock. */
+-static void executive_pit_clock_tick(void) {
++/* Interrupts advance the actual resident image clock after source-ordered INIT. */
++static void executive_pit_clock_tick(void){
+     port_exe_systime_tick(&executive_clock);
+ }
++static struct port_sysloa_table executive_sysloa;
+ 
+-/* Original INIT.MAR populates the SCB, sets up clock state, then prepares
+- * process scheduling. This restricted entry checks the INILOA handoff and
+- * initializes only those backed IA-32 counterparts. Actual IDT hooks,
+- * physical memory, process image activation and SYSLOGIN remain outstanding. */
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *p){
+     if(!p || p->signature!=PORT_SYS_EXEC_SIGNATURE ||
+-       p->version!=PORT_SYS_EXEC_VERSION || !p->initialized_images ||
+-       p->pcb_type!=PORT_SYS_EXEC_PCB_KIND || !p->result || p->reserved)
++       p->version!=PORT_SYS_EXEC_VERSION || !p->result || p->reserved ||
++       p->pcb_type!=PORT_SYS_EXEC_PCB_KIND)
+         return PORT_SYS_EXEC_BAD_PARAMETERS;
++    if(p->phase==PORT_SYS_EXEC_LINK_SYSLOA){
++        /* This is INIT.MAR LINK_VEC/EXE$AL_LOAVEC, in resident SYS.EXE. */
++        if(!p->sysloa_descriptor || !p->sysloa_bytes ||
++           !port_sysloavec_link(&executive_sysloa,p->sysloa_descriptor,
++                p->sysloa_bytes,PORT_SYSLOA386_DYN_LOADCODE))
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        if(!port_sysloavec_address(&executive_sysloa,PORT_SYSLOA_INIBOOTADP)||
++           !port_sysloavec_address(&executive_sysloa,PORT_SYSLOA_INIPROCREG))
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        p->result->sysloa_linked=1u;
++        p->result->signature=PORT_SYS_EXEC_LINK_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
++    if(p->phase!=PORT_SYS_EXEC_INIT_RESIDENT ||
++       p->initialized_images!=3u || !executive_sysloa.loaded ||
++       !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
++
++    /* Hardware-dependent EXE$INIBOOTADP/EXE$INIPROCREG are called through
++     * the self-relative vectors that were linked into SYS.EXE. */
++    uint32_t (*boot)(const struct port_sysloa386_boot_ops *,
++                     struct port_sysloa386_boot_result *)=
++       (void *)(uintptr_t)port_sysloavec_address(&executive_sysloa,
++                                                     PORT_SYSLOA_INIBOOTADP);
++    uint32_t (*cpu)(const struct port_sysloa386_cpu_ops *,
++                    struct port_sysloa386_cpu_result *)=
++       (void *)(uintptr_t)port_sysloavec_address(&executive_sysloa,
++                                                     PORT_SYSLOA_INIPROCREG);
++    struct port_sysloa386_boot_result boot_info={0};
++    struct port_sysloa386_cpu_result cpu_info={0};
++    if(!boot || !cpu ||
++       boot(p->boot_ops,&boot_info)!=PORT_SYSLOA386_OK ||
++       cpu(p->cpu_ops,&cpu_info)!=PORT_SYSLOA386_OK ||
++       boot_info.home_block_lbn!=1u || !boot_info.cluster_factor)
++        return PORT_SYS_EXEC_BAD_PARAMETERS;
++
++    /* INIT's SCB, scheduler queue and clock initialization is partial;
++     * no process activation, LOGINOUT or DCL can be inferred from it. */
+     port_exe_sched_init(&executive_scheduler,p->pcb_type);
+     port_exe_scb_init(executive_scb);
+     port_exe_systime_store(&executive_clock,p->system_time);
+@@ -28,8 +63,6 @@
+     const struct port_exe_scb_slot *pf=port_exe_scb_get(executive_scb,0x24u);
+     if(!acv || !pf || acv->pc_idt_vector!=13u || pf->pc_idt_vector!=14u)
+         return PORT_SYS_EXEC_BAD_PARAMETERS;
+-    /* A physical guest readback proves the *loaded* SYS.EXE code ran; a
+-     * success string from the bootstrap alone is never treated as proof. */
+     p->result->scheduler_ready_mask=executive_scheduler.ready_mask;
+     p->result->scheduler_pcb_type=executive_scheduler.pcb_type;
+     p->result->scb_access_violation_pc_vector=acv->pc_idt_vector;
+@@ -38,6 +71,11 @@
+     p->result->system_time_high=executive_clock.high;
+     p->result->resident_clock=&executive_clock;
+     p->result->pit_tick=executive_pit_clock_tick;
++    p->result->sysloa_linked=1u;
++    p->result->sysloa_idtr_base=cpu_info.idt_base;
++    p->result->sysloa_irq_ticks=cpu_info.irq_ticks;
++    p->result->sysloa_home_lbn=boot_info.home_block_lbn;
++    p->result->sysloa_cr0=cpu_info.cr0;
+     p->result->signature=PORT_SYS_EXEC_RESULT_TAG;
+     return PORT_SYS_EXEC_NORMAL;
+ }
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -1,13 +1,15 @@
+ #ifndef VMS_SYS_EXECUTIVE_ENTRY_H
+ #define VMS_SYS_EXECUTIVE_ENTRY_H
+ #include <stdint.h>
++#include "vms_sysloa386.h"
+ #include "vms_exe_gettim.h"
+-/* SYS.EXE's native entry is reached through the address SYSBOOT reads from
+- * the actual ODS-2 SYS.EXE. This entry implements only resident scheduler,
+- * system time and named SCB setup; it cannot start processes or LOGINOUT. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=3u,
++/* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
++ * and subsequent source-ordered initialization as separate phases. */
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=4u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+-       PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u };
++       PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
++       PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
++       PORT_SYS_EXEC_LINK_RESULT_TAG=0x4b4e4c53u };
+ struct port_sys_exec_result {
+     uint32_t signature;
+     uint32_t scheduler_ready_mask;
+@@ -16,8 +18,11 @@
+     uint32_t scb_page_fault_pc_vector;
+     uint32_t system_time_low;
+     uint32_t system_time_high;
+-    /* Native INIT clock ownership is transferred only after all readback
+-     * fields pass; this address and timer ISR target belong to SYS.EXE. */
++    uint32_t sysloa_linked;
++    uint32_t sysloa_idtr_base;
++    uint32_t sysloa_irq_ticks;
++    uint32_t sysloa_home_lbn;
++    uint32_t sysloa_cr0;
+     const struct port_exe_systime *resident_clock;
+     void (*pit_tick)(void);
+ };
+@@ -28,6 +33,11 @@
+     uint8_t initialized_images;
+     uint16_t reserved;
+     struct port_sys_exec_result *result;
++    uint32_t phase;
++    const void *sysloa_descriptor;
++    uint32_t sysloa_bytes;
++    const struct port_sysloa386_cpu_ops *cpu_ops;
++    const struct port_sysloa386_boot_ops *boot_ops;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+ #endif
+--- a/src/vms_sysboot_elf.c
++++ b/src/vms_sysboot_elf.c
+@@ -28,7 +28,7 @@
+     if(!disk||!fh||!mem||!mem->write||!mem->clear||!entry_out||!blocks||
+        blocks>UINT32_MAX/512u||first_address>=limit_address||
+        first_address<PORT_SYS_ELF_START||
+-       limit_address>PORT_INILOA_ELF_LIMIT)return PORT_SYS_ELF_BAD_ARG;
++       limit_address>PORT_SYSLOA386_ELF_LIMIT)return PORT_SYS_ELF_BAD_ARG;
+     uint8_t header[512];
+     if(read_bytes(disk,fn,fh,0u,header,512u)!=PORT_SYS_ELF_OK)
+         return PORT_SYS_ELF_DISK_ERROR;
+--- a/src/vms_sysboot_elf.h
++++ b/src/vms_sysboot_elf.h
+@@ -11,6 +11,8 @@
+     PORT_SYS_ELF_LIMIT=0x00380000u,
+     PORT_INILOA_ELF_START=0x00380000u,
+     PORT_INILOA_ELF_LIMIT=0x003e0000u,
++    PORT_SYSLOA386_ELF_START=0x003e0000u,
++    PORT_SYSLOA386_ELF_LIMIT=0x003f0000u,
+     PORT_SYS_ELF_OK=1u,
+     PORT_SYS_ELF_BAD_ARG=2u,
+     PORT_SYS_ELF_BAD_HEADER=4u,
+--- /dev/null
++++ b/src/vms_sysloa386.h
+@@ -0,0 +1,59 @@
++#ifndef VMS_SYSLOA386_H
++#define VMS_SYSLOA386_H
++#include <stdint.h>
++/* Native IA-32 CPU-dependent SYSLOA386.EXE, corresponding to the
++ * SYSLOAxxx/LOAVEC processor-dependent image. VAX bus machinery is not
++ * represented by fake PC devices. Unimplemented vectors fail closed. */
++enum {
++    PORT_SYSLOA386_SIGNATURE=0x36384c53u,
++    PORT_SYSLOA386_VERSION=1u,
++    PORT_SYSLOA386_RETURN_TAG=0x4b4e4c53u,
++    PORT_SYSLOA386_DYN_LOADCODE=98u,
++    PORT_SYSLOA386_OK=1u,
++    PORT_SYSLOA386_BAD_ARGUMENT=2u,
++    PORT_SYSLOA386_BAD_CPU=4u,
++    PORT_SYSLOA386_BAD_DISK=6u
++};
++struct port_sysloa386_load_result {
++    uint32_t signature;
++    uint32_t descriptor_address;
++    uint32_t descriptor_bytes;
++};
++struct port_sysloa386_load_start {
++    uint32_t signature,version;
++    struct port_sysloa386_load_result *result;
++};
++/* Snapshot is recorded from SIDT, MOV CR0/CR3, STR and live IDT gates.
++ * `ticks` comes from the installed PIT IRQ handler, not a timer simulation. */
++struct port_sysloa386_gate {
++    uint16_t offset_low,selector;
++    uint8_t reserved,type;
++    uint16_t offset_high;
++} __attribute__((packed));
++struct port_sysloa386_cpu_result {
++    uint32_t cr0,cr3,idt_base,irq_ticks;
++    uint16_t idt_limit,task_selector,kernel_cs,reserved;
++    struct port_sysloa386_gate gp,pf,timer;
++};
++struct port_sysloa386_cpu_ops {
++    void *context;
++    uint32_t (*read_irq_ticks)(void *);
++};
++struct port_sysloa386_boot_result {
++    uint32_t home_block_lbn;
++    uint32_t physical_boot_sector_checksum;
++    uint16_t cluster_factor,system_structure_level;
++};
++struct port_sysloa386_boot_ops {
++    void *context;
++    int (*read_sector)(void *,uint32_t,uint16_t [256]);
++};
++uint32_t port_sysloa386_entry(const struct port_sysloa386_load_start *req);
++uint32_t port_sysloa386_cpu_probe(const struct port_sysloa386_cpu_ops *ops,
++                                   struct port_sysloa386_cpu_result *out);
++uint32_t port_sysloa386_boot_probe(const struct port_sysloa386_boot_ops *ops,
++                                    struct port_sysloa386_boot_result *out);
++uint32_t port_sysloa386_check_cpu(const struct port_sysloa386_cpu_result *regs);
++uint32_t port_sysloa386_check_home(const uint8_t sector[512],
++                                   struct port_sysloa386_boot_result *out);
++#endif
+--- /dev/null
++++ b/src/vms_sysloa386_boot.c
+@@ -0,0 +1,36 @@
++#include "vms_sysloa386.h"
++/* EXE$INIBOOTADP: native boot-device check via its registered ATA driver.
++ * An actual Files-11 home block at LBN 1 is necessary, not just a port ID. */
++static uint16_t rd16(const uint8_t *p){
++    return (uint16_t)(p[0]|((uint16_t)p[1]<<8));
++}
++static uint32_t rd32(const uint8_t *p){
++    return (uint32_t)rd16(p)|((uint32_t)rd16(p+2)<<16);
++}
++static uint16_t sum16(const uint8_t *p,unsigned last){
++    uint16_t s=0u;
++    for(unsigned i=0;i<last;i+=2u)s=(uint16_t)(s+rd16(p+i));
++    return s;
++}
++uint32_t port_sysloa386_check_home(const uint8_t s[512],
++                                   struct port_sysloa386_boot_result *r){
++    if(!s||!r)return PORT_SYSLOA386_BAD_ARGUMENT;
++    /* HM2$W_STRUCLEV 2, LBN and checked sums from Files-11 boot mount. */
++    if(rd32(s)!=1u||s[13]!=2u||rd16(s+14u)==0u||
++       rd32(s+24u)==0u||rd32(s+28u)<rd16(s+34u)||
++       rd16(s+58u)!=sum16(s,58u)||
++       rd16(s+510u)!=sum16(s,510u))return PORT_SYSLOA386_BAD_DISK;
++    r->home_block_lbn=rd32(s);
++    r->cluster_factor=rd16(s+14u);
++    r->system_structure_level=rd16(s+12u);
++    r->physical_boot_sector_checksum=rd16(s+510u);
++    return PORT_SYSLOA386_OK;
++}
++uint32_t port_sysloa386_boot_probe(const struct port_sysloa386_boot_ops *ops,
++                                    struct port_sysloa386_boot_result *r){
++    if(!ops||!ops->read_sector||!r)return PORT_SYSLOA386_BAD_ARGUMENT;
++    uint16_t sector[256];
++    if(ops->read_sector(ops->context,1u,sector))return PORT_SYSLOA386_BAD_DISK;
++    /* The PC disk sector is little-endian, as are Files-11 ODS-2 headers. */
++    return port_sysloa386_check_home((const uint8_t *)sector,r);
++}
+--- /dev/null
++++ b/src/vms_sysloa386_cpu.c
+@@ -0,0 +1,48 @@
++#include "vms_sysloa386.h"
++/* Hardware replacement for SYSLOAVEC's EXE$INIPROCREG; the VAX IPL,
++ * SCBB, MAPEN and machine-check registers are *not* x86 CPU registers.
++ * The live x86 IDTR, CR0, CR3 and TSS must be initialized by arch_init. */
++static uint32_t gate_target(const struct port_sysloa386_gate *g){
++    return (uint32_t)g->offset_low|((uint32_t)g->offset_high<<16);
++}
++static int gate_ok(const struct port_sysloa386_gate *g){
++    const uint32_t at=gate_target(g);
++    return g->selector==8u && g->reserved==0u &&
++           (g->type==0x8eu) && at>=0x10000u && at<0x00320000u;
++}
++uint32_t port_sysloa386_check_cpu(const struct port_sysloa386_cpu_result *r){
++    if(!r || (r->cr0&0x80010001u)!=0x80010001u ||
++       !(r->cr3&0xfffff000u) || (r->cr3&4095u)!=0u ||
++       r->idt_base<0x10000u || r->idt_base>=0x00320000u ||
++       r->idt_limit<32u*8u+7u || r->task_selector!=0x48u ||
++       r->kernel_cs!=8u || !r->irq_ticks ||
++       !gate_ok(&r->gp) || !gate_ok(&r->pf) || !gate_ok(&r->timer))
++        return PORT_SYSLOA386_BAD_CPU;
++    return PORT_SYSLOA386_OK;
++}
++uint32_t port_sysloa386_cpu_probe(const struct port_sysloa386_cpu_ops *ops,
++                                   struct port_sysloa386_cpu_result *r){
++    if(!ops||!ops->read_irq_ticks||!r)return PORT_SYSLOA386_BAD_ARGUMENT;
++#if defined(__i386__) && defined(PORT_SYSLOA386_GUEST)
++    struct {uint16_t limit;uint32_t base;} __attribute__((packed)) idtr;
++    __asm__ volatile("sidt %0":"=m"(idtr));
++    r->idt_base=idtr.base;r->idt_limit=idtr.limit;
++    __asm__ volatile("movl %%cr0,%0":"=r"(r->cr0));
++    __asm__ volatile("movl %%cr3,%0":"=r"(r->cr3));
++    __asm__ volatile("str %0":"=r"(r->task_selector));
++    __asm__ volatile("movw %%cs,%0":"=r"(r->kernel_cs));
++    r->reserved=0u;
++    if(r->idt_base<0x10000u || r->idt_base>=0x00320000u ||
++       r->idt_limit<32u*8u+7u)return PORT_SYSLOA386_BAD_CPU;
++    const struct port_sysloa386_gate *idt=
++        (const struct port_sysloa386_gate *)(uintptr_t)r->idt_base;
++    r->gp=idt[13];r->pf=idt[14];r->timer=idt[32];
++    r->irq_ticks=ops->read_irq_ticks(ops->context);
++    return port_sysloa386_check_cpu(r);
++#else
++    /* User-mode host code cannot lawfully read CR0 or CR3. Only the pure
++     * checker is host-tested; actual register inspection runs in QEMU. */
++    (void)r;
++    return PORT_SYSLOA386_BAD_CPU;
++#endif
++}
+--- /dev/null
++++ b/src/vms_sysloa386_entry.c
+@@ -0,0 +1,30 @@
++#include "vms_sysloa386.h"
++#include <stdint.h>
++/* SYSLOAxxx's native IA-32 loadable-image entry. Its self-describing
++ * SYSLOAVEC data is compiled into this very image ahead of its text. */
++extern const uint8_t port_sysloa386_descriptor[];
++extern const uint8_t port_sysloa386_image_end[];
++uint32_t port_sysloa386_mcheck_errors[2];
++__attribute__((noreturn)) void port_sysloa386_unavailable(void){
++    /* An unported VAX-specific vector must never succeed accidentally. */
++    __asm__ volatile("cli\n1: hlt\njmp 1b");
++    __builtin_unreachable();
++}
++uint32_t port_sysloa386_entry(const struct port_sysloa386_load_start *req){
++    if(!req||req->signature!=PORT_SYSLOA386_SIGNATURE||
++       req->version!=PORT_SYSLOA386_VERSION||!req->result)
++        return PORT_SYSLOA386_BAD_ARGUMENT;
++    const uintptr_t base=(uintptr_t)port_sysloa386_descriptor;
++    const uintptr_t end=(uintptr_t)port_sysloa386_image_end;
++    if(end<=base||end-base>65535u||base<0x003e0000u||end>0x003f0000u)
++        return PORT_SYSLOA386_BAD_ARGUMENT;
++    const uint32_t extent=(uint32_t)(end-base);
++    const uint8_t *b=port_sysloa386_descriptor;
++    const uint32_t n=(uint32_t)b[0]|((uint32_t)b[1]<<8)|
++                     ((uint32_t)b[2]<<16)|((uint32_t)b[3]<<24);
++    if(n!=extent||b[10]!=PORT_SYSLOA386_DYN_LOADCODE)return PORT_SYSLOA386_BAD_ARGUMENT;
++    req->result->descriptor_address=(uint32_t)base;
++    req->result->descriptor_bytes=extent;
++    req->result->signature=PORT_SYSLOA386_RETURN_TAG;
++    return PORT_SYSLOA386_OK;
++}
+--- /dev/null
++++ b/src/vms_sysloa386_vectors.S
+@@ -0,0 +1,37 @@
++/* SYS/SRC/SYSLOAVEC.MAR LOAVEC original 23-entry order.
++ * Type 2 entries map VAX CPU/bus exception hardware and deliberately fail
++ * on this PC. EXE$INIBOOTADP and EXE$INIPROCREG have real IA-32 services.
++ * This is a self-relative table loaded from the actual Files-11 file. */
++.section .vmsvec,"a",@progbits
++.balign 4
++.global port_sysloa386_descriptor
++port_sysloa386_descriptor:
++    .long port_sysloa386_image_end - port_sysloa386_descriptor
++    .long 0
++    .short port_sysloa386_image_end - port_sysloa386_descriptor
++    .byte 98,0
++.macro VEC kind, dest
++    .byte \kind
++1:  .long \dest - 1b
++.endm
++/* Longword-aligned original interrupt/machine-check entries. */
++.rept 7
++    VEC 2, port_sysloa386_unavailable
++.endr
++/* ECC$REENABLE (VAX hardware), then EXE$INIBOOTADP (native ATA). */
++    VEC 3, port_sysloa386_unavailable
++    VEC 3, port_sysloa386_boot_probe
++/* EXE$DUMPCPUREG, REGRESTOR, REGSAVE are still unported. */
++.rept 3
++    VEC 3, port_sysloa386_unavailable
++.endr
++/* EXE$INIPROCREG inspects real SIDT/CR0/CR3/TSS and PIT IRQ. */
++    VEC 3, port_sysloa386_cpu_probe
++/* EXE$TEST_CSR, PURGDATAP, UBA/CI/MBA and shutdown remain unported. */
++.rept 9
++    VEC 3, port_sysloa386_unavailable
++.endr
++/* Data pointer EXE$MCHK_ERRCNT (resident, zero-initialized counters). */
++    VEC 1, port_sysloa386_mcheck_errors
++    .long -1
++.section .note.GNU-stack,"",@progbits
+--- /dev/null
++++ b/sysloa386_native.ld
+@@ -0,0 +1,21 @@
++/* SYSLOAxxx.EXE successor: one native IA-32 CPU-dependent loadable module.
++ * All entry points remain in supervisor RAM, outside SYS/INILOA and the
++ * bootstrap. The original self-relative vector header precedes code. */
++OUTPUT_FORMAT(elf32-i386)
++OUTPUT_ARCH(i386)
++ENTRY(port_sysloa386_entry)
++PHDRS { text PT_LOAD FLAGS(5); data PT_LOAD FLAGS(6); }
++SECTIONS {
++  . = 0x003e0000;
++  .text : { KEEP(*(.vmsvec)) *(.text*) *(.rodata*) } :text
++  . = ALIGN(4096);
++  .data : { *(.data*) } :data
++  . = ALIGN(4096);
++  .bss (NOLOAD) : { *(COMMON) *(.bss*) } :data
++  . = ALIGN(16);
++  port_sysloa386_image_end = .;
++  /DISCARD/ : { *(.note*) *(.comment*) *(.eh_frame*) }
++  ASSERT(. <= 0x003f0000, "SYSLOA386 exceeds reserved supervisor aperture")
++  ASSERT(port_sysloa386_image_end - port_sysloa386_descriptor <= 65535,
++         "SYSLOA386 self-relative vector table exceeds 16-bit header")
++}
+--- a/tests/test_disk_image.py
++++ b/tests/test_disk_image.py
+@@ -1,7 +1,7 @@
+ from pathlib import Path
+ from struct import unpack_from
+ 
+-# M90: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
++# M91: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
+ # diagnostic-sector fixture. Do not assume USER or SYSTEM accounts exist.
+ volume=(Path(__file__).resolve().parents[1]/'portdisk.img').read_bytes()
+ assert len(volume)==8*16*63*512
+@@ -25,11 +25,15 @@
+ assert unpack_from('<H',index_header,8)[0]==1
+ assert checksum(index_header,510)==unpack_from('<H',index_header,510)[0]
+ index_bitmap=block(12)
+-assert (unpack_from('<H',index_bitmap,0)[0]&0x0fff)==0x0fff
++assert (unpack_from('<H',index_bitmap,0)[0]&0x1fff)==0x1fff
+ system_dir=block(30)
+-assert b'SYS.EXE' in system_dir and b'INILOA.EXE' in system_dir
+-for lbn in (33,117):
++assert all(name in system_dir for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
++sysloa_header=block(115)
++assert unpack_from('<H',sysloa_header,8)[0]==13
++assert unpack_from('<H',sysloa_header,10)[0]==13
++assert checksum(sysloa_header,510)==unpack_from('<H',sysloa_header,510)[0]
++for lbn in (33,117,129):
+     image=block(lbn)
+     assert image[:5]==b'\x7fELF\x01'
+     assert unpack_from('<H',image,18)[0]==3  # IA-32 machine
+-print('Files-11 ODS-2 volume, home, index and SYS/INILOA on-disk ELF32 PASS')
++print('Files-11 ODS-2 SYS, SYSLOA386, INILOA disk records and ELF32 bytes PASS')
+--- a/tests/test_sys_exec_entry_host.c
++++ b/tests/test_sys_exec_entry_host.c
+@@ -2,7 +2,24 @@
+ #include <stdio.h>
+ #include <string.h>
+ #include "vms_sys_executive_entry.h"
+-#define CHECK(x) do {if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++#include "vms_sysloavec.h"
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++static void u32(uint8_t *p,uint32_t n){
++    for(unsigned j=0;j<4;j++)p[j]=(uint8_t)(n>>(8u*j));
++}
++/* A source-type table lives inside one simulated loadable image. It is
++ * never invoked on the host; the real CPU vector dispatch is guest-only. */
++static void image(uint8_t b[256]){
++    memset(b,0,256u);u32(b,256u);b[8u]=0u;b[9u]=1u;
++    b[10u]=PORT_SYSLOA386_DYN_LOADCODE;
++    unsigned pos=12u;
++    for(unsigned i=0;i<PORT_SYSLOA_COUNT;i++){
++        b[pos]=(uint8_t)(i<7u?2u:i<22u?3u:1u);
++        u32(b+pos+1u,200u-(pos+1u));
++        pos+=5u;
++    }
++    u32(b+pos,UINT32_MAX);
++}
+ int main(void){
+     struct port_sys_exec_result result;
+     memset(&result,0xa5,sizeof result);
+@@ -11,37 +28,32 @@
+         .version=PORT_SYS_EXEC_VERSION,
+         .system_time=UINT64_C(53312345670000000),
+         .pcb_type=PORT_SYS_EXEC_PCB_KIND,
+-        .initialized_images=1u,.reserved=0u,.result=&result};
++        .initialized_images=3u,.reserved=0u,.result=&result,
++        .phase=PORT_SYS_EXEC_INIT_RESIDENT};
+     CHECK(port_sys_executive_entry(0)==PORT_SYS_EXEC_BAD_PARAMETERS);
+-    req.initialized_images=0u;
+     CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
+     CHECK(result.signature==0xa5a5a5a5u);
+-    req.initialized_images=1u;req.signature=0u;
++    req.signature=0u;
+     CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
+-    req.signature=PORT_SYS_EXEC_SIGNATURE;
+-    req.result=0;
++    req.signature=PORT_SYS_EXEC_SIGNATURE;req.result=0;
+     CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
+-    req.result=&result;
++    req.result=&result;req.phase=PORT_SYS_EXEC_LINK_SYSLOA;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    uint8_t blob[256];image(blob);blob[10u]=0u;
++    req.sysloa_descriptor=blob;req.sysloa_bytes=sizeof blob;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    CHECK(result.signature==0xa5a5a5a5u);
++    image(blob);
+     CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_NORMAL);
+-    CHECK(result.signature==PORT_SYS_EXEC_RESULT_TAG);
+-    CHECK(result.scheduler_pcb_type==PORT_SYS_EXEC_PCB_KIND);
+-    CHECK(result.scheduler_ready_mask==0u);
+-    CHECK(result.scb_access_violation_pc_vector==13u);
+-    CHECK(result.scb_page_fault_pc_vector==14u);
+-    CHECK(result.system_time_low==(uint32_t)req.system_time);
+-    CHECK(result.system_time_high==(uint32_t)(req.system_time>>32));
+-    CHECK(result.resident_clock!=NULL);
+-    CHECK(result.pit_tick!=NULL);
+-    CHECK(result.resident_clock->low==result.system_time_low);
+-    CHECK(result.resident_clock->high==result.system_time_high);
+-    /* Exercise the exact function pointer furnished by the native image,
+-     * then read its actual resident longwords, not copies in the request. */
+-    uint32_t old_sequence=result.resident_clock->sequence;
+-    uint64_t old_time=((uint64_t)result.resident_clock->high<<32)|result.resident_clock->low;
+-    result.pit_tick();
+-    CHECK(result.resident_clock->sequence==old_sequence+2u);
+-    CHECK((((uint64_t)result.resident_clock->high<<32)|result.resident_clock->low)==
+-          old_time+UINT64_C(100000));
+-    puts("SYS.EXE resident entry RPB/SCB/time/scheduler readback PASS");
++    CHECK(result.signature==PORT_SYS_EXEC_LINK_RESULT_TAG);
++    CHECK(result.sysloa_linked==1u);
++    req.phase=PORT_SYS_EXEC_INIT_RESIDENT;req.initialized_images=0u;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    req.initialized_images=3u;
++    CHECK(port_sys_executive_entry(&req)==PORT_SYS_EXEC_BAD_PARAMETERS);
++    CHECK(result.signature==PORT_SYS_EXEC_LINK_RESULT_TAG);
++    /* Hardware CPU and ATA callbacks are deliberately unavailable in this
++     * host test; NULL result pointers remain uninitialized on failure. */
++    puts("SYS.EXE resident SYSLOA vector link and fail-closed INIT checks PASS");
+     return 0;
+ }
+--- a/tests/test_sysboot_elf_host.c
++++ b/tests/test_sysboot_elf_host.c
+@@ -17,26 +17,26 @@
+     if(d->corrupt_header && lbn==33u)((uint8_t *)ptr)[0]=0u;
+     return BOO_IO_NORMAL;
+ }
+-static uint8_t resident[PORT_INILOA_ELF_LIMIT-PORT_SYS_ELF_START];
++static uint8_t resident[PORT_SYSLOA386_ELF_LIMIT-PORT_SYS_ELF_START];
+ struct writes { uint32_t calls,bytes,zeroes; };
+ static int write_ram(void *ctx,uint32_t at,const uint8_t *bytes,uint32_t len){
+     struct writes *w=ctx;
+-    if(at<PORT_SYS_ELF_START||at>PORT_INILOA_ELF_LIMIT||
+-       len>PORT_INILOA_ELF_LIMIT-at)return 0;
++    if(at<PORT_SYS_ELF_START||at>PORT_SYSLOA386_ELF_LIMIT||
++       len>PORT_SYSLOA386_ELF_LIMIT-at)return 0;
+     memcpy(resident+(at-PORT_SYS_ELF_START),bytes,len);
+     w->calls++;w->bytes+=len;
+     return 1;
+ }
+ static int clear_ram(void *ctx,uint32_t at,uint32_t len){
+     struct writes *w=ctx;
+-    if(at<PORT_SYS_ELF_START||at>PORT_INILOA_ELF_LIMIT||
+-       len>PORT_INILOA_ELF_LIMIT-at)return 0;
++    if(at<PORT_SYS_ELF_START||at>PORT_SYSLOA386_ELF_LIMIT||
++       len>PORT_SYSLOA386_ELF_LIMIT-at)return 0;
+     memset(resident+(at-PORT_SYS_ELF_START),0,len);
+     w->zeroes+=len;
+     return 1;
+ }
+ int main(int argc,char **argv){
+-    CHECK(argc==4);
++    CHECK(argc==5);
+     struct test_disk d={fopen(argv[1],"rb"),0,0};CHECK(d.f);
+     FILE *elf=fopen(argv[2],"rb");CHECK(elf);
+     const struct boo_io_driver driver={transfer,&d,0};
+@@ -124,7 +124,46 @@
+           PORT_SYS_ELF_BAD_SEGMENT);
+     CHECK(!w.calls);
+     fclose(initelf);
++    /* Third, CPU-dependent loadable image follows SYSLOAVEC source order.
++     * The FID13 INDEXF extension is real; all three images share an active
++     * Files-11 disk but occupy disjoint supervisor apertures. */
++    FILE *sysloa=fopen(argv[4],"rb");CHECK(sysloa);
++    CHECK(port_f11_open_named_file(&driver,1u,&volume,
++          "[SYSEXE]SYSLOA386.EXE",&fid,header,&first,&blocks)==PORT_F11_HOME_OK);
++    CHECK(fid.number==13u&&fid.sequence==13u&&first>114u&&blocks>1u);
++    memset(resident,0xa5,sizeof resident);
++    w.calls=w.bytes=w.zeroes=0u;
++    uint32_t cpuentry=0;
++    CHECK(port_sysboot_load_elf_range(&driver,1u,header,blocks,&memory,
++          PORT_SYSLOA386_ELF_START,PORT_SYSLOA386_ELF_LIMIT,
++          &cpuentry)==PORT_SYS_ELF_OK);
++    CHECK(cpuentry>=PORT_SYSLOA386_ELF_START&&cpuentry<PORT_SYSLOA386_ELF_LIMIT);
++    CHECK(fread(hdr,1,512,sysloa)==512u&&cpuentry==rd32(hdr+24u));
++    uint32_t cpu_total=0,cpu_zero=0;
++    for(unsigned i=0;i<rd16(hdr+44u);i++){
++        const uint8_t *ph=hdr+rd32(hdr+28u)+i*32u;
++        if(rd32(ph)!=1u||rd32(ph+20u)==0u)continue;
++        uint32_t off=rd32(ph+4u),at=rd32(ph+12u);
++        uint32_t bytes=rd32(ph+16u),memsz=rd32(ph+20u);
++        CHECK(at>=PORT_SYSLOA386_ELF_START && at+memsz<=PORT_SYSLOA386_ELF_LIMIT);
++        CHECK(!fseek(sysloa,(long)off,SEEK_SET));
++        uint8_t *expected=malloc(bytes?bytes:1u);CHECK(expected);
++        CHECK(fread(expected,1,bytes,sysloa)==bytes);
++        CHECK(!memcmp(resident+at-PORT_SYS_ELF_START,expected,bytes));
++        for(uint32_t j=bytes;j<memsz;j++)
++            CHECK(resident[at-PORT_SYS_ELF_START+j]==0u);
++        cpu_total+=bytes;cpu_zero+=memsz-bytes;free(expected);
++    }
++    CHECK(w.bytes==cpu_total&&w.zeroes==cpu_zero&&w.calls>0u);
++    for(uint32_t j=0;j<PORT_SYSLOA386_ELF_START-PORT_SYS_ELF_START;j++)
++        CHECK(resident[j]==0xa5u);
++    w.calls=w.bytes=w.zeroes=0u;
++    CHECK(port_sysboot_load_elf_range(&driver,1u,header,blocks,&memory,
++          PORT_INILOA_ELF_START,PORT_INILOA_ELF_LIMIT,
++          &cpuentry)==PORT_SYS_ELF_BAD_SEGMENT);
++    CHECK(!w.calls);
++    fclose(sysloa);
+     fclose(elf);fclose(d.f);
+-    puts("SYSBOOT real SYS.EXE and INILOA.EXE Files-11 / ELF32 load checks PASS");
++    puts("SYSBOOT SYS.EXE, SYSLOA386.EXE and INILOA.EXE real Files-11/ELF32 load PASS");
+     return 0;
+ }
+--- /dev/null
++++ b/tests/test_sysloa386_host.c
+@@ -0,0 +1,57 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_sysloa386.h"
++#define CHECK(e) do {if(!(e)){fprintf(stderr,"FAILED %s:%d %s\n",__FILE__,__LINE__,#e);return 1;}}while(0)
++static struct port_sysloa386_gate gate(uint16_t low){
++    return (struct port_sysloa386_gate){low,8u,0u,0x8eu,0x1u};
++}
++struct disk {uint8_t home[512];unsigned reads;int fail;};
++static int read_sector(void *context,uint32_t lbn,uint16_t out[256]){
++    struct disk *d=context;
++    d->reads++;
++    if(d->fail||lbn!=1u)return -1;
++    memcpy(out,d->home,512u);
++    return 0;
++}
++static uint16_t sum(const uint8_t *p,unsigned end){
++    uint16_t n=0;
++    for(unsigned i=0;i<end;i+=2u)n=(uint16_t)(n+p[i]+(p[i+1u]<<8));
++    return n;
++}
++static void wr16(uint8_t *p,uint16_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);}
++static void wr32(uint8_t *p,uint32_t v){wr16(p,(uint16_t)v);wr16(p+2,(uint16_t)(v>>16));}
++int main(void){
++    struct port_sysloa386_cpu_result r={
++        .cr0=0x80010001u,.cr3=0x11000u,.idt_base=0x13000u,
++        .irq_ticks=19u,.idt_limit=2047u,.task_selector=0x48u,.kernel_cs=8u,
++        .gp=gate(0x8000u),.pf=gate(0x9000u),.timer=gate(0xa000u)};
++    CHECK(port_sysloa386_check_cpu(&r)==PORT_SYSLOA386_OK);
++    r.timer.type=0x8fu;
++    CHECK(port_sysloa386_check_cpu(&r)==PORT_SYSLOA386_BAD_CPU);
++    r.timer.type=0x8eu;r.irq_ticks=0u;
++    CHECK(port_sysloa386_check_cpu(&r)==PORT_SYSLOA386_BAD_CPU);
++    r.irq_ticks=20u;r.cr0&=~0x10000u;
++    CHECK(port_sysloa386_check_cpu(&r)==PORT_SYSLOA386_BAD_CPU);
++    r.cr0|=0x10000u;r.task_selector=0x40u;
++    CHECK(port_sysloa386_check_cpu(&r)==PORT_SYSLOA386_BAD_CPU);
++    r.task_selector=0x48u;r.idt_limit=100u;
++    CHECK(port_sysloa386_check_cpu(&r)==PORT_SYSLOA386_BAD_CPU);
++    struct disk d={{0},0,0};
++    wr32(d.home,1u);wr16(d.home+12u,0x0200u);
++    wr16(d.home+14u,3u);wr32(d.home+24u,12u);
++    wr32(d.home+28u,100u);wr16(d.home+34u,8u);
++    wr16(d.home+58u,sum(d.home,58u));
++    wr16(d.home+510u,sum(d.home,510u));
++    struct port_sysloa386_boot_result b={0};
++    struct port_sysloa386_boot_ops ops={&d,read_sector};
++    CHECK(port_sysloa386_boot_probe(&ops,&b)==PORT_SYSLOA386_OK);
++    CHECK(d.reads==1u&&b.home_block_lbn==1u&&b.cluster_factor==3u);
++    d.home[19u]^=0x40u;
++    CHECK(port_sysloa386_boot_probe(&ops,&b)==PORT_SYSLOA386_BAD_DISK);
++    d.home[19u]^=0x40u;d.fail=1;
++    CHECK(port_sysloa386_boot_probe(&ops,&b)==PORT_SYSLOA386_BAD_DISK);
++    CHECK(port_sysloa386_boot_probe(0,&b)==PORT_SYSLOA386_BAD_ARGUMENT);
++    puts("SYSLOA386 real CPU snapshot and Files-11 home validators PASS");
++    return 0;
++}
+--- /dev/null
++++ b/tests/test_sysloa386_image_host.c
+@@ -0,0 +1,59 @@
++/* Verify that SYSLOA386's *actual* ELF bytes contain a source-ordered,
++ * self-relative 23-entry SYSLOAVEC list resolving to the loaded image. */
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_sysloavec.h"
++#include "vms_sysloa386.h"
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++static uint16_t get16(const uint8_t *b){return (uint16_t)(b[0]|(b[1]<<8));}
++static uint32_t get32(const uint8_t *b){
++    return (uint32_t)get16(b)|((uint32_t)get16(b+2)<<16);
++}
++static uint8_t loaded[65536u];
++int main(int argc,char **argv){
++    CHECK(argc==2);
++    FILE *f=fopen(argv[1],"rb");CHECK(f);
++    uint8_t h[512];CHECK(fread(h,1,512u,f)==512u);
++    CHECK(!memcmp(h,"\177ELF",4u)&&get16(h+18u)==3u);
++    CHECK(get32(h+24u)>=0x3e0000u&&get32(h+24u)<0x3f0000u);
++    const uint32_t phoff=get32(h+28u);
++    const uint16_t count=get16(h+44u);
++    CHECK(phoff>=52u&&phoff+(uint32_t)count*32u<=512u);
++    for(unsigned i=0;i<count;i++){
++        const uint8_t *p=h+phoff+i*32u;
++        if(get32(p)!=1u)continue;
++        const uint32_t off=get32(p+4u),at=get32(p+12u);
++        const uint32_t filesz=get32(p+16u),memsz=get32(p+20u);
++        CHECK(at>=0x3e0000u&&at<0x3f0000u&&
++              memsz<=0x3f0000u-at&&filesz<=memsz);
++        CHECK(!fseek(f,(long)off,SEEK_SET));
++        CHECK(fread(loaded+at-0x3e0000u,1,filesz,f)==filesz);
++    }
++    fclose(f);
++    const uint32_t extent=get32(loaded);
++    CHECK(extent>=132u&&extent<=65535u&&get16(loaded+8u)==extent);
++    struct port_sysloa_table table;
++    port_sysloavec_init(&table);
++    CHECK(port_sysloavec_link(&table,loaded,extent,
++                              PORT_SYSLOA386_DYN_LOADCODE));
++    uintptr_t boot=port_sysloavec_address(&table,PORT_SYSLOA_INIBOOTADP);
++    uintptr_t cpu=port_sysloavec_address(&table,PORT_SYSLOA_INIPROCREG);
++    uintptr_t exception=port_sysloavec_address(&table,PORT_SYSLOA_MCHK);
++    uintptr_t counters=port_sysloavec_address(&table,PORT_SYSLOA_MCHK_ERRCNT);
++    CHECK(boot>=(uintptr_t)loaded&&boot<(uintptr_t)(loaded+extent));
++    CHECK(cpu>=(uintptr_t)loaded&&cpu<(uintptr_t)(loaded+extent));
++    CHECK(exception>=(uintptr_t)loaded&&exception<(uintptr_t)(loaded+extent));
++    CHECK(counters>=(uintptr_t)loaded&&counters<(uintptr_t)(loaded+extent));
++    CHECK(boot!=cpu && boot!=exception && cpu!=exception);
++    CHECK(port_sysloavec_address(&table,PORT_SYSLOA_CI_INITIAL)==exception);
++    CHECK(port_sysloavec_address(&table,PORT_SYSLOA_UBA_INITIAL)==exception);
++    CHECK(get32(loaded+12u+5u*PORT_SYSLOA_COUNT)==UINT32_MAX);
++    loaded[12u+5u*PORT_SYSLOA_INIPROCREG]=0u;
++    port_sysloavec_init(&table);
++    CHECK(!port_sysloavec_link(&table,loaded,extent,
++                               PORT_SYSLOA386_DYN_LOADCODE));
++    CHECK(!table.loaded);
++    puts("SYSLOA386 ELF32: 23 typed vectors, 2 real CPU/disk services, fail-closed others PASS");
++    return 0;
++}
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1213,7 +1213,10 @@
+     (224,228,None,None,'patch area heading'),
+     (229,236,'src/vms_sysloavec.c','port_sysloavec_patch_init','fifteen-word patch area'),
+     (237,240,None,None,'source terminator')],
+-    'Actual CPU-specific loadable image and live INIT LINK_VEC handoff are not installed yet.')
++    'SYSLOA386 is loaded from Files-11 and LINK_VEC binds all 23 descriptors in resident SYS.EXE; only EXE$INIBOOTADP and EXE$INIPROCREG implement native hardware functions. Other entries trap if invoked, and cannot be counted as completed services.')
++# Vector table presence is not CPU service implementation. 21 of 23
++# original vector targets still trap if called; mark that range partial.
++result['files'][-1]['sections'][6]['status']='partial'
+ 
+ 
+ exe_mapped_source('SYS/SRC/SYSEVTSRV.MAR',314,[
+@@ -1603,9 +1606,9 @@
+     (1,427,None,None,'Source header, executive storage and boot tables still need line-by-line work','unresolved'),
+     (428,572,'src/kernel.c','kmain','Physical-memory/bootstrap setup and source-dependent resident entry','partial'),
+     (573,755,None,None,'Paging, physical memory, nonpaged pool and I/O queues not fully ported','unresolved'),
+-    (756,837,'src/kernel.c','kmain','SYSLOA and INILOA Files-11 loading and native entry dispatch','partial'),
++    (756,837,'src/kernel.c','kmain','Source-ordered SYS.EXE, SYSLOA386, INILOA Files-11 loads and live SYSLOAVEC link; SCSLOA and remaining runtime initialization not complete','partial'),
+     (838,1165,None,None,'SPT, process state, lock tables, resident allocation not fully ported','unresolved'),
+-    (1166,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB and system process state initialization only','partial'),
++    (1166,1300,'src/vms_sys_executive_entry.c','port_sys_executive_entry','Resident SCB, kernel clock, queue setup and live CPU register verification only; no real process activation','partial'),
+     (1301,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
+ parts=[]
+ for first,last,path,symbol,purpose,status in init_parts:
+@@ -1619,7 +1622,7 @@
+             'pc_file':path,'pc_symbol':symbol,'pc_line':line,'function':purpose})
+ result['files'].append({'original_file':'SYS/SRC/INIT.MAR',
+     'original_lines':1906,'sections':parts,
+-    'unresolved_integration':'Source-ordered INIT remains incomplete; the two ELF images execute verified resident entries but no SYSTEM login, DCL, or network session runs.'})
++    'unresolved_integration':'Source-ordered INIT remains incomplete; SYS.EXE, SYSLOA386 and INILOA execute live native entries but no SYSTEM login, DCL, or network session runs.'})
+ 
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+--- /dev/null
++++ b/tools/install_sysloa386_image.c
+@@ -0,0 +1,168 @@
++/* Files-11 ODS-2 SYSLOA386.EXE installation. SYS and INILOA already use
++ * FIDs 11 and 12. INDEXF's allocated three-block extension has room for
++ * FID13 at its next mapped VBN; never overwrite the bitmap or other files.
++ * Original SYSLOAxxx boot order is preserved for the native PC CPU type. */
++#include <stdint.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include "vms_boot_files11.h"
++#include "vms_f11_home.h"
++#define BLOCK 512u
++#define DISK_BLOCKS 8064u
++#define SYSLOA_FID 13u
++struct disk {FILE *f;};
++static uint16_t u16(const uint8_t *p){return (uint16_t)(p[0]|((uint16_t)p[1]<<8));}
++static void p16(uint8_t *p,uint16_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);}
++static void p32(uint8_t *p,uint32_t v){p16(p,(uint16_t)v);p16(p+2,(uint16_t)(v>>16));}
++static int sector(struct disk *d,uint32_t lbn,uint8_t b[BLOCK],int write){
++    if(!d||!d->f||lbn>=DISK_BLOCKS||fseek(d->f,(long)lbn*BLOCK,SEEK_SET))return 0;
++    return (write?fwrite(b,1,BLOCK,d->f):fread(b,1,BLOCK,d->f))==BLOCK;
++}
++static int put(struct disk *d,uint32_t lbn,const uint8_t *src){
++    uint8_t b[BLOCK];memcpy(b,src,BLOCK);return sector(d,lbn,b,1);
++}
++static uint32_t diskread(void *ctx,uint32_t mode,uint32_t fn,
++                         uint32_t lbn,uint32_t count,void *dest){
++    return !mode&&fn==1u&&count==BLOCK&&dest&&sector(ctx,lbn,dest,0)?
++        BOO_IO_NORMAL:BOO_IO_FAILED;
++}
++static int free_clusters(struct disk *d,uint32_t at,uint32_t blocks,uint32_t cf){
++    uint8_t b[BLOCK];
++    if(!blocks||!cf||at%cf||at>=DISK_BLOCKS||blocks>DISK_BLOCKS-at||
++       !sector(d,25u,b,0))return 0;
++    for(uint32_t j=0;j<(blocks+cf-1u)/cf;j++){
++        uint32_t bit=at/cf+j;
++        if(bit>=4096u||!(b[bit/8u]&(1u<<(bit%8u))))return 0;
++    }
++    return 1;
++}
++static int mark_clusters(struct disk *d,uint32_t at,uint32_t blocks,uint32_t cf){
++    uint8_t b[BLOCK];
++    if(!free_clusters(d,at,blocks,cf)||!sector(d,25u,b,0))return 0;
++    for(uint32_t j=0;j<(blocks+cf-1u)/cf;j++){
++        uint32_t bit=at/cf+j;
++        b[bit/8u]&=(uint8_t)~(1u<<(bit%8u));
++    }
++    return put(d,25u,b);
++}
++static int add_header(struct disk *d,uint32_t header_lbn,
++                      const uint8_t template_header[BLOCK],
++                      uint32_t data_lbn,uint32_t blocks,uint32_t bytes){
++    uint8_t b[BLOCK];memcpy(b,template_header,BLOCK);
++    if(b[7]!=2u||b[1]!=65u||!blocks||blocks>256u||data_lbn>65535u)return 0;
++    p16(b+8u,SYSLOA_FID);p16(b+10u,SYSLOA_FID);
++    b[20u]=1u;b[21u]=0u;
++    p32(b+24u,blocks<<16u);p32(b+28u,(blocks+1u)<<16u);
++    p16(b+32u,(uint16_t)(bytes%BLOCK));
++    memset(b+76u,' ',20u);memcpy(b+76u,"SYSLOA386.EXE;1",15u);
++    memset(b+130u,0,380u);
++    p16(b+130u,(uint16_t)(0x4000u|((blocks-1u)&0xffu)));
++    p16(b+132u,(uint16_t)data_lbn);b[58u]=2u;
++    port_f11_checksum2(b,510u);
++    return put(d,header_lbn,b);
++}
++static int add_directory(struct disk *d){
++    uint8_t b[BLOCK];
++    if(!sector(d,30u,b,0))return 0;
++    unsigned at=0u,seen=0u;
++    while(at+2u<=BLOCK){
++        uint16_t n=u16(b+at);
++        if(n==0xffffu)break;
++        if(n<12u || at+2u+n>BLOCK)return 0;
++        if(b[at+5u]==10u && !memcmp(b+at+6u,"INILOA.EXE",10u))seen|=1u;
++        if(b[at+5u]==7u && !memcmp(b+at+6u,"SYS.EXE",7u))seen|=2u;
++        at+=(unsigned)n+2u;
++    }
++    if(seen!=3u || at+28u+2u>BLOCK || u16(b+at)!=0xffffu)return 0;
++    memset(b+at,0,30u);
++    p16(b+at,26u);p16(b+at+2u,1u);
++    b[at+5u]=13u;memcpy(b+at+6u,"SYSLOA386.EXE",13u);
++    const unsigned v=at+6u+14u;
++    p16(b+v,1u);p16(b+v+2u,SYSLOA_FID);
++    p16(b+v+4u,SYSLOA_FID);p16(b+v+6u,0u);
++    p16(b+at+28u,0xffffu);
++    return put(d,30u,b);
++}
++static int mark_index_file(struct disk *d){
++    uint8_t b[BLOCK];if(!sector(d,12u,b,0)||u16(b)!=0x0fffu)return 0;
++    p16(b,0x1fffu);return put(d,12u,b);
++}
++static int verify(struct disk *d,FILE *src,uint32_t bytes,
++                  uint32_t head_lbn,uint32_t data_lbn){
++    const struct boo_io_driver io={diskread,d,0u};
++    struct port_f11_volume volume;struct port_f11_fid fid;
++    uint8_t header[BLOCK];uint32_t first=0,blocks=0;
++    if(port_f11_mount(&io,1u,&volume)!=PORT_F11_HOME_OK ||
++       port_f11_open_named_file(&io,1u,&volume,"[SYSEXE]SYSLOA386.EXE",
++               &fid,header,&first,&blocks)!=PORT_F11_HOME_OK ||
++       fid.number!=SYSLOA_FID||fid.sequence!=SYSLOA_FID||
++       first!=data_lbn||blocks!=(bytes+BLOCK-1u)/BLOCK||
++       port_f11_read_file_header(&io,1u,&volume,fid,header)!=PORT_F11_HOME_OK||
++       fseek(src,0L,SEEK_SET))return 0;
++    uint32_t header_actual=0;
++    if(port_f11_vbn_to_lbn(volume.index_header,
++               volume.index_vbn_offset+SYSLOA_FID,&header_actual)!=PORT_F11_HOME_OK||
++       header_actual!=head_lbn)return 0;
++    for(uint32_t at=0;at<bytes;){
++        uint32_t n=bytes-at;if(n>BLOCK)n=BLOCK;
++        uint8_t block[BLOCK],original[BLOCK];
++        if(port_f11_read_vbn(&io,1u,header,at/BLOCK+1u,block)!=PORT_F11_HOME_OK||
++           fread(original,1,n,src)!=n||memcmp(block,original,n))return 0;
++        at+=n;
++    }
++    return 1;
++}
++int main(int argc,char **argv){
++    if(argc!=3){fprintf(stderr,"usage: %s portdisk.img sysloa386.exe\n",argv[0]);return 2;}
++    struct disk disk={fopen(argv[1],"r+b")};FILE *image=fopen(argv[2],"rb");
++    if(!disk.f||!image){perror("open");if(disk.f)fclose(disk.f);if(image)fclose(image);return 2;}
++    int ok=0;
++    do{
++        if(fseek(image,0,SEEK_END))break;
++        long length=ftell(image);if(length<512L||length>65535L)break;
++        uint32_t bytes=(uint32_t)length,blocks=(bytes+BLOCK-1u)/BLOCK;
++        const struct boo_io_driver io={diskread,&disk,0u};
++        struct port_f11_volume vol;struct port_f11_fid fid;
++        uint8_t ini_header[BLOCK],test_header[BLOCK];
++        uint32_t ini_lbn=0,ini_blocks=0,tmp_lbn=0,tmp_blocks=0;
++        if(port_f11_mount(&io,1u,&vol)!=PORT_F11_HOME_OK||
++           vol.home.cluster!=3u||vol.home.index_bitmap_lbn!=12u||
++           vol.home.max_files<SYSLOA_FID||
++           port_f11_open_named_file(&io,1u,&vol,"[SYSEXE]INILOA.EXE",
++                 &fid,ini_header,&ini_lbn,&ini_blocks)!=PORT_F11_HOME_OK||
++           fid.number!=12u||fid.sequence!=12u||
++           port_f11_open_named_file(&io,1u,&vol,"[SYSEXE]SYSLOA386.EXE",
++                 &fid,test_header,&tmp_lbn,&tmp_blocks)!=PORT_F11_FILE_NOT_FOUND)break;
++        uint32_t header_lbn=0;
++        if(port_f11_vbn_to_lbn(vol.index_header,
++                vol.index_vbn_offset+SYSLOA_FID,&header_lbn)!=PORT_F11_HOME_OK||
++           header_lbn<24u||header_lbn>=DISK_BLOCKS)break;
++        uint8_t previous[BLOCK];
++        if(!sector(&disk,header_lbn,previous,0))break;
++        int free_header=1;
++        for(unsigned i=0;i<BLOCK;i++)if(previous[i]){free_header=0;break;}
++        if(!free_header)break;
++        const uint32_t cf=vol.home.cluster;
++        uint32_t data_lbn=((ini_lbn+ini_blocks+cf-1u)/cf)*cf;
++        if(!free_clusters(&disk,data_lbn,blocks,cf)||fseek(image,0,SEEK_SET))break;
++        int written=1;
++        for(uint32_t j=0;j<blocks;j++){
++            uint8_t b[BLOCK];uint32_t n=bytes-j*BLOCK;
++            if(n>BLOCK)n=BLOCK;
++            if(fread(b,1,n,image)!=n){written=0;break;}
++            if(n<BLOCK)memset(b+n,0,BLOCK-n);
++            if(!put(&disk,data_lbn+j,b)){written=0;break;}
++        }
++        if(!written||ferror(image)||
++           !add_header(&disk,header_lbn,ini_header,data_lbn,blocks,bytes)||
++           !add_directory(&disk)||!mark_index_file(&disk)||
++           !mark_clusters(&disk,data_lbn,blocks,cf)||fflush(disk.f)||
++           !verify(&disk,image,bytes,header_lbn,data_lbn))break;
++        printf("Installed SYSLOA386.EXE: FID 13, header LBN %u, data LBN %u, %u blocks; readback verified\n",
++             header_lbn,data_lbn,blocks);
++        ok=1;
++    }while(0);
++    if(!ok)fputs("SYSLOA386 Files-11 installation/verification failed\n",stderr);
++    fclose(image);fclose(disk.f);return ok?0:1;
++}
+--- /dev/null
++++ b/tools/qemu_sysboot_m92.py
+@@ -0,0 +1,77 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; require actual SYSLOA386 CPU vector execution.
++
++Only source-derived image execution and a deliberate incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M92: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        observed.extend(b'\n=== QEMU stderr ===\n')
++        observed.extend(p.stderr.read(8192))
++        (ROOT/'qemu-m92-serial.log').write_bytes(observed)
++    if passed:
++        print('QEMU M92: SYS.EXE linked SYSLOA386; live IRQ/IDT/CR3/TSS/Files-11 home verified PASS')
++        return 0
++    print('QEMU M92: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())

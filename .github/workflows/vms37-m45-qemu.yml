@@ -1,4 +1,4 @@
-name: VMS37 native IA-32 M91 loaded executive execution QEMU
+name: VMS37 native IA-32 M92 loaded executive execution QEMU
 on:
   push:
     branches:
@@ -25,7 +25,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Restore exact M89 base and M91 native source patch
+      - name: Restore exact M89 base and M92 native source patch
         shell: bash
         run: |
           set -euo pipefail
@@ -33,24 +33,25 @@ jobs:
           unzip -q ci-vms37/vms37-native-x86-m89-current.zip
           cd vms37-native-x86-m89
           patch --batch -p1 < ../ci-vms37/m90-native.patch
-          patch --batch -p1 < ../ci-vms37/m91-native.patch
+          patch --batch -p1 < ../ci-vms37/m92-native.patch
           make -j2 all
-          make bootcheck imagecheck sysnativecheck iniloacheck inicpbuscheck sysexecentrycheck
+          make bootcheck imagecheck sysnativecheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
           python3 tools/gen_source_coverage.py
           python3 tests/test_source_audit.py
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
+          readelf -l build/sysloa386.exe
       - name: Boot single native IA-32 PC and verify loaded code execution
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m91.py
+          python3 tools/qemu_sysboot_m92.py
       - name: Preserve actual guest COM1 transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m91-qemu-serial
+          name: vms37-m92-qemu-serial
           path: |
-            vms37-native-x86-m89/qemu-m91-serial.log
+            vms37-native-x86-m89/qemu-m92-serial.log
           if-no-files-found: warn
