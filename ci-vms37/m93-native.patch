@@ -46,10 +46,9 @@
  	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
  .PHONY: inicpbuscheck
  inicpbuscheck: | build
-@@ -818,3 +822,20 @@
+@@ -818,2 +822,19 @@
  	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c tests/test_sysloa386_image_host.c -o build/sysloa386imagecheck
  	./build/sysloa386imagecheck build/sysloa386.exe
- 
 +# Recoverable checkpoints retain the exact COM1 bytes of every known run.
 +.PHONY: seriallogcheck seriallogtest checkpointzip
 +seriallogcheck:
