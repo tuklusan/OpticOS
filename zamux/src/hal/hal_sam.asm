@@ -271,38 +271,97 @@ sam_kbd_init:
 
 ; --- sam_kbd_poll ---
 ; Scan all keyboard rows; return first pressed key as ASCII in A.
-; Returns A=0 if no key pressed.
-; SAM keyboard: OUT 0xFFFE selects all rows; individual rows via A8-A15.
-; Row addresses (high byte): 0xFE=caps/Z-X-C-V, 0xFD=A-S-D-F-G,
-;   0xFB=Q-W-E-R-T, 0xF7=1-2-3-4-5, 0xEF=0-9-8-7-6,
-;   0xDF=P-O-I-U-Y, 0xBF=ENTER/L-K-J-H, 0x7F=space/SS/M-N-B
+; Returns A=0 if no key pressed. Handles CAPS SHIFT for uppercase.
+; SAM keyboard matrix (identical to ZX Spectrum):
+;   Port read: B=row_high_byte, C=0xFE → IN A,(C); bits 0-4, active low.
+;   Row 0xFE: CAPS Z X C V     Row 0xFD: A S D F G
+;   Row 0xFB: Q W E R T        Row 0xF7: 1 2 3 4 5
+;   Row 0xEF: 0 9 8 7 6        Row 0xDF: P O I U Y
+;   Row 0xBF: ENTER L K J H    Row 0x7F: SPACE SS M N B
 sam_kbd_poll:
-        ; quick check: any key at all?
-        ld      bc, 0xFEFE      ; B=0xFE (all rows), C=0xFE
+        ; Quick check: any key pressed at all?
+        ld      bc, 0xFEFE
         in      a, (c)
         and     0x1F
         cp      0x1F
-        ret     z               ; all bits 1 = nothing pressed → A stays non-zero
-        ; full scan: use a simple table-driven decode
-        ; (Phase 0 delivers basic A-Z, 0-9, space, enter, backspace)
-        ld      hl, _kbd_rows
-        ld      b, 8            ; 8 rows
-.scanrow:
-        ld      e, (hl)         ; row high byte
-        inc     hl
-        ld      d, (hl)         ; pointer high to key table... simplified below
+        jr      nz, .do_scan
+        xor     a
+        ret
+.do_scan:
+        ; Check CAPS SHIFT (row 0xFE bit 0) → uppercase flag
+        ld      bc, 0xFEFE
+        in      a, (c)
+        ld      (_kbd_shift), a         ; save row 0 (has CAPS bit 0)
+        ; Scan all 8 rows with their key tables
+        ld      hl, _kbd_table          ; HL → table: row_hi, 5 key bytes
+        ld      d, 8                    ; 8 rows
+.row_loop:
+        ld      b, (hl)                 ; B = row high byte
         inc     hl
         ld      c, 0xFE
-        in      a, (c)          ; this needs B=row high byte; simplified:
-        ; TODO: proper row scan with correct B register
-        djnz    .scanrow
-        xor     a               ; placeholder: return 0 (no key)
+        in      a, (c)                  ; read row
+        cpl                             ; invert: 1=pressed
+        and     0x1F                    ; mask 5 key bits
+        jr      z, .row_skip            ; nothing in this row
+        ; Find lowest set bit
+        ld      e, a
+        ld      a, 0
+.bit_find:
+        inc     a                       ; bit index 1-5
+        rr      e
+        jr      c, .got_bit
+        cp      5
+        jr      nz, .bit_find
+        jr      .row_skip
+.got_bit:
+        ; A = bit position (1-5); HL points at the 5 key bytes for this row
+        ld      c, a
+        ld      b, 0
+        add     hl, bc                  ; HL → key byte
+        ld      a, (hl)
+        or      a
+        jr      z, .row_skip            ; unmapped key
+        ; Apply CAPS SHIFT: if shift pressed and key is a-z, uppercase it
+        ld      e, a
+        ld      a, (_kbd_shift)
+        cpl
+        and     0x01                    ; bit 0 = CAPS SHIFT pressed
+        jr      z, .no_shift
+        ld      a, e
+        cp      'a'
+        jr      c, .no_shift
+        cp      'z' + 1
+        jr      nc, .no_shift
+        sub     32                      ; to uppercase
+        ret
+.no_shift:
+        ld      a, e
+        ret
+.row_skip:
+        ld      a, (hl)                 ; skip 5 key bytes of this row
+        inc     hl
+        inc     hl
+        inc     hl
+        inc     hl
+        inc     hl
+        dec     d
+        jr      nz, .row_loop
+        xor     a
         ret
 
-_kbd_rows:
-        ; (row high byte, placeholder) × 8 — to be filled in Phase 0.3
-        db      0xFE, 0, 0xFD, 0, 0xFB, 0, 0xF7, 0
-        db      0xEF, 0, 0xDF, 0, 0xBF, 0, 0x7F, 0
+_kbd_shift: db  0xFF                    ; cached row 0xFE read
+
+; Keyboard table: row_high_byte, key[bit0..bit4] (ASCII, 0=unmapped)
+; Bit order: bit0=leftmost key in row description above.
+_kbd_table:
+        db      0xFE, 0, 'z', 'x', 'c', 'v'       ; row 0: CAPS Z X C V
+        db      0xFD, 'a', 's', 'd', 'f', 'g'      ; row 1: A S D F G
+        db      0xFB, 'q', 'w', 'e', 'r', 't'      ; row 2: Q W E R T
+        db      0xF7, '1', '2', '3', '4', '5'      ; row 3: 1 2 3 4 5
+        db      0xEF, '0', '9', '8', '7', '6'      ; row 4: 0 9 8 7 6
+        db      0xDF, 'p', 'o', 'i', 'u', 'y'      ; row 5: P O I U Y
+        db      0xBF, 13,  'l', 'k', 'j', 'h'      ; row 6: ENTER L K J H
+        db      0x7F, ' ', 0,   'm', 'n', 'b'       ; row 7: SPACE SS M N B
 
 ; =====================================================================
 ; TICK — IM2 50 Hz timer via SAM line interrupt
