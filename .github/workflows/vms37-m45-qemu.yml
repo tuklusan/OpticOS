@@ -1,4 +1,4 @@
-name: VMS37 M77 QEMU repeated guest stress
+name: VMS37 M81 QEMU repeated guest stress
 on:
   push:
     branches:
@@ -27,24 +27,24 @@ jobs:
         run: |
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86
 
-      - name: Reconstruct and verify native M77 floppy and Files-11 IDE disk
+      - name: Reconstruct and verify native M81 floppy and Files-11 IDE disk
         shell: bash
         run: |
           set -euo pipefail
-          xz --decompress --stdout ci-vms37/vms37lab-m77.ima.xz > ci-vms37/vms37lab-m77.ima
-          echo 'e9e88d877724e1969107f50b5b87a20d6067377b527b600f2465e1c3b2dddcbd  ci-vms37/vms37lab-m77.ima' | sha256sum --check
-          xz --decompress --stdout ci-vms37/portdisk-m77.img.xz > ci-vms37/portdisk.img
+          xz --decompress --stdout ci-vms37/vms37lab-m81.ima.xz > ci-vms37/vms37lab-m81.ima
+          echo '3eadc3cc3cac4815a0646456c4f2e5d4bf83d93aa5394df78e078c49fbe25771  ci-vms37/vms37lab-m81.ima' | sha256sum --check
+          xz --decompress --stdout ci-vms37/portdisk-m81.img.xz > ci-vms37/portdisk.img
           echo 'e38b443c7145e0a81d8d4fa9fa4a1cd37341448e62e075c3eb8c43d7a176524e  ci-vms37/portdisk.img' | sha256sum --check
 
       - name: Check native VMB RPB handoff and original SYSBOOT Files-11 disk
         shell: bash
-        run: python3 ci-vms37/qemu_m77_startup.py
+        run: python3 ci-vms37/qemu_m81_startup.py
 
       - name: Preserve QEMU serial transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m77-qemu-serial
+          name: vms37-m81-qemu-serial
           path: |
-            ci-vms37/qemu-m77-serial.log
+            ci-vms37/qemu-m81-serial.log
           if-no-files-found: warn
