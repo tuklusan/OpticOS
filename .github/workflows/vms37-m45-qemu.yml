@@ -1,11 +1,11 @@
-name: VMS37 native IA-32 M89 one QEMU runner
+name: VMS37 native IA-32 M90 loaded executive execution QEMU
 on:
   push:
     branches:
       - vms37-x86-qemu-m45-ci
   workflow_dispatch:
 
-# Use the original single serialized QEMU runner, never two parallel VMS PCs.
+# Keep all guest boots in the existing one-at-a-time QEMU lane.
 concurrency:
   group: vms37-native-x86-qemu-singleton
   cancel-in-progress: false
@@ -20,33 +20,36 @@ jobs:
     steps:
       - name: Checkout isolated VMS37 branch
         uses: actions/checkout@v4
-      - name: Install QEMU TCG
+      - name: Install one QEMU TCG PC runner
         shell: bash
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Verify and unpack tested M89 native source/build archive
+      - name: Restore exact M89 base and M90 native source patch
         shell: bash
         run: |
           set -euo pipefail
           echo '7631f04979782b2fae1e5050a975406539ef2cff8172d3f66e8cd2a4ee8ca8b7  ci-vms37/vms37-native-x86-m89-current.zip' | sha256sum --check
           unzip -q ci-vms37/vms37-native-x86-m89-current.zip
-          test -f vms37-native-x86-m89/vms37lab.ima
-          test -f vms37-native-x86-m89/portdisk.img
-          file vms37-native-x86-m89/build/sys.exe vms37-native-x86-m89/build/iniloa.exe
-          readelf -l vms37-native-x86-m89/build/sys.exe
-          readelf -l vms37-native-x86-m89/build/iniloa.exe
-      - name: Boot one real IA-32 PC and require both Files-11 images
+          cd vms37-native-x86-m89
+          patch --batch -p1 < ../ci-vms37/m90-native.patch
+          make -j2 all
+          make bootcheck imagecheck sysnativecheck iniloacheck inicpbuscheck sysexecentrycheck
+          python3 tools/gen_source_coverage.py
+          python3 tests/test_source_audit.py
+          readelf -l build/sys.exe
+          readelf -l build/iniloa.exe
+      - name: Boot single native IA-32 PC and verify loaded code execution
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m89.py
-      - name: Preserve single QEMU COM1 transcript
+          python3 tools/qemu_sysboot_m90.py
+      - name: Preserve actual guest COM1 transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m89-qemu-serial
+          name: vms37-m90-qemu-serial
           path: |
-            vms37-native-x86-m89/qemu-m89-serial.log
+            vms37-native-x86-m89/qemu-m90-serial.log
           if-no-files-found: warn
