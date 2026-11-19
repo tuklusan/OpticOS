@@ -671,37 +671,6 @@
 +  ASSERT(port_sysloa386_image_end - port_sysloa386_descriptor <= 65535,
 +         "SYSLOA386 self-relative vector table exceeds 16-bit header")
 +}
---- a/tests/test_disk_image.py
-+++ b/tests/test_disk_image.py
-@@ -1,7 +1,7 @@
- from pathlib import Path
- from struct import unpack_from
- 
--# M90: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
-+# M91: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
- # diagnostic-sector fixture. Do not assume USER or SYSTEM accounts exist.
- volume=(Path(__file__).resolve().parents[1]/'portdisk.img').read_bytes()
- assert len(volume)==8*16*63*512
-@@ -25,11 +25,15 @@
- assert unpack_from('<H',index_header,8)[0]==1
- assert checksum(index_header,510)==unpack_from('<H',index_header,510)[0]
- index_bitmap=block(12)
--assert (unpack_from('<H',index_bitmap,0)[0]&0x0fff)==0x0fff
-+assert (unpack_from('<H',index_bitmap,0)[0]&0x1fff)==0x1fff
- system_dir=block(30)
--assert b'SYS.EXE' in system_dir and b'INILOA.EXE' in system_dir
--for lbn in (33,117):
-+assert all(name in system_dir for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
-+sysloa_header=block(115)
-+assert unpack_from('<H',sysloa_header,8)[0]==13
-+assert unpack_from('<H',sysloa_header,10)[0]==13
-+assert checksum(sysloa_header,510)==unpack_from('<H',sysloa_header,510)[0]
-+for lbn in (33,117,129):
-     image=block(lbn)
-     assert image[:5]==b'\x7fELF\x01'
-     assert unpack_from('<H',image,18)[0]==3  # IA-32 machine
--print('Files-11 ODS-2 volume, home, index and SYS/INILOA on-disk ELF32 PASS')
-+print('Files-11 ODS-2 SYS, SYSLOA386, INILOA disk records and ELF32 bytes PASS')
 --- a/tests/test_sys_exec_entry_host.c
 +++ b/tests/test_sys_exec_entry_host.c
 @@ -2,7 +2,24 @@
@@ -872,6 +841,48 @@
 +    puts("SYSBOOT SYS.EXE, SYSLOA386.EXE and INILOA.EXE real Files-11/ELF32 load PASS");
      return 0;
  }
+--- /dev/null
++++ b/tests/test_sysloa386_disk_image.py
+@@ -0,0 +1,39 @@
++from pathlib import Path
++from struct import unpack_from
++
++# M91: the boot drive is a Files-11 ODS-2 volume, not the old M10 raw
++# diagnostic-sector fixture. Do not assume USER or SYSTEM accounts exist.
++volume=(Path(__file__).resolve().parents[1]/'portdisk.img').read_bytes()
++assert len(volume)==8*16*63*512
++
++def block(lbn):
++    assert 0<=lbn<8*16*63
++    return volume[lbn*512:(lbn+1)*512]
++
++def checksum(block_bytes,at):
++    return sum(unpack_from('<H',block_bytes,p)[0]
++               for p in range(0,at,2))&0xffff
++
++assert block(0)[510:512]==b'\x55\xaa'
++for n in (3,6):
++    home=block(n)
++    assert unpack_from('<I',home,0)[0]==n
++    assert checksum(home,58)==unpack_from('<H',home,58)[0]
++    assert checksum(home,510)==unpack_from('<H',home,510)[0]
++index_header=block(13)
++assert index_header[:2]==b'\x26\x41'
++assert unpack_from('<H',index_header,8)[0]==1
++assert checksum(index_header,510)==unpack_from('<H',index_header,510)[0]
++index_bitmap=block(12)
++assert (unpack_from('<H',index_bitmap,0)[0]&0x1fff)==0x1fff
++system_dir=block(30)
++assert all(name in system_dir for name in (b'SYS.EXE',b'SYSLOA386.EXE',b'INILOA.EXE'))
++sysloa_header=block(115)
++assert unpack_from('<H',sysloa_header,8)[0]==13
++assert unpack_from('<H',sysloa_header,10)[0]==13
++assert checksum(sysloa_header,510)==unpack_from('<H',sysloa_header,510)[0]
++for lbn in (33,117,129):
++    image=block(lbn)
++    assert image[:5]==b'\x7fELF\x01'
++    assert unpack_from('<H',image,18)[0]==3  # IA-32 machine
++print('Files-11 ODS-2 SYS, SYSLOA386, INILOA disk records and ELF32 bytes PASS')
 --- /dev/null
 +++ b/tests/test_sysloa386_host.c
 @@ -0,0 +1,57 @@
