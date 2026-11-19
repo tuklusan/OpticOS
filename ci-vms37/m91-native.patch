@@ -1,0 +1,283 @@
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -1,10 +1,11 @@
+ #ifndef VMS_SYS_EXECUTIVE_ENTRY_H
+ #define VMS_SYS_EXECUTIVE_ENTRY_H
+ #include <stdint.h>
++#include "vms_exe_gettim.h"
+ /* SYS.EXE's native entry is reached through the address SYSBOOT reads from
+  * the actual ODS-2 SYS.EXE. This entry implements only resident scheduler,
+  * system time and named SCB setup; it cannot start processes or LOGINOUT. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=2u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=3u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u };
+ struct port_sys_exec_result {
+@@ -15,6 +16,10 @@
+     uint32_t scb_page_fault_pc_vector;
+     uint32_t system_time_low;
+     uint32_t system_time_high;
++    /* Native INIT clock ownership is transferred only after all readback
++     * fields pass; this address and timer ISR target belong to SYS.EXE. */
++    const struct port_exe_systime *resident_clock;
++    void (*pit_tick)(void);
+ };
+ struct port_sys_exec_start {
+     uint32_t signature,version;
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -6,6 +6,12 @@
+ static struct port_exe_scheduler executive_scheduler;
+ static struct port_exe_scb_slot executive_scb[PORT_SCB_ENTRIES];
+ static struct port_exe_systime executive_clock;
++/* Original SYSGETTIM/SYSCLK tick is now owned by the mapped resident
++ * SYS.EXE, not by the bootstrap monitor's copy of a clock. */
++static void executive_pit_clock_tick(void) {
++    port_exe_systime_tick(&executive_clock);
++}
++
+ /* Original INIT.MAR populates the SCB, sets up clock state, then prepares
+  * process scheduling. This restricted entry checks the INILOA handoff and
+  * initializes only those backed IA-32 counterparts. Actual IDT hooks,
+@@ -30,6 +36,8 @@
+     p->result->scb_page_fault_pc_vector=pf->pc_idt_vector;
+     p->result->system_time_low=executive_clock.low;
+     p->result->system_time_high=executive_clock.high;
++    p->result->resident_clock=&executive_clock;
++    p->result->pit_tick=executive_pit_clock_tick;
+     p->result->signature=PORT_SYS_EXEC_RESULT_TAG;
+     return PORT_SYS_EXEC_NORMAL;
+ }
+--- a/src/arch.c
++++ b/src/arch.c
+@@ -63,8 +63,30 @@
+ static volatile uint32_t ticks;
+ static struct port_exe_systime exe_system_clock;
+ static volatile uint32_t exe_clock_valid;
++/* After INIT hands off, the actual SYS.EXE residence owns time.  The
++ * kernel's early clock is used only until that handoff completes. */
++static const struct port_exe_systime *volatile resident_exe_clock;
++static void (*volatile resident_exe_tick)(void);
++/* Keep pointer+callback assignment atomic with respect to IRQ0.  A caller
++ * must validate both addresses against the loaded SYS.EXE mapped region. */
++int arch_adopt_executive_clock(const struct port_exe_systime *clock,
++                               void (*tick)(void)) {
++    if(!clock || !tick || !exe_clock_valid || resident_exe_clock ||
++       (clock->sequence&1u))return 0;
++    uint32_t flags;
++    __asm__ volatile("pushfl; popl %0; cli":"=r"(flags)::"memory");
++    if(resident_exe_clock){
++        if(flags&0x200u)__asm__ volatile("sti":::"memory");
++        return 0;
++    }
++    resident_exe_tick=tick;
++    resident_exe_clock=clock;
++    if(flags&0x200u)__asm__ volatile("sti":::"memory");
++    return 1;
++}
+ /* A failed RTC read cannot create a made-up absolute system date. */
+ const struct port_exe_systime *arch_exe_systime(void) {
++    if(resident_exe_clock)return resident_exe_clock;
+     return exe_clock_valid ? &exe_system_clock : 0;
+ }
+ 
+@@ -768,6 +790,8 @@
+     outb(0xA1, 0x01); io_wait();
+     uint64_t start_time;
+     exe_clock_valid=0;
++    resident_exe_clock=0;
++    resident_exe_tick=0;
+     if(port_rtc_x86_now(0,&start_time)) {
+         port_exe_systime_store(&exe_system_clock,start_time);
+         exe_clock_valid=1;
+@@ -1172,7 +1196,10 @@
+     }
+     if (f->vector == 32) {
+         ++ticks;
+-        if(exe_clock_valid)port_exe_systime_tick(&exe_system_clock);
++        /* The ISR executes the registered native SYS.EXE timer routine.
++         * Never advance the pre-INIT clock after ownership transfer. */
++        if(resident_exe_tick)resident_exe_tick();
++        else if(exe_clock_valid)port_exe_systime_tick(&exe_system_clock);
+         if (sched_active && (f->cs&3u)==3u)
+             port_pcb_tick(&task_pcb[sched_current]);
+         /* Identity alias 0x400000 is supervisor-only and RW, whereas the
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -60,6 +60,9 @@
+ extern uint32_t arch_a20_ready(void);
+ extern uint32_t arch_ram_window_ready(void);
+ extern uint32_t arch_ticks(void);
++extern int arch_adopt_executive_clock(const struct port_exe_systime *,
++                                     void (*tick)(void));
++extern const struct port_exe_systime *arch_exe_systime(void);
+ extern uint32_t arch_last_vector(void);
+ extern void arch_probe_int3(void);
+ extern void arch_probe_ud2(void);
+@@ -2630,11 +2633,48 @@
+        sys_result.scb_access_violation_pc_vector!=13u ||
+        sys_result.scb_page_fault_pc_vector!=14u ||
+        sys_result.system_time_low!=(uint32_t)native_now ||
+-       sys_result.system_time_high!=(uint32_t)(native_now>>32)){
++       sys_result.system_time_high!=(uint32_t)(native_now>>32) ||
++       (uintptr_t)sys_result.resident_clock<PORT_SYS_ELF_START ||
++       (uintptr_t)sys_result.resident_clock>
++           PORT_SYS_ELF_LIMIT-sizeof(struct port_exe_systime) ||
++       (uintptr_t)sys_result.pit_tick<PORT_SYS_ELF_START ||
++       (uintptr_t)sys_result.pit_tick>=PORT_SYS_ELF_LIMIT ||
++       (sys_result.resident_clock->sequence&1u)){
+         bootstrap_message("INIT: SYS.EXE resident initialization failed.");
+         bootstrap_halt();
+     }
+     bootstrap_message("INIT: loaded SYS.EXE resident entry executed and verified.");
++    /* The actual original SYS.EXE's source-derived system-time longwords
++     * become the PIT IRQ0 clock. Require asynchronous hardware ticks to
++     * advance them. No synthetic test tick is allowed on this boot path. */
++    if(!arch_adopt_executive_clock(sys_result.resident_clock,
++                                  sys_result.pit_tick) ||
++       arch_exe_systime()!=sys_result.resident_clock){
++        bootstrap_message("INIT: SYS.EXE PIT clock handoff failed.");
++        bootstrap_halt();
++    }
++    uint32_t pit_before=arch_ticks();
++    uint32_t sequence_before=sys_result.resident_clock->sequence;
++    uint64_t time_before=((uint64_t)sys_result.resident_clock->high<<32)|
++                                 sys_result.resident_clock->low;
++    /* Bounded polling; IRQ0 is enabled by arch_init and is the only writer.
++     * An interrupt-free machine must fail instead of hanging indefinitely. */
++    uint32_t spins=0;
++    while((uint32_t)(arch_ticks()-pit_before)<3u && spins<30000000u){
++        __asm__ volatile("pause");
++        ++spins;
++    }
++    uint32_t pit_after=arch_ticks();
++    uint32_t sequence_after=sys_result.resident_clock->sequence;
++    uint64_t time_after=((uint64_t)sys_result.resident_clock->high<<32)|
++                                sys_result.resident_clock->low;
++    if((uint32_t)(pit_after-pit_before)<3u ||
++       sequence_after-sequence_before<6u ||
++       time_after-time_before<UINT64_C(300000)){
++        bootstrap_message("INIT: live SYS.EXE PIT clock did not advance.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.");
+     /* INIT.MAR's remaining SYSLOA, SYSPARAM, SPT, ACP and process-image
+      * prerequisites have not been ported. Stop before login or DCL. */
+     bootstrap_message("INIT stopped: remaining original initialization dependencies incomplete.");
+--- a/tests/test_sys_exec_entry_host.c
++++ b/tests/test_sys_exec_entry_host.c
+@@ -30,6 +30,18 @@
+     CHECK(result.scb_page_fault_pc_vector==14u);
+     CHECK(result.system_time_low==(uint32_t)req.system_time);
+     CHECK(result.system_time_high==(uint32_t)(req.system_time>>32));
++    CHECK(result.resident_clock!=NULL);
++    CHECK(result.pit_tick!=NULL);
++    CHECK(result.resident_clock->low==result.system_time_low);
++    CHECK(result.resident_clock->high==result.system_time_high);
++    /* Exercise the exact function pointer furnished by the native image,
++     * then read its actual resident longwords, not copies in the request. */
++    uint32_t old_sequence=result.resident_clock->sequence;
++    uint64_t old_time=((uint64_t)result.resident_clock->high<<32)|result.resident_clock->low;
++    result.pit_tick();
++    CHECK(result.resident_clock->sequence==old_sequence+2u);
++    CHECK((((uint64_t)result.resident_clock->high<<32)|result.resident_clock->low)==
++          old_time+UINT64_C(100000));
+     puts("SYS.EXE resident entry RPB/SCB/time/scheduler readback PASS");
+     return 0;
+ }
+--- a/Makefile
++++ b/Makefile
+@@ -757,7 +757,7 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h | build
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_exe_gettim.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/sys.exe: build/vms_sys_executive_entry.o build/executive-partial.o sys_native.ld
+ 	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/executive-partial.o
+@@ -771,7 +771,7 @@
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysnative_hosttest portdisk.img build/sys.exe build/iniloa.exe
+ .PHONY: qemu-sysnative
+ qemu-sysnative: vms37lab.ima portdisk.img
+-	python3 tools/qemu_sysboot_m90.py
++	python3 tools/qemu_sysboot_m91.py
+ 
+ # M89: original INILOA load order, with native IA-32 I/O-map counterpart.
+ build/vms_iniloa_iomap.o: src/vms_iniloa_iomap.c src/vms_iniloa_iomap.h | build
+--- /dev/null
++++ b/tools/qemu_sysboot_m91.py
+@@ -0,0 +1,73 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU guest; require executed source-derived images.
++
++This checks running code in SYS.EXE and INILOA.EXE, not just printed boot
++load messages. The expected stop is missing the remaining original INIT
++services, not a manufactured SYSTEM login.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M91: no system QEMU installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++       b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++       b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++       b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++       b'INIT: loaded SYS.EXE resident entry executed and verified.',
++       b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++       b'INIT stopped: remaining original initialization dependencies incomplete.']
++    reject=[b'SYSBOOT: SYS.EXE native image validation or loading failed.',
++            b'SYSBOOT: INILOA.EXE image validation or loading failed.',
++            b'INIT: INILOA adapter initialization failed.',
++            b'INIT: SYS.EXE resident initialization failed.',
++            b'INIT: hardware system clock is unavailable.',
++            b'INIT: SYS.EXE PIT clock handoff failed.',
++            b'INIT: live SYS.EXE PIT clock did not advance.',
++            b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in reject):break
++            if all(x in observed for x in expected):
++                # Require exact source-stage order, not just the substrings.
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            readable,_,_=select.select([p.stdout],[],[],0.25)
++            if readable:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        observed.extend(b'\n=== QEMU stderr ===\n')
++        observed.extend(p.stderr.read(8192))
++        (ROOT/'qemu-m91-serial.log').write_bytes(observed)
++    if passed:
++        print('QEMU M91: guest executed real Files-11 INILOA and SYS.EXE entry code PASS')
++        return 0
++    print('QEMU M91: execution evidence absent or failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
