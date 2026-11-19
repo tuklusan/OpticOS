@@ -17,7 +17,7 @@
  	./build/files1187check portdisk.img
  
  # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
--build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h | build
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_exe_gettim.h | build
 +build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h | build
  	$(CC) $(CFLAGS) -c $< -o $@
  build/sys.exe: build/vms_sys_executive_entry.o build/executive-partial.o sys_native.ld
@@ -33,7 +33,7 @@
 +	ASAN_OPTIONS=detect_leaks=1 ./build/sysnative_hosttest portdisk.img build/sys.exe build/iniloa.exe build/sysloa386.exe
  .PHONY: qemu-sysnative
  qemu-sysnative: vms37lab.ima portdisk.img
--	python3 tools/qemu_sysboot_m90.py
+-	python3 tools/qemu_sysboot_m91.py
 +	python3 tools/qemu_sysboot_m92.py
  
  # M89: original INILOA load order, with native IA-32 I/O-map counterpart.
