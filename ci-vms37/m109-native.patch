@@ -1,0 +1,1861 @@
+--- a/Makefile
++++ b/Makefile
+@@ -961,3 +961,23 @@
+ 	$(CC) -std=c11 -O2 -g -fsanitize=undefined -fno-sanitize-recover=undefined -Wall -Wextra -Werror -Isrc src/vms_rtl_m107.c src/vms_rtl_m108.c $(M108_MODULE_SRCS) tests/test_rtl_m108.c -o build/rtl108check
+ 	./build/rtl108check
+ all: build/rtl-m108-partial.o
++
++# M109: 36 pinned DEC RTL math source modules, native self-contained x87 IA-32 subsets.
++M109_MODULE_SRCS=$(wildcard src/native_rtl_m109/*.c)
++M109_MODULE_OBJS=$(patsubst src/native_rtl_m109/%.c,build/m109/%.o,$(M109_MODULE_SRCS))
++build/vms_rtl_m109_x87.o: src/vms_rtl_m109_x87.c src/vms_rtl_m109_x87.h | build
++	$(CC) $(CFLAGS) -fplt -c $< -o $@
++build/vms_rtl_m109.o: src/vms_rtl_m109.c src/vms_rtl_m109.h src/vms_rtl_m109_x87.h | build
++	$(CC) $(CFLAGS) -fplt -c $< -o $@
++build/m109/%.o: src/native_rtl_m109/%.c src/vms_rtl_m109.h | build
++	mkdir -p build/m109
++	$(CC) $(CFLAGS) -fplt -c $< -o $@
++build/rtl-m109-partial.o: build/vms_rtl_m109.o build/vms_rtl_m109_x87.o $(M109_MODULE_OBJS)
++	ld -m elf_i386 -r -o $@ $^
++.PHONY: rtl109check
++rtl109check: build/rtl-m109-partial.o
++	$(CC) -std=c11 -O2 -g -fsanitize=undefined -fno-sanitize-recover=undefined -Wall -Wextra -Werror -Isrc src/vms_rtl_m107.c src/vms_rtl_m108.c src/vms_rtl_m109.c src/vms_rtl_m109_x87.c $(M109_MODULE_SRCS) tests/test_rtl_m109.c -o build/rtl109check
++	./build/rtl109check
++	python3 tools/gen_source_coverage.py
++	python3 tests/test_rtl_m109_integrity.py
++all: build/rtl-m109-partial.o
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1749,6 +1749,57 @@
+       'sections':spans,'unresolved_integration':caveat+
+       'Native ELF32 relocatable RTL only. Not linked into SYS.EXE or guest DCL. Partial source mapping; no VAX CPU emulation.'})
+ 
++# M109: 36 source-specific native x87 math translations. This is a
++# partial domain/representation adapter. The original polynomial tables,
++# VAX condition signaling, H-floating 113-bit accuracy, register-entry ABI,
++# and real guest DCL/RTL link are NOT supplied. The full source-entry index
++# records exactly which routines have corresponding native symbols.
++m109_manifest = json.loads((ROOT/'tools/m109_originals.json').read_text())
++assert m109_manifest['revision']==REVISION
++assert m109_manifest['file_count']==36
++m109_seen=set()
++for item in m109_manifest['modules']:
++    original=item['source']
++    assert original not in m109_seen
++    m109_seen.add(original)
++    total=item['lines']
++    entries=item['entries']
++    assert entries and all(0<ent['line']<total-1 for ent in entries)
++    path='src/native_rtl_m109/'+original.split('/')[-1].lower().replace('.mar','.c')
++    assert (ROOT/path).is_file()
++    sections=[]
++    # Pre-entry source includes real coefficient tables and processing logic,
++    # NOT just declarations. Leave those unresolved instead of falsely
++    # excluding them from full functional coverage.
++    if entries[0]['line']>1:
++        sections.append({'original_lines':[1,entries[0]['line']-1],
++           'status':'unresolved','reason':'VAX polynomial coefficients, shared assembly helper logic, declarations, and instruction-specific routines not ported'})
++    for index,entry in enumerate(entries):
++        start=entry['line']
++        stop=(entries[index+1]['line']-1 if index+1<len(entries) else total-2)
++        assert start<=stop
++        symbol=entry['symbol']
++        line=line_for_symbol(path,symbol)
++        if line is None:missing+=1
++        sections.append({'original_lines':[start,stop],
++            'status':'partial' if line else 'missing',
++            'pc_file':path,'pc_symbol':symbol,'pc_line':line,
++            'function':('Original '+entry['label']+' mathematical operation; '+
++              'native IA-32 long double/x87 approximation and strict VAX F/D/G/H word adapter. '+
++              'VAX error signaling, coefficient rounding, exact H semantics and full calling frame remain unresolved.')})
++    sections.append({'original_lines':[total-1,total],
++                     'status':'excluded',
++                     'reason':'Original assembler END directive and final blank line; not a runtime instruction'})
++    result['files'].append({'original_file':original,'original_lines':total,
++        'sections':sections,
++        'unresolved_integration':(
++          'M109 source-specific wrappers compile to IA-32 ELF32 relocatable code and run '+
++          'only in host tests. APPROX deliberately marks non-bit-identical x87 output. '+
++          'H-float inputs using precision below 64-bit are rejected; H result low bits '+
++          'are approximate. No guest executable links this library. No VAX CPU emulation.')})
++assert len(m109_seen)==36
++assert len({x['original_file'] for x in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- /dev/null
++++ b/tools/m109_originals.json
+@@ -0,0 +1,615 @@
++{
++  "reference": "https://github.com/calmsacibis995/vms37-src",
++  "revision": "2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752",
++  "file_count": 36,
++  "modules": [
++    {
++      "source": "RTL/SRC/MTHACOS.MAR",
++      "lines": 411,
++      "entries": [
++        {
++          "label": "MTH$ACOS",
++          "line": 169,
++          "symbol": "port109_mthacos"
++        },
++        {
++          "label": "MTH$ACOSD",
++          "line": 323,
++          "symbol": "port109_mthacosd"
++        }
++      ],
++      "format": "F",
++      "op": "ACOS"
++    },
++    {
++      "source": "RTL/SRC/MTHDACOS.MAR",
++      "lines": 418,
++      "entries": [
++        {
++          "label": "MTH$DACOS",
++          "line": 173,
++          "symbol": "port109_mthdacos"
++        },
++        {
++          "label": "MTH$DACOSD",
++          "line": 328,
++          "symbol": "port109_mthdacosd"
++        }
++      ],
++      "format": "D",
++      "op": "ACOS"
++    },
++    {
++      "source": "RTL/SRC/MTHGACOS.MAR",
++      "lines": 410,
++      "entries": [
++        {
++          "label": "MTH$GACOS",
++          "line": 164,
++          "symbol": "port109_mthgacos"
++        },
++        {
++          "label": "MTH$GACOSD",
++          "line": 318,
++          "symbol": "port109_mthgacosd"
++        }
++      ],
++      "format": "G",
++      "op": "ACOS"
++    },
++    {
++      "source": "RTL/SRC/MTHHACOS.MAR",
++      "lines": 433,
++      "entries": [
++        {
++          "label": "MTH$HACOS",
++          "line": 174,
++          "symbol": "port109_mthhacos"
++        },
++        {
++          "label": "MTH$HACOSD",
++          "line": 338,
++          "symbol": "port109_mthhacosd"
++        }
++      ],
++      "format": "H",
++      "op": "ACOS"
++    },
++    {
++      "source": "RTL/SRC/MTHASIN.MAR",
++      "lines": 359,
++      "entries": [
++        {
++          "label": "MTH$ASIN",
++          "line": 162,
++          "symbol": "port109_mthasin"
++        },
++        {
++          "label": "MTH$ASIND",
++          "line": 291,
++          "symbol": "port109_mthasind"
++        }
++      ],
++      "format": "F",
++      "op": "ASIN"
++    },
++    {
++      "source": "RTL/SRC/MTHDASIN.MAR",
++      "lines": 365,
++      "entries": [
++        {
++          "label": "MTH$DASIN",
++          "line": 169,
++          "symbol": "port109_mthdasin"
++        },
++        {
++          "label": "MTH$DASIND",
++          "line": 298,
++          "symbol": "port109_mthdasind"
++        }
++      ],
++      "format": "D",
++      "op": "ASIN"
++    },
++    {
++      "source": "RTL/SRC/MTHGASIN.MAR",
++      "lines": 353,
++      "entries": [
++        {
++          "label": "MTH$GASIN",
++          "line": 158,
++          "symbol": "port109_mthgasin"
++        },
++        {
++          "label": "MTH$GASIND",
++          "line": 287,
++          "symbol": "port109_mthgasind"
++        }
++      ],
++      "format": "G",
++      "op": "ASIN"
++    },
++    {
++      "source": "RTL/SRC/MTHHASIN.MAR",
++      "lines": 370,
++      "entries": [
++        {
++          "label": "MTH$HASIN",
++          "line": 163,
++          "symbol": "port109_mthhasin"
++        },
++        {
++          "label": "MTH$HASIND",
++          "line": 304,
++          "symbol": "port109_mthhasind"
++        }
++      ],
++      "format": "H",
++      "op": "ASIN"
++    },
++    {
++      "source": "RTL/SRC/MTHATAN.MAR",
++      "lines": 972,
++      "entries": [
++        {
++          "label": "MTH$ATAN",
++          "line": 402,
++          "symbol": "port109_mthatan"
++        },
++        {
++          "label": "MTH$ATAN2",
++          "line": 439,
++          "symbol": "port109_mthatan2"
++        },
++        {
++          "label": "MTH$ATAND",
++          "line": 717,
++          "symbol": "port109_mthatand"
++        },
++        {
++          "label": "MTH$ATAND2",
++          "line": 754,
++          "symbol": "port109_mthatand2"
++        }
++      ],
++      "format": "F",
++      "op": "ATAN"
++    },
++    {
++      "source": "RTL/SRC/MTHDATAN.MAR",
++      "lines": 984,
++      "entries": [
++        {
++          "label": "MTH$DATAN",
++          "line": 422,
++          "symbol": "port109_mthdatan"
++        },
++        {
++          "label": "MTH$DATAN2",
++          "line": 459,
++          "symbol": "port109_mthdatan2"
++        },
++        {
++          "label": "MTH$DATAND",
++          "line": 732,
++          "symbol": "port109_mthdatand"
++        },
++        {
++          "label": "MTH$DATAND2",
++          "line": 769,
++          "symbol": "port109_mthdatand2"
++        }
++      ],
++      "format": "D",
++      "op": "ATAN"
++    },
++    {
++      "source": "RTL/SRC/MTHGATAN.MAR",
++      "lines": 979,
++      "entries": [
++        {
++          "label": "MTH$GATAN",
++          "line": 405,
++          "symbol": "port109_mthgatan"
++        },
++        {
++          "label": "MTH$GATAN2",
++          "line": 441,
++          "symbol": "port109_mthgatan2"
++        },
++        {
++          "label": "MTH$GATAND",
++          "line": 719,
++          "symbol": "port109_mthgatand"
++        },
++        {
++          "label": "MTH$GATAND2",
++          "line": 755,
++          "symbol": "port109_mthgatand2"
++        }
++      ],
++      "format": "G",
++      "op": "ATAN"
++    },
++    {
++      "source": "RTL/SRC/MTHHATAN.MAR",
++      "lines": 1077,
++      "entries": [
++        {
++          "label": "MTH$HATAN",
++          "line": 445,
++          "symbol": "port109_mthhatan"
++        },
++        {
++          "label": "MTH$HATAN2",
++          "line": 495,
++          "symbol": "port109_mthhatan2"
++        },
++        {
++          "label": "MTH$HATAND",
++          "line": 792,
++          "symbol": "port109_mthhatand"
++        },
++        {
++          "label": "MTH$HATAND2",
++          "line": 842,
++          "symbol": "port109_mthhatand2"
++        }
++      ],
++      "format": "H",
++      "op": "ATAN"
++    },
++    {
++      "source": "RTL/SRC/MTHALOG.MAR",
++      "lines": 614,
++      "entries": [
++        {
++          "label": "MTH$ALOG",
++          "line": 371,
++          "symbol": "port109_mthalog"
++        },
++        {
++          "label": "MTH$ALOG10",
++          "line": 407,
++          "symbol": "port109_mthalog10"
++        },
++        {
++          "label": "MTH$ALOG2",
++          "line": 443,
++          "symbol": "port109_mthalog2"
++        }
++      ],
++      "format": "F",
++      "op": "LOG"
++    },
++    {
++      "source": "RTL/SRC/MTHDLOG.MAR",
++      "lines": 589,
++      "entries": [
++        {
++          "label": "MTH$DLOG",
++          "line": 349,
++          "symbol": "port109_mthdlog"
++        },
++        {
++          "label": "MTH$DLOG10",
++          "line": 385,
++          "symbol": "port109_mthdlog10"
++        },
++        {
++          "label": "MTH$DLOG2",
++          "line": 421,
++          "symbol": "port109_mthdlog2"
++        }
++      ],
++      "format": "D",
++      "op": "LOG"
++    },
++    {
++      "source": "RTL/SRC/MTHGLOG.MAR",
++      "lines": 574,
++      "entries": [
++        {
++          "label": "MTH$GLOG",
++          "line": 323,
++          "symbol": "port109_mthglog"
++        },
++        {
++          "label": "MTH$GLOG10",
++          "line": 359,
++          "symbol": "port109_mthglog10"
++        },
++        {
++          "label": "MTH$GLOG2",
++          "line": 396,
++          "symbol": "port109_mthglog2"
++        }
++      ],
++      "format": "G",
++      "op": "LOG"
++    },
++    {
++      "source": "RTL/SRC/MTHHLOG.MAR",
++      "lines": 605,
++      "entries": [
++        {
++          "label": "MTH$HLOG",
++          "line": 346,
++          "symbol": "port109_mthhlog"
++        },
++        {
++          "label": "MTH$HLOG10",
++          "line": 389,
++          "symbol": "port109_mthhlog10"
++        },
++        {
++          "label": "MTH$HLOG2",
++          "line": 432,
++          "symbol": "port109_mthhlog2"
++        }
++      ],
++      "format": "H",
++      "op": "LOG"
++    },
++    {
++      "source": "RTL/SRC/MTHEXP.MAR",
++      "lines": 376,
++      "entries": [
++        {
++          "label": "MTH$EXP",
++          "line": 248,
++          "symbol": "port109_mthexp"
++        }
++      ],
++      "format": "F",
++      "op": "EXP"
++    },
++    {
++      "source": "RTL/SRC/MTHDEXP.MAR",
++      "lines": 425,
++      "entries": [
++        {
++          "label": "MTH$DEXP",
++          "line": 285,
++          "symbol": "port109_mthdexp"
++        }
++      ],
++      "format": "D",
++      "op": "EXP"
++    },
++    {
++      "source": "RTL/SRC/MTHGEXP.MAR",
++      "lines": 431,
++      "entries": [
++        {
++          "label": "MTH$GEXP",
++          "line": 278,
++          "symbol": "port109_mthgexp"
++        }
++      ],
++      "format": "G",
++      "op": "EXP"
++    },
++    {
++      "source": "RTL/SRC/MTHHEXP.MAR",
++      "lines": 466,
++      "entries": [
++        {
++          "label": "MTH$HEXP",
++          "line": 312,
++          "symbol": "port109_mthhexp"
++        }
++      ],
++      "format": "H",
++      "op": "EXP"
++    },
++    {
++      "source": "RTL/SRC/MTHSQRT.MAR",
++      "lines": 287,
++      "entries": [
++        {
++          "label": "MTH$SQRT",
++          "line": 196,
++          "symbol": "port109_mthsqrt"
++        }
++      ],
++      "format": "F",
++      "op": "SQRT"
++    },
++    {
++      "source": "RTL/SRC/MTHDSQRT.MAR",
++      "lines": 289,
++      "entries": [
++        {
++          "label": "MTH$DSQRT",
++          "line": 199,
++          "symbol": "port109_mthdsqrt"
++        }
++      ],
++      "format": "D",
++      "op": "SQRT"
++    },
++    {
++      "source": "RTL/SRC/MTHGSQRT.MAR",
++      "lines": 271,
++      "entries": [
++        {
++          "label": "MTH$GSQRT",
++          "line": 182,
++          "symbol": "port109_mthgsqrt"
++        }
++      ],
++      "format": "G",
++      "op": "SQRT"
++    },
++    {
++      "source": "RTL/SRC/MTHHSQRT.MAR",
++      "lines": 292,
++      "entries": [
++        {
++          "label": "MTH$HSQRT",
++          "line": 185,
++          "symbol": "port109_mthhsqrt"
++        }
++      ],
++      "format": "H",
++      "op": "SQRT"
++    },
++    {
++      "source": "RTL/SRC/MTHSINH.MAR",
++      "lines": 296,
++      "entries": [
++        {
++          "label": "MTH$SINH",
++          "line": 180,
++          "symbol": "port109_mthsinh"
++        }
++      ],
++      "format": "F",
++      "op": "SINH"
++    },
++    {
++      "source": "RTL/SRC/MTHDSINH.MAR",
++      "lines": 314,
++      "entries": [
++        {
++          "label": "MTH$DSINH",
++          "line": 197,
++          "symbol": "port109_mthdsinh"
++        }
++      ],
++      "format": "D",
++      "op": "SINH"
++    },
++    {
++      "source": "RTL/SRC/MTHGSINH.MAR",
++      "lines": 298,
++      "entries": [
++        {
++          "label": "MTH$GSINH",
++          "line": 179,
++          "symbol": "port109_mthgsinh"
++        }
++      ],
++      "format": "G",
++      "op": "SINH"
++    },
++    {
++      "source": "RTL/SRC/MTHHSINH.MAR",
++      "lines": 329,
++      "entries": [
++        {
++          "label": "MTH$HSINH",
++          "line": 209,
++          "symbol": "port109_mthhsinh"
++        }
++      ],
++      "format": "H",
++      "op": "SINH"
++    },
++    {
++      "source": "RTL/SRC/MTHCOSH.MAR",
++      "lines": 276,
++      "entries": [
++        {
++          "label": "MTH$COSH",
++          "line": 185,
++          "symbol": "port109_mthcosh"
++        }
++      ],
++      "format": "F",
++      "op": "COSH"
++    },
++    {
++      "source": "RTL/SRC/MTHDCOSH.MAR",
++      "lines": 283,
++      "entries": [
++        {
++          "label": "MTH$DCOSH",
++          "line": 198,
++          "symbol": "port109_mthdcosh"
++        }
++      ],
++      "format": "D",
++      "op": "COSH"
++    },
++    {
++      "source": "RTL/SRC/MTHGCOSH.MAR",
++      "lines": 269,
++      "entries": [
++        {
++          "label": "MTH$GCOSH",
++          "line": 177,
++          "symbol": "port109_mthgcosh"
++        }
++      ],
++      "format": "G",
++      "op": "COSH"
++    },
++    {
++      "source": "RTL/SRC/MTHHCOSH.MAR",
++      "lines": 305,
++      "entries": [
++        {
++          "label": "MTH$HCOSH",
++          "line": 210,
++          "symbol": "port109_mthhcosh"
++        }
++      ],
++      "format": "H",
++      "op": "COSH"
++    },
++    {
++      "source": "RTL/SRC/MTHTANH.MAR",
++      "lines": 213,
++      "entries": [
++        {
++          "label": "MTH$TANH",
++          "line": 143,
++          "symbol": "port109_mthtanh"
++        }
++      ],
++      "format": "F",
++      "op": "TANH"
++    },
++    {
++      "source": "RTL/SRC/MTHDTANH.MAR",
++      "lines": 219,
++      "entries": [
++        {
++          "label": "MTH$DTANH",
++          "line": 149,
++          "symbol": "port109_mthdtanh"
++        }
++      ],
++      "format": "D",
++      "op": "TANH"
++    },
++    {
++      "source": "RTL/SRC/MTHGTANH.MAR",
++      "lines": 212,
++      "entries": [
++        {
++          "label": "MTH$GTANH",
++          "line": 142,
++          "symbol": "port109_mthgtanh"
++        }
++      ],
++      "format": "G",
++      "op": "TANH"
++    },
++    {
++      "source": "RTL/SRC/MTHHTANH.MAR",
++      "lines": 224,
++      "entries": [
++        {
++          "label": "MTH$HTANH",
++          "line": 155,
++          "symbol": "port109_mthhtanh"
++        }
++      ],
++      "format": "H",
++      "op": "TANH"
++    }
++  ]
++}
+--- /dev/null
++++ b/tests/test_rtl_m109.c
+@@ -0,0 +1,148 @@
++#include "../src/vms_rtl_m109.h"
++#include "../src/vms_rtl_m108.h"
++#include <assert.h>
++#include <stdio.h>
++#include <math.h>
++#include <string.h>
++typedef int (*unary)(const uint16_t*,uint16_t*);
++typedef int (*binary)(const uint16_t*,const uint16_t*,uint16_t*);
++static const enum port_m107_fmt fmts[]={PORT_M107_F,PORT_M107_D,PORT_M107_G,PORT_M107_H};
++static const int xval[]={0,1,1,2,1,2,1,1,1};
++static const long double expectation[]={
++ 1.5707963267948966192313216916L,1.5707963267948966192313216916L,
++ 0.7853981633974483096156608458L,0.6931471805599453094172321215L,
++ 2.7182818284590452353602874713L,1.4142135623730950488016887242L,
++ 1.1752011936438014568823818506L,1.5430806348152437784779056208L,
++ 0.7615941559557648881194582826L};
++static unary all[9][4] = {
++ { port109_mthacos, port109_mthdacos, port109_mthgacos, port109_mthhacos },
++ { port109_mthasin, port109_mthdasin, port109_mthgasin, port109_mthhasin },
++ { port109_mthatan, port109_mthdatan, port109_mthgatan, port109_mthhatan },
++ { port109_mthalog, port109_mthdlog, port109_mthglog, port109_mthhlog },
++ { port109_mthexp, port109_mthdexp, port109_mthgexp, port109_mthhexp },
++ { port109_mthsqrt, port109_mthdsqrt, port109_mthgsqrt, port109_mthhsqrt },
++ { port109_mthsinh, port109_mthdsinh, port109_mthgsinh, port109_mthhsinh },
++ { port109_mthcosh, port109_mthdcosh, port109_mthgcosh, port109_mthhcosh },
++ { port109_mthtanh, port109_mthdtanh, port109_mthgtanh, port109_mthhtanh },
++};
++static long double abs_ld(long double x){return x<0?-x:x;}
++static int acceptable(int st){return st==PORT109_OK||st==PORT109_APPROX;}
++static void value(enum port_m107_fmt f,const uint16_t *v,long double expected){
++ long double decoded=0.0L;
++ assert(port109_decode(f,v,&decoded)==PORT109_OK);
++ long double tol=f==PORT_M107_F?0.000008L:0.000000000002L;
++ assert(abs_ld(decoded-expected)<=tol*(1.0L+abs_ld(expected)));
++}
++static void modes(void){
++ for(unsigned k=0;k<4;k++){
++  enum port_m107_fmt f=fmts[k];
++  uint16_t in[8]={0},out[8]={0};
++  for(unsigned op=0;op<9;op++){
++   assert(port108_float_from_integer(f,xval[op],in)==PORT108_OK);
++   int st=all[op][k](in,out);
++   assert(st==PORT109_APPROX);
++   value(f,out,expectation[op]);
++  }
++  /* Exact, instruction-independent algebraic identities. */
++  for(unsigned op=0;op<9;op++){
++   int x=0;if(op==PORT109_ACOS||op==PORT109_LOG||op==PORT109_SQRT)x=1;
++   if(op==PORT109_LOG)x=1;
++   assert(port108_float_from_integer(f,x,in)==PORT108_OK);
++   int st=all[op][k](in,out);
++   assert(acceptable(st));
++  }
++  /* Nontrivial domain errors do not modify the output buffer. */
++  for(unsigned i=0;i<8;i++)out[i]=0x4554u;
++  assert(port108_float_from_integer(f,2,in)==PORT108_OK);
++  assert(all[PORT109_ASIN][k](in,out)==PORT109_DOMAIN);
++  for(unsigned i=0;i<8;i++)assert(out[i]==0x4554u);
++  assert(port108_float_from_integer(f,0,in)==PORT108_OK);
++  assert(all[PORT109_LOG][k](in,out)==PORT109_DOMAIN);
++  assert(port108_float_from_integer(f,-1,in)==PORT108_OK);
++  assert(all[PORT109_SQRT][k](in,out)==PORT109_DOMAIN);
++  assert(!memcmp(out,(uint16_t[8]){0x4554,0x4554,0x4554,0x4554,0x4554,0x4554,0x4554,0x4554},sizeof out));
++  in[0]=0x8000u;
++  assert(all[PORT109_EXP][k](in,out)==PORT109_RESERVED);
++  if(f==PORT_M107_H){
++   assert(port108_float_from_integer(f,1,in)==PORT108_OK);
++   in[7]=1u;
++   assert(all[PORT109_EXP][k](in,out)==PORT109_PARTIAL);
++  }
++ }
++}
++static void extras(void){
++ uint16_t in[8]={0},b[8]={0},out[8]={0};
++ for(unsigned k=0;k<4;k++){
++  enum port_m107_fmt f=fmts[k];
++  assert(port108_float_from_integer(f,1,in)==PORT108_OK);
++  assert(port108_float_from_integer(f,1,b)==PORT108_OK);
++  unary acos_degrees[4]={port109_mthacosd, port109_mthdacosd, port109_mthgacosd, port109_mthhacosd};
++  assert(acceptable(acos_degrees[k](in,out)));value(f,out,0.0L);
++  unary asin_degrees[4]={port109_mthasind, port109_mthdasind, port109_mthgasind, port109_mthhasind};
++  assert(acceptable(asin_degrees[k](in,out)));value(f,out,90.0L);
++  unary atan_degrees[4]={port109_mthatand, port109_mthdatand, port109_mthgatand, port109_mthhatand};
++  assert(acceptable(atan_degrees[k](in,out)));value(f,out,45.0L);
++  binary two[4]={port109_mthatan2, port109_mthdatan2, port109_mthgatan2, port109_mthhatan2};
++  binary degtwo[4]={port109_mthatand2, port109_mthdatand2, port109_mthgatand2, port109_mthhatand2};
++  assert(acceptable(two[k](in,b,out)));
++  value(f,out,0.78539816339744830961566L);
++  assert(acceptable(degtwo[k](in,b,out)));value(f,out,45.0L);
++  assert(port108_float_from_integer(f,0,b)==PORT108_OK);
++  assert(acceptable(two[k](in,b,out)));value(f,out,1.570796326794896619L);
++  assert(port108_float_from_integer(f,0,in)==PORT108_OK);
++  assert(two[k](in,b,out)==PORT109_DOMAIN);
++  assert(port108_float_from_integer(f,100,in)==PORT108_OK);
++  unary log10s[4]={port109_mthalog10, port109_mthdlog10, port109_mthglog10, port109_mthhlog10};
++  unary log2s[4]={port109_mthalog2, port109_mthdlog2, port109_mthglog2, port109_mthhlog2};
++  assert(acceptable(log10s[k](in,out)));value(f,out,2.0L);
++  assert(port108_float_from_integer(f,8,in)==PORT108_OK);
++  assert(acceptable(log2s[k](in,out)));value(f,out,3.0L);
++ }
++}
++static void contracts(void){
++ uint16_t a[8]={0},b[8]={0};long double v=0.0L;
++ assert(port109_unary(PORT_M107_F,PORT109_EXP,NULL,b)==PORT109_BAD_ARG);
++ assert(port109_unary(PORT_M107_F,PORT109_EXP,a,NULL)==PORT109_BAD_ARG);
++ assert(port109_unary(0,PORT109_EXP,a,b)==PORT109_BAD_ARG);
++ assert(port109_unary(PORT_M107_F,(enum port109_function)999,a,b)==PORT109_BAD_ARG);
++ assert(port109_unary_degrees(PORT_M107_F,PORT109_COSH,a,b)==PORT109_BAD_ARG);
++ assert(port109_atan_ratio(PORT_M107_F,a,a,2,b)==PORT109_BAD_ARG);
++ assert(port109_decode(PORT_M107_F,NULL,&v)==PORT109_BAD_ARG);
++ assert(port109_encode(PORT_M107_F,1.0L,NULL)==PORT109_BAD_ARG);
++ assert(port108_float_from_integer(PORT_M107_F,1,a)==PORT108_OK);
++ assert(port109_decode(PORT_M107_F,a,&v)==PORT109_OK && v==1.0L);
++ assert(port109_encode(PORT_M107_F,1.0L,b)==PORT109_OK);
++ assert(memcmp(a,b,4)==0);
++ assert(port109_encode(PORT_M107_F,0.0L,b)==PORT109_OK && b[0]==0 && b[1]==0);
++ assert(port109_encode(PORT_M107_F,1.0e100L,b)==PORT109_RANGE);
++}
++/* Differential raw-word roundtrip: 4,000 deterministic nonzero VAX
++ * values per supported format. A silent word-layout error is a real bug. */
++static uint32_t random32(uint32_t *seed){
++ *seed=*seed*UINT32_C(1664525)+UINT32_C(1013904223);return *seed;
++}
++static void raw_roundtrip(void){
++ uint32_t seed=UINT32_C(0x12345678);
++ for(unsigned format=0;format<4;format++){
++  enum port_m107_fmt f=fmts[format];
++  const unsigned n=f==PORT_M107_F?2u:f==PORT_M107_H?8u:4u;
++  const unsigned shift=f==PORT_M107_G?4u:f==PORT_M107_H?0u:7u;
++  const unsigned biased=f==PORT_M107_G?1024u:f==PORT_M107_H?16384u:128u;
++  for(unsigned iter=0;iter<4000u;iter++){
++   uint16_t v[8]={0},w[8]={0};
++   for(unsigned i=0;i<n;i++)v[i]=(uint16_t)(random32(&seed)>>16);
++   unsigned expn=f==PORT_M107_H?biased+(random32(&seed)%513u)-256u:
++          1u+(random32(&seed)%((f==PORT_M107_G)?2047u:255u));
++   v[0]=(uint16_t)((v[0]&0x8000u)|((expn<<shift)&0x7fffu)|
++                   (v[0]&((1u<<shift)-1u)));
++   if(f==PORT_M107_H){v[4]&=0xfffeu;v[5]=v[6]=v[7]=0;}
++   long double value=0.0L;
++   assert(port109_decode(f,v,&value)==PORT109_OK);
++   assert(port109_encode(f,value,w)==PORT109_OK);
++   assert(memcmp(v,w,n*sizeof(uint16_t))==0);
++  }
++ }
++}
++
++int main(void){modes();extras();contracts();raw_roundtrip();
++ puts("M109: 36 native original math modules, 64 entry wrappers, constrained host tests passed");return 0;}
+--- /dev/null
++++ b/tests/test_rtl_m109_integrity.py
+@@ -0,0 +1,51 @@
++#!/usr/bin/env python3
++"""Assert M109 IA-32 objects, source mapping, and unsupported scopes are honest."""
++import json
++import re
++import subprocess
++from pathlib import Path
++
++ROOT=Path(__file__).resolve().parents[1]
++M=json.loads((ROOT/'tools/m109_originals.json').read_text())
++assert M['revision']=='2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752'
++mods=M['modules']
++assert M['file_count']==len(mods)==36
++assert len({m['source'] for m in mods})==36
++expected={entry['symbol'] for mod in mods for entry in mod['entries']}
++assert len(expected)==64
++for item in mods:
++    file=ROOT/'src/native_rtl_m109'/(
++        item['source'].split('/')[-1].lower().replace('.mar','.c'))
++    assert file.is_file(),file
++    code=file.read_text()
++    assert 'No original restricted source is distributed' in code
++    for ent in item['entries']:
++        assert re.search(r'\b'+re.escape(ent['symbol'])+r'\s*\(',code)
++    assert 0<item['entries'][0]['line']<item['lines']
++    assert all(a['line']<b['line'] for a,b in zip(item['entries'],item['entries'][1:]))
++
++partial=ROOT/'build/rtl-m109-partial.o'
++raw=subprocess.check_output(['readelf','-h',str(partial)],text=True)
++assert 'ELF32' in raw and 'Intel 80386' in raw and 'REL (Relocatable file)' in raw
++undefined=subprocess.check_output(['nm','-u',str(partial)],text=True)
++assert not undefined.strip(),undefined
++names=subprocess.check_output(['nm','-g','--defined-only',str(partial)],text=True)
++exports={line.rsplit(None,1)[-1] for line in names.splitlines() if line.strip()}
++assert expected<=exports,sorted(expected-exports)
++
++coverage=json.loads((ROOT/'source-coverage.json').read_text())
++rows={row['original_file']:row for row in coverage['files']}
++assert len(rows)==len(coverage['files'])
++for m in mods:
++    row=rows[m['source']]
++    assert row['original_lines']==m['lines']
++    sec=row['sections']
++    assert sec[0]['original_lines'][0]==1
++    assert sec[-1]['original_lines'][1]==m['lines']
++    for i,s in enumerate(sec):
++        assert s['status'] in ('partial','unresolved','excluded')
++        a,b=s['original_lines']
++        assert 1<=a<=b<=m['lines']
++        if i: assert sec[i-1]['original_lines'][1]+1==a
++    assert len([s for s in sec if s['status']=='partial'])==len(m['entries'])
++print('M109: 36 distinct source files, 64 exports, ELF32 no undefined library dependencies, contiguous partial audit PASS')
+--- /dev/null
++++ b/src/vms_rtl_m109.h
+@@ -0,0 +1,85 @@
++#ifndef VMS_RTL_M109_H
++#define VMS_RTL_M109_H
++#include <stdint.h>
++#include <stddef.h>
++#include "vms_rtl_m107.h"
++/* Native IA-32 VAX F/D/G/H transcendentals; x87 computes
++ * useful results, but VAX polynomial tables and exception frames
++ * are still NOT reproduced. APPROX is successful, not fidelity proof. */
++enum {PORT109_OK=1,PORT109_BAD_ARG=2,PORT109_APPROX=3,PORT109_PARTIAL=4,
++      PORT109_RANGE=6,PORT109_RESERVED=8,PORT109_DOMAIN=10};
++enum port109_function {PORT109_ACOS,PORT109_ASIN,PORT109_ATAN,
++ PORT109_LOG,PORT109_EXP,PORT109_SQRT,PORT109_SINH,PORT109_COSH,
++ PORT109_TANH,PORT109_LOG10,PORT109_LOG2};
++int port109_decode(enum port_m107_fmt fmt,const uint16_t *raw,long double *out);
++int port109_encode(enum port_m107_fmt fmt,long double value,uint16_t *out);
++int port109_unary(enum port_m107_fmt fmt,enum port109_function op,const uint16_t *arg,uint16_t *out);
++int port109_unary_degrees(enum port_m107_fmt fmt,enum port109_function op,const uint16_t *arg,uint16_t *out);
++int port109_atan_ratio(enum port_m107_fmt fmt,const uint16_t *numerator,
++                       const uint16_t *denominator,int degrees,uint16_t *out);
++/* One native .c per original DEC source file, distinct callable symbols. */
++int port109_mthacos(const uint16_t *arg,uint16_t *out);
++int port109_mthacosd(const uint16_t *arg,uint16_t *out);
++int port109_mthdacos(const uint16_t *arg,uint16_t *out);
++int port109_mthdacosd(const uint16_t *arg,uint16_t *out);
++int port109_mthgacos(const uint16_t *arg,uint16_t *out);
++int port109_mthgacosd(const uint16_t *arg,uint16_t *out);
++int port109_mthhacos(const uint16_t *arg,uint16_t *out);
++int port109_mthhacosd(const uint16_t *arg,uint16_t *out);
++int port109_mthasin(const uint16_t *arg,uint16_t *out);
++int port109_mthasind(const uint16_t *arg,uint16_t *out);
++int port109_mthdasin(const uint16_t *arg,uint16_t *out);
++int port109_mthdasind(const uint16_t *arg,uint16_t *out);
++int port109_mthgasin(const uint16_t *arg,uint16_t *out);
++int port109_mthgasind(const uint16_t *arg,uint16_t *out);
++int port109_mthhasin(const uint16_t *arg,uint16_t *out);
++int port109_mthhasind(const uint16_t *arg,uint16_t *out);
++int port109_mthatan(const uint16_t *arg,uint16_t *out);
++int port109_mthatand(const uint16_t *arg,uint16_t *out);
++int port109_mthatan2(const uint16_t *num,const uint16_t *den,uint16_t *out);
++int port109_mthatand2(const uint16_t *num,const uint16_t *den,uint16_t *out);
++int port109_mthdatan(const uint16_t *arg,uint16_t *out);
++int port109_mthdatand(const uint16_t *arg,uint16_t *out);
++int port109_mthdatan2(const uint16_t *num,const uint16_t *den,uint16_t *out);
++int port109_mthdatand2(const uint16_t *num,const uint16_t *den,uint16_t *out);
++int port109_mthgatan(const uint16_t *arg,uint16_t *out);
++int port109_mthgatand(const uint16_t *arg,uint16_t *out);
++int port109_mthgatan2(const uint16_t *num,const uint16_t *den,uint16_t *out);
++int port109_mthgatand2(const uint16_t *num,const uint16_t *den,uint16_t *out);
++int port109_mthhatan(const uint16_t *arg,uint16_t *out);
++int port109_mthhatand(const uint16_t *arg,uint16_t *out);
++int port109_mthhatan2(const uint16_t *num,const uint16_t *den,uint16_t *out);
++int port109_mthhatand2(const uint16_t *num,const uint16_t *den,uint16_t *out);
++int port109_mthalog(const uint16_t *arg,uint16_t *out);
++int port109_mthalog10(const uint16_t *arg,uint16_t *out);
++int port109_mthalog2(const uint16_t *arg,uint16_t *out);
++int port109_mthdlog(const uint16_t *arg,uint16_t *out);
++int port109_mthdlog10(const uint16_t *arg,uint16_t *out);
++int port109_mthdlog2(const uint16_t *arg,uint16_t *out);
++int port109_mthglog(const uint16_t *arg,uint16_t *out);
++int port109_mthglog10(const uint16_t *arg,uint16_t *out);
++int port109_mthglog2(const uint16_t *arg,uint16_t *out);
++int port109_mthhlog(const uint16_t *arg,uint16_t *out);
++int port109_mthhlog10(const uint16_t *arg,uint16_t *out);
++int port109_mthhlog2(const uint16_t *arg,uint16_t *out);
++int port109_mthexp(const uint16_t *arg,uint16_t *out);
++int port109_mthdexp(const uint16_t *arg,uint16_t *out);
++int port109_mthgexp(const uint16_t *arg,uint16_t *out);
++int port109_mthhexp(const uint16_t *arg,uint16_t *out);
++int port109_mthsqrt(const uint16_t *arg,uint16_t *out);
++int port109_mthdsqrt(const uint16_t *arg,uint16_t *out);
++int port109_mthgsqrt(const uint16_t *arg,uint16_t *out);
++int port109_mthhsqrt(const uint16_t *arg,uint16_t *out);
++int port109_mthsinh(const uint16_t *arg,uint16_t *out);
++int port109_mthdsinh(const uint16_t *arg,uint16_t *out);
++int port109_mthgsinh(const uint16_t *arg,uint16_t *out);
++int port109_mthhsinh(const uint16_t *arg,uint16_t *out);
++int port109_mthcosh(const uint16_t *arg,uint16_t *out);
++int port109_mthdcosh(const uint16_t *arg,uint16_t *out);
++int port109_mthgcosh(const uint16_t *arg,uint16_t *out);
++int port109_mthhcosh(const uint16_t *arg,uint16_t *out);
++int port109_mthtanh(const uint16_t *arg,uint16_t *out);
++int port109_mthdtanh(const uint16_t *arg,uint16_t *out);
++int port109_mthgtanh(const uint16_t *arg,uint16_t *out);
++int port109_mthhtanh(const uint16_t *arg,uint16_t *out);
++#endif
+--- /dev/null
++++ b/src/vms_rtl_m109.c
+@@ -0,0 +1,200 @@
++#include "vms_rtl_m109.h"
++/* Native freestanding IA-32 x87 implementation of VMS 3.7 RTL mathematical entry-point
++ * SUBSETS. The original VAX hardware is not emulated. Explicit FP word
++ * adapters preserve VAX on-disk representation at the interface. This code
++ * is deliberately NOT linked into SYS.EXE until its exception/PSL semantics,
++ * condition signaling, and 113-bit H precision can be supplied. */
++#include "vms_rtl_m109_x87.h"
++
++static unsigned count(enum port_m107_fmt f){
++    return f==PORT_M107_F ? 2u : f==PORT_M107_H ? 8u : 4u;
++}
++static unsigned radix_shift(enum port_m107_fmt f){
++    return f==PORT_M107_G ? 4u : f==PORT_M107_H ? 0u : 7u;
++}
++static unsigned bias(enum port_m107_fmt f){
++    return f==PORT_M107_G ? 1024u : f==PORT_M107_H ? 16384u : 128u;
++}
++static int fmt_valid(enum port_m107_fmt f){
++    return f==PORT_M107_F||f==PORT_M107_D||f==PORT_M107_G||f==PORT_M107_H;
++}
++static unsigned bit_count(enum port_m107_fmt f){
++    return 1u+radix_shift(f)+16u*(count(f)-1u);
++}
++static unsigned bit_at(enum port_m107_fmt f,const uint16_t *v,unsigned i){
++    if(i==0)return 1u;
++    unsigned s=radix_shift(f);
++    if(i<=s)return (v[0]>>(s-i))&1u;
++    i-=s+1u;
++    return (v[1u+i/16u]>>(15u-i%16u))&1u;
++}
++static void set_bit(enum port_m107_fmt f,uint16_t *v,unsigned i,int on){
++    if(i==0)return;
++    unsigned s=radix_shift(f),wi=0u,p=0u;
++    if(i<=s)p=s-i;
++    else{i-=s+1u;wi=1u+i/16u;p=15u-i%16u;}
++    uint16_t mask=(uint16_t)(1u<<p);
++    if(on)v[wi]|=mask;else v[wi]&=(uint16_t)~mask;
++}
++static void raw_zero(enum port_m107_fmt f,uint16_t *out){
++    for(unsigned i=0;i<count(f);i++)out[i]=0u;
++}
++static void raw_copy(enum port_m107_fmt f,const uint16_t *in,uint16_t *out){
++    for(unsigned i=0;i<count(f);i++)out[i]=in[i];
++}
++int port109_decode(enum port_m107_fmt f,const uint16_t *raw,long double *out){
++    if(!raw||!out||!fmt_valid(f))return PORT109_BAD_ARG;
++    if(!(raw[0]&0x7fffu) && (raw[0]&0x8000u))return PORT109_RESERVED;
++    unsigned e=(raw[0]&0x7fffu)>>radix_shift(f);
++    if(!e){*out=0.0L;return PORT109_OK;}
++    unsigned p=bit_count(f);
++    /* x87 has 64 fraction/significand bits. Low H bits are significant,
++     * and must NOT silently be dropped as a floating approximation. */
++    if(f==PORT_M107_H){
++        for(unsigned i=64u;i<p;i++)if(bit_at(f,raw,i))return PORT109_PARTIAL;
++    }
++    long double mantissa=0.5L,weight=0.25L;
++    for(unsigned i=1u;i<p;i++){
++        if(bit_at(f,raw,i))mantissa+=weight;
++        weight*=0.5L;
++    }
++    int exponent=(int)e-(int)bias(f);
++    long double val=port109_x87_scale(mantissa,exponent);
++    if(!__builtin_isfinite(val)||val==0.0L)return PORT109_PARTIAL;
++    *out=(raw[0]&0x8000u)?-val:val;
++    return PORT109_OK;
++}
++int port109_encode(enum port_m107_fmt f,long double val,uint16_t *out){
++    if(!out||!fmt_valid(f))return PORT109_BAD_ARG;
++    if(!__builtin_isfinite(val))return PORT109_RANGE;
++    if(val==0.0L){raw_zero(f,out);return PORT109_OK;}
++    int negative=val<0.0L;
++    if(negative)val=-val;
++    int e=0;
++    long double normalized=port109_x87_extract(val,&e);  /* [0.5,1) */
++    int field=e+(int)bias(f);
++    if(field<=0||field >= (1<<(15u-radix_shift(f))))return PORT109_RANGE;
++    unsigned p=bit_count(f);
++    uint16_t tmp[8]={0};
++    tmp[0]=(uint16_t)(((unsigned)field<<radix_shift(f))|
++                      (negative?0x8000u:0u));
++    long double fraction=normalized*2.0L-1.0L;
++    for(unsigned i=1u;i<p;i++){
++        fraction*=2.0L;
++        if(fraction>=1.0L){
++            set_bit(f,tmp,i,1);
++            fraction-=1.0L;
++        }
++    }
++    /* IEEE x87 arithmetic is used to calculate this candidate; nearest
++     * even quantization is a best-effort adapter, NOT original polynomial
++     * rounding. An H-float output has 49 zero low bits beyond x87 precision. */
++    if(fraction>0.5L ||
++       (fraction==0.5L && bit_at(f,tmp,p-1u))){
++        unsigned i=p-1u;
++        for(;;){
++            if(i==0u){
++                ++field;
++                if(field >= (1<<(15u-radix_shift(f))))return PORT109_RANGE;
++                for(unsigned w=0;w<count(f);w++)tmp[w]=0;
++                tmp[0]=(uint16_t)(((unsigned)field<<radix_shift(f))|
++                                  (negative?0x8000u:0u));
++                break;
++            }
++            if(!bit_at(f,tmp,i)){set_bit(f,tmp,i,1);break;}
++            set_bit(f,tmp,i,0);--i;
++        }
++    }
++    raw_copy(f,tmp,out);
++    return PORT109_OK;
++}
++static int finish(enum port_m107_fmt f,long double y,uint16_t *out){
++    /* Output bytes change atomically only after VAX range/format checks. */
++    uint16_t tmp[8]={0};
++    int st=port109_encode(f,y,tmp);
++    if(st!=PORT109_OK)return st;
++    raw_copy(f,tmp,out);
++    return PORT109_APPROX;
++}
++static const long double port109_pi=
++    3.1415926535897932384626433832795028841971693993751L;
++static int calculate(enum port_m107_fmt f,enum port109_function op,
++                     const uint16_t *arg,int degrees,uint16_t *out){
++    if(!out||!arg||!fmt_valid(f)||op>PORT109_LOG2)return PORT109_BAD_ARG;
++    long double x=0.0L;
++    int st=port109_decode(f,arg,&x);
++    if(st!=PORT109_OK)return st;
++    if((op==PORT109_ACOS||op==PORT109_ASIN) && (x>1.0L||x< -1.0L))
++        return PORT109_DOMAIN;
++    if((op==PORT109_LOG||op==PORT109_LOG10||op==PORT109_LOG2) && x<=0.0L)
++        return PORT109_DOMAIN;
++    if(op==PORT109_SQRT && x<0.0L)return PORT109_DOMAIN;
++    if(degrees && op!=PORT109_ACOS && op!=PORT109_ASIN && op!=PORT109_ATAN)
++        return PORT109_BAD_ARG;
++    /* Exact identities are independent of the DEC polynomial tables. */
++    if((x==0.0L && (op==PORT109_ASIN||op==PORT109_ATAN||
++                     op==PORT109_SQRT||op==PORT109_SINH||op==PORT109_TANH)) ||
++       (x==1.0L && (op==PORT109_ACOS||op==PORT109_LOG||
++                     op==PORT109_LOG10||op==PORT109_LOG2))){
++        raw_zero(f,out);return PORT109_OK;
++    }
++    if(x==1.0L && op==PORT109_SQRT){
++        raw_copy(f,arg,out);return PORT109_OK;
++    }
++    if(x==0.0L && (op==PORT109_EXP||op==PORT109_COSH)){
++        return port109_encode(f,1.0L,out);
++    }
++    long double y=0.0L;
++    switch(op){
++    case PORT109_ACOS:y=port109_x87_atan2(port109_x87_sqrt(1.0L-x*x),x);break;
++    case PORT109_ASIN:y=port109_x87_atan2(x,port109_x87_sqrt(1.0L-x*x));break;
++    case PORT109_ATAN:y=port109_x87_atan2(x,1.0L);break;
++    case PORT109_LOG:y=port109_x87_ln(x);break;
++    case PORT109_LOG10:y=port109_x87_log10(x);break;
++    case PORT109_LOG2:y=port109_x87_log2(x);break;
++    case PORT109_EXP:y=port109_x87_exp(x);break;
++    case PORT109_SQRT:y=port109_x87_sqrt(x);break;
++    case PORT109_SINH:{
++        long double ax=x<0.0L?-x:x;
++        long double a=port109_x87_exp(ax);
++        y=(a-1.0L/a)*0.5L;
++        if(x<0.0L)y=-y;
++        break; }
++    case PORT109_COSH:{
++        long double ax=x<0.0L?-x:x;
++        long double a=port109_x87_exp(ax);
++        y=(a+1.0L/a)*0.5L;
++        break; }
++    case PORT109_TANH:{
++        long double ax=x<0.0L?-x:x;
++        long double z=port109_x87_exp(-2.0L*ax);
++        y=(1.0L-z)/(1.0L+z);
++        if(x<0.0L)y=-y;
++        break; }
++    }
++    if(degrees)y*=180.0L/port109_pi;
++    return finish(f,y,out);
++}
++int port109_unary(enum port_m107_fmt f,enum port109_function op,
++                  const uint16_t *in,uint16_t *out){
++    return calculate(f,op,in,0,out);
++}
++int port109_unary_degrees(enum port_m107_fmt f,enum port109_function op,
++                          const uint16_t *in,uint16_t *out){
++    return calculate(f,op,in,1,out);
++}
++int port109_atan_ratio(enum port_m107_fmt f,const uint16_t *num,
++                        const uint16_t *den,int degrees,uint16_t *out){
++    if(!out||!num||!den||!fmt_valid(f)||(degrees!=0&&degrees!=1))
++        return PORT109_BAD_ARG;
++    long double x=0.0L,y=0.0L;
++    int st=port109_decode(f,num,&x);if(st!=PORT109_OK)return st;
++    st=port109_decode(f,den,&y);if(st!=PORT109_OK)return st;
++    /* The source's ATAN2 entry point computes a quadrant-resolved X/Y.
++     * It signals an invalid argument on (0,0), unlike ordinary atan2l. */
++    if(x==0.0L && y==0.0L)return PORT109_DOMAIN;
++    if(x==0.0L && y>0.0L){raw_zero(f,out);return PORT109_OK;}
++    long double v=port109_x87_atan2(x,y);
++    if(degrees)v*=180.0L/port109_pi;
++    return finish(f,v,out);
++}
+--- /dev/null
++++ b/src/vms_rtl_m109_x87.h
+@@ -0,0 +1,12 @@
++#ifndef VMS_RTL_M109_X87_H
++#define VMS_RTL_M109_X87_H
++/* Freestanding IA-32 hardware FPU operations. No libm, Linux, or VAX ISA. */
++long double port109_x87_sqrt(long double x);
++long double port109_x87_atan2(long double y,long double x);
++long double port109_x87_ln(long double x);
++long double port109_x87_log10(long double x);
++long double port109_x87_log2(long double x);
++long double port109_x87_exp(long double x);
++long double port109_x87_scale(long double x,int e);
++long double port109_x87_extract(long double x,int *e);
++#endif
+--- /dev/null
++++ b/src/vms_rtl_m109_x87.c
+@@ -0,0 +1,67 @@
++#include "vms_rtl_m109_x87.h"
++/* Each operation starts and ends with a balanced x87 register stack.
++ * We deliberately use the i386 FPU, not a VAX instruction emulator or
++ * the host's libm. The translated DEC polynomial implementation remains
++ * unported; callers report this distinction with PORT109_APPROX. */
++long double port109_x87_sqrt(long double x){
++    long double out;
++    __asm__ __volatile__(
++       "fldt %1\n\tfsqrt\n\tfstpt %0"
++       : "=m"(out) : "m"(x) : "st");
++    return out;
++}
++long double port109_x87_atan2(long double y,long double x){
++    long double out;
++    __asm__ __volatile__(
++       "fldt %1\n\tfldt %2\n\tfpatan\n\tfstpt %0"
++       : "=m"(out) : "m"(y),"m"(x) : "st","st(1)");
++    return out;
++}
++long double port109_x87_ln(long double x){
++    long double out;
++    __asm__ __volatile__(
++       "fldln2\n\tfldt %1\n\tfyl2x\n\tfstpt %0"
++       : "=m"(out) : "m"(x) : "st","st(1)");
++    return out;
++}
++long double port109_x87_log10(long double x){
++    long double out;
++    __asm__ __volatile__(
++       "fldlg2\n\tfldt %1\n\tfyl2x\n\tfstpt %0"
++       : "=m"(out) : "m"(x) : "st","st(1)");
++    return out;
++}
++long double port109_x87_log2(long double x){
++    long double out;
++    __asm__ __volatile__(
++       "fld1\n\tfldt %1\n\tfyl2x\n\tfstpt %0"
++       : "=m"(out) : "m"(x) : "st","st(1)");
++    return out;
++}
++long double port109_x87_exp(long double x){
++    long double out;
++    /* t = x log2(e). Split into nearest integer and fraction [-.5,.5].
++     * 2^fraction = F2XM1(fraction) + 1, then scale by 2^integer. */
++    __asm__ __volatile__(
++       "fldt %1\n\tfldl2e\n\tfmulp %%st, %%st(1)\n\t"
++       "fld %%st(0)\n\tfrndint\n\tfsubr %%st(0), %%st(1)\n\t"
++       "fxch %%st(1)\n\tf2xm1\n\tfld1\n\tfaddp %%st, %%st(1)\n\t"
++       "fscale\n\tfstp %%st(1)\n\tfstpt %0"
++       : "=m"(out) : "m"(x) : "st","st(1)");
++    return out;
++}
++long double port109_x87_scale(long double x,int e){
++    long double out,exponent=(long double)e;
++    __asm__ __volatile__(
++       "fldt %1\n\tfldt %2\n\tfscale\n\tfstp %%st(1)\n\tfstpt %0"
++       : "=m"(out) : "m"(exponent),"m"(x) : "st","st(1)");
++    return out;
++}
++long double port109_x87_extract(long double x,int *e){
++    long double normalized,exp;
++    __asm__ __volatile__(
++       "fldt %2\n\tfxtract\n\tfstpt %0\n\tfstpt %1"
++       : "=m"(normalized),"=m"(exp) : "m"(x) : "st","st(1)");
++    *e=(int)exp+1;
++    return normalized*0.5L;
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthacos.c
+@@ -0,0 +1,14 @@
++/* Source: RTL/SRC/MTHACOS.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 169 of 411.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthacos(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_ACOS,arg,out);
++}
++
++int port109_mthacosd(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_F,PORT109_ACOS,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthalog.c
+@@ -0,0 +1,18 @@
++/* Source: RTL/SRC/MTHALOG.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 371 of 614.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthalog(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_LOG,arg,out);
++}
++
++int port109_mthalog10(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_LOG10,arg,out);
++}
++
++int port109_mthalog2(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_LOG2,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthasin.c
+@@ -0,0 +1,14 @@
++/* Source: RTL/SRC/MTHASIN.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 162 of 359.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthasin(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_ASIN,arg,out);
++}
++
++int port109_mthasind(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_F,PORT109_ASIN,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthatan.c
+@@ -0,0 +1,21 @@
++/* Source: RTL/SRC/MTHATAN.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 402 of 972.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthatan(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_ATAN,arg,out);
++}
++
++int port109_mthatand(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_F,PORT109_ATAN,arg,out);
++}
++
++int port109_mthatan2(const uint16_t *num,const uint16_t *den,uint16_t *out){
++    return port109_atan_ratio(PORT_M107_F,num,den,0,out);
++}
++int port109_mthatand2(const uint16_t *num,const uint16_t *den,uint16_t *out){
++    return port109_atan_ratio(PORT_M107_F,num,den,1,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthcosh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHCOSH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 185 of 276.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthcosh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_COSH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdacos.c
+@@ -0,0 +1,14 @@
++/* Source: RTL/SRC/MTHDACOS.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 173 of 418.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdacos(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_ACOS,arg,out);
++}
++
++int port109_mthdacosd(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_D,PORT109_ACOS,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdasin.c
+@@ -0,0 +1,14 @@
++/* Source: RTL/SRC/MTHDASIN.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 169 of 365.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdasin(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_ASIN,arg,out);
++}
++
++int port109_mthdasind(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_D,PORT109_ASIN,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdatan.c
+@@ -0,0 +1,21 @@
++/* Source: RTL/SRC/MTHDATAN.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 422 of 984.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdatan(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_ATAN,arg,out);
++}
++
++int port109_mthdatand(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_D,PORT109_ATAN,arg,out);
++}
++
++int port109_mthdatan2(const uint16_t *num,const uint16_t *den,uint16_t *out){
++    return port109_atan_ratio(PORT_M107_D,num,den,0,out);
++}
++int port109_mthdatand2(const uint16_t *num,const uint16_t *den,uint16_t *out){
++    return port109_atan_ratio(PORT_M107_D,num,den,1,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdcosh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHDCOSH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 198 of 283.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdcosh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_COSH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdexp.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHDEXP.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 285 of 425.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdexp(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_EXP,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdlog.c
+@@ -0,0 +1,18 @@
++/* Source: RTL/SRC/MTHDLOG.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 349 of 589.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdlog(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_LOG,arg,out);
++}
++
++int port109_mthdlog10(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_LOG10,arg,out);
++}
++
++int port109_mthdlog2(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_LOG2,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdsinh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHDSINH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 197 of 314.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdsinh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_SINH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdsqrt.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHDSQRT.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 199 of 289.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdsqrt(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_SQRT,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthdtanh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHDTANH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 149 of 219.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthdtanh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_D,PORT109_TANH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthexp.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHEXP.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 248 of 376.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthexp(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_EXP,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthgacos.c
+@@ -0,0 +1,14 @@
++/* Source: RTL/SRC/MTHGACOS.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 164 of 410.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthgacos(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_ACOS,arg,out);
++}
++
++int port109_mthgacosd(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_G,PORT109_ACOS,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthgasin.c
+@@ -0,0 +1,14 @@
++/* Source: RTL/SRC/MTHGASIN.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 158 of 353.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthgasin(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_ASIN,arg,out);
++}
++
++int port109_mthgasind(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_G,PORT109_ASIN,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthgatan.c
+@@ -0,0 +1,21 @@
++/* Source: RTL/SRC/MTHGATAN.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 405 of 979.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthgatan(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_ATAN,arg,out);
++}
++
++int port109_mthgatand(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_G,PORT109_ATAN,arg,out);
++}
++
++int port109_mthgatan2(const uint16_t *num,const uint16_t *den,uint16_t *out){
++    return port109_atan_ratio(PORT_M107_G,num,den,0,out);
++}
++int port109_mthgatand2(const uint16_t *num,const uint16_t *den,uint16_t *out){
++    return port109_atan_ratio(PORT_M107_G,num,den,1,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthgcosh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHGCOSH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 177 of 269.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthgcosh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_COSH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthgexp.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHGEXP.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 278 of 431.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthgexp(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_EXP,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthglog.c
+@@ -0,0 +1,18 @@
++/* Source: RTL/SRC/MTHGLOG.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 323 of 574.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthglog(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_LOG,arg,out);
++}
++
++int port109_mthglog10(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_LOG10,arg,out);
++}
++
++int port109_mthglog2(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_LOG2,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthgsinh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHGSINH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 179 of 298.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthgsinh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_SINH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthgsqrt.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHGSQRT.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 182 of 271.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthgsqrt(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_SQRT,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthgtanh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHGTANH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 142 of 212.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthgtanh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_G,PORT109_TANH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhacos.c
+@@ -0,0 +1,14 @@
++/* Source: RTL/SRC/MTHHACOS.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 174 of 433.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhacos(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_ACOS,arg,out);
++}
++
++int port109_mthhacosd(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_H,PORT109_ACOS,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhasin.c
+@@ -0,0 +1,14 @@
++/* Source: RTL/SRC/MTHHASIN.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 163 of 370.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhasin(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_ASIN,arg,out);
++}
++
++int port109_mthhasind(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_H,PORT109_ASIN,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhatan.c
+@@ -0,0 +1,21 @@
++/* Source: RTL/SRC/MTHHATAN.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 445 of 1077.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhatan(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_ATAN,arg,out);
++}
++
++int port109_mthhatand(const uint16_t *arg,uint16_t *out){
++    return port109_unary_degrees(PORT_M107_H,PORT109_ATAN,arg,out);
++}
++
++int port109_mthhatan2(const uint16_t *num,const uint16_t *den,uint16_t *out){
++    return port109_atan_ratio(PORT_M107_H,num,den,0,out);
++}
++int port109_mthhatand2(const uint16_t *num,const uint16_t *den,uint16_t *out){
++    return port109_atan_ratio(PORT_M107_H,num,den,1,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhcosh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHHCOSH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 210 of 305.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhcosh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_COSH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhexp.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHHEXP.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 312 of 466.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhexp(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_EXP,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhlog.c
+@@ -0,0 +1,18 @@
++/* Source: RTL/SRC/MTHHLOG.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 346 of 605.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhlog(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_LOG,arg,out);
++}
++
++int port109_mthhlog10(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_LOG10,arg,out);
++}
++
++int port109_mthhlog2(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_LOG2,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhsinh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHHSINH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 209 of 329.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhsinh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_SINH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhsqrt.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHHSQRT.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 185 of 292.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhsqrt(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_SQRT,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthhtanh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHHTANH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 155 of 224.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthhtanh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_H,PORT109_TANH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthsinh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHSINH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 180 of 296.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthsinh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_SINH,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthsqrt.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHSQRT.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 196 of 287.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthsqrt(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_SQRT,arg,out);
++}
+--- /dev/null
++++ b/src/native_rtl_m109/mthtanh.c
+@@ -0,0 +1,10 @@
++/* Source: RTL/SRC/MTHTANH.MAR, pinned DEC source revision.
++ * Original primary .ENTRY at line 143 of 213.
++ * Native IA-32 numerical adapter. Original VAX polynomial rounding,
++ * condition dispatcher, register/PSL ABI, and remaining entry points
++ * remain unresolved. APPROX means a native x87 approximation, not exact DEC rounding.
++ * No original restricted source is distributed. */
++#include "../vms_rtl_m109.h"
++int port109_mthtanh(const uint16_t *arg,uint16_t *out){
++    return port109_unary(PORT_M107_F,PORT109_TANH,arg,out);
++}

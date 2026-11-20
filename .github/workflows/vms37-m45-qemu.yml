@@ -1,4 +1,4 @@
-name: VMS37 IA-32 M108 34 native RTL modules host tests and M106 QEMU regression
+name: VMS37 IA-32 M109 36 freestanding x87 RTL modules host tests and M106 QEMU regression
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M108
+      - name: Rebuild pinned native source through M109
         shell: bash
         run: |
           set -euo pipefail
@@ -52,10 +52,11 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m106-native.patch
           patch --batch -p1 < ../ci-vms37/m107-native.patch
           patch --batch -p1 < ../ci-vms37/m108-native.patch
+          patch --batch -p1 < ../ci-vms37/m109-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           make -j2 all
-          make rtl85check rtl107check rtl108check
+          make rtl85check rtl107check rtl108check rtl109check
           make bootcheck imagecheck sysnativecheck sysnormalizedmapcheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
           make inidptlistcheck inittydrvcheck inittybindcheck pktlayoutcheck packetqueuecheck inilockdbcheck iniprocveccheck iniphvswapcheck inimpwcheck inipflveccheck inisyswcbcheck inisyswcbdiskcheck inisyslogcheck files1186check files1187check
           python3 tools/gen_source_coverage.py
@@ -65,7 +66,7 @@ jobs:
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Regress real QEMU M106 resident SYSWCB map (M108 RTL modules remain host-only)
+      - name: Regress real QEMU M106 resident SYSWCB map (M109 RTL modules remain host-only)
         shell: bash
         run: |
           set -euo pipefail
@@ -75,7 +76,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m108-ci-m106-guest-serial
+          name: vms37-m109-ci-m106-guest-serial
           path: |
             vms37-native-x86-m89/qemu-m106-serial.log
           if-no-files-found: warn
