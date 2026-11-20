@@ -1,4 +1,4 @@
-name: VMS37 native IA-32 M122 NLDRIVER software DDTAB/FUNCTAB live NLA binding
+name: VMS37 native IA-32 M123 IOCIOPOST privileged end-action REMQUE in resident SYS.EXE
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M122
+      - name: Rebuild pinned native source through M123
         shell: bash
         run: |
           set -euo pipefail
@@ -66,12 +66,13 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m120-native.patch
           patch --batch -p1 < ../ci-vms37/m121-native.patch
           patch --batch -p1 < ../ci-vms37/m122-native.patch
+          patch --batch -p1 < ../ci-vms37/m123-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           # Replay the 46 exact SHA-256-verified current guest-layout fixtures, not stale M89 copies.
           python3 tools/m110_sync_test_fixtures.py
           make -j2 all
-          make nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
+          make iopostendcheck nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
           make rtl85check rtl107check rtl108check rtl109check rtl110check rtl111check rtl112check rtl113check sourcerangecheck m21bootcheck
           # Run the full historical guest-layout/host test suite, not only the modern smoke subset.
           make test
@@ -84,17 +85,17 @@ jobs:
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Regress real QEMU M122 source DDT/FDT native NLA binding
+      - name: Regress real QEMU M123 IOCIOPOST kernel end-action dequeue
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m122.py
+          python3 tools/qemu_sysboot_m123.py
       - name: Preserve actual guest COM1 transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m122-ci-m122-guest-serial
+          name: vms37-m123-ci-m123-guest-serial
           path: |
-            vms37-native-x86-m89/qemu-m122-serial.log
+            vms37-native-x86-m89/qemu-m123-serial.log
           if-no-files-found: warn
