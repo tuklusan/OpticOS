@@ -1,0 +1,700 @@
+--- a/Makefile
++++ b/Makefile
+@@ -793,8 +793,8 @@
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
+ 	./build/conportcheck
+ 
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -818,7 +818,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1124,3 +1124,14 @@
+ inidpttemplatecheck: build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M117_DPT_SRCS) tests/test_ini_dpt_templates_host.c -o build/inidpttemplatecheck
+ 	./build/inidpttemplatecheck
++
++# M120: original IOSUBPAGD read-only IOC$SEARCHDEV physical device walk.
++# A prelinked DDB/UCB match remains UNBOUND until real $ASSIGN/$QIO and DDT.
++M120_IOC_SRCS=$(wildcard src/vms_ioc_*.c)
++M120_IOC_OBJS=$(patsubst src/%.c,build/%.o,$(M120_IOC_SRCS))
++build/vms_ioc_%.o: src/vms_ioc_%.c src/vms_ioc_phys.h src/vms_ini_devicedb.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: iocphyscheck
++iocphyscheck: $(M120_IOC_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M120_IOC_SRCS) $(M118_DB_SRCS) tests/test_ioc_phys_host.c -o build/iocphyscheck
++	./build/iocphyscheck
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3088,6 +3088,34 @@
+     }
+     bootstrap_message("INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).");
+ 
++    /* IOSUBPAGD.MAR IOC$SEARCHDEV: execute a bounded physical-device
++     * name walk in genuine resident SYS.EXE without faking IOC$GL_DEVLIST
++     * publication, LOG$TRANSLATE, `$ASSIGN`, QIO or terminal output. */
++    static struct port_sys_exec_result ioc_result;
++    const struct port_sys_exec_start ioc_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&ioc_result,
++        .phase=PORT_SYS_EXEC_INIT_IOC_LOOKUP};
++    if(loaded_sys(&ioc_request)!=PORT_SYS_EXEC_NORMAL ||
++       ioc_result.signature!=PORT_SYS_EXEC_IOC_RESULT_TAG ||
++       !ioc_result.ioc_samples || !ioc_result.ioc_search ||
++       (uintptr_t)ioc_result.ioc_samples<PORT_SYS_ELF_START ||
++       (uintptr_t)ioc_result.ioc_samples>
++          PORT_SYS_ELF_LIMIT-3u*sizeof(struct port_v37_ioc_result) ||
++       (uintptr_t)ioc_result.ioc_search<PORT_SYS_ELF_START ||
++       (uintptr_t)ioc_result.ioc_search>=PORT_SYS_ELF_LIMIT ||
++       ioc_result.ioc_samples[0].ucb!=devicedb_result.device_db->ucb[1] ||
++       ioc_result.ioc_samples[1].ucb!=devicedb_result.device_db->ucb[2] ||
++       ioc_result.ioc_samples[2].ucb!=devicedb_result.device_db->ucb[4] ||
++       !ioc_result.ioc_samples[0].concealed ||
++       ioc_result.ioc_samples[0].driver_bound ||
++       ioc_result.ioc_samples[1].driver_bound ||
++       ioc_result.ioc_samples[2].driver_bound){
++        bootstrap_message("INIT: resident SYS.EXE physical IOC name search validation failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE read-only IOC device search resolved OPA0 MBA1 NLA0 (drivers absent).");
++
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -8,6 +8,7 @@
+ #include "vms_ini_syslog.h"
+ #include "vms_ini_devicedb.h"
+ #include "vms_con_port.h"
++#include "vms_ioc_phys.h"
+ #include <stdint.h>
+ /* All state belongs to SYS.EXE's separately loaded resident supervisor
+  * segment, not to the SYSBOOT monitor or a pretend VAX processor. */
+@@ -71,6 +72,8 @@
+ static uint32_t executive_devicedb_ready;
+ static union {uint32_t align;uint8_t bytes[PORT_V37_OPA_UCB_SIZE];} executive_con_scratch;
+ static uint32_t executive_conport_ready;
++static struct port_v37_ioc_result executive_ioc_samples[3];
++static uint32_t executive_ioc_ready;
+ /* Original SYSTEM and NULL PCB slots have distinct persistent resident
+  * storage. Creating these source-derived scheduler descriptors is not a
+  * substitute for actually scheduling SYSTEM or running LOGINOUT. */
+@@ -459,6 +462,44 @@
+         p->result->signature=PORT_SYS_EXEC_SYSLOG_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_IOC_LOOKUP){
++        /* Source IOSUBPAGD physical IOC$SEARCHDEV on actual resident
++         * DEVICEDAT pointer records. No $ASSIGN, LOG$TRANSLATE, DDT or IOC
++         * mutex exists; only UNBOUND diagnostics may be reported. */
++        if(!executive_conport_ready||!executive_devicedb_ready||
++           executive_ioc_ready||executive_devicedb_result.incomplete_driver_mask!=15u)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        const uint32_t base=(uint32_t)(uintptr_t)executive_devicedb_bytes.data;
++        const char *const names[3]={"__OPA0:","MBA1:","NLA0:"};
++        const size_t sizes[3]={7u,5u,5u};
++        const uint32_t expected[3]={executive_devicedb_result.ucb[1],
++             executive_devicedb_result.ucb[2],executive_devicedb_result.ucb[4]};
++        for(unsigned i=0;i<3u;i++){
++            if(port_v37_ioc_searchdev(executive_devicedb_bytes.data,
++                PORT_V37_DEVICE_BYTES,base,&executive_devicedb_result,
++                names[i],sizes[i],&executive_ioc_samples[i])!=PORT_V37_IOC_UNBOUND ||
++                executive_ioc_samples[i].ucb!=expected[i] ||
++                executive_ioc_samples[i].driver_bound ||
++                executive_ioc_samples[i].concealed!=(i==0u))
++                return PORT_SYS_EXEC_BAD_PARAMETERS;
++        }
++        struct port_v37_ioc_result ignored={0};
++        if(port_v37_ioc_searchdev(executive_devicedb_bytes.data,
++             PORT_V37_DEVICE_BYTES,base,&executive_devicedb_result,
++             "MBA3:",5u,&ignored)!=PORT_V37_IOC_NO_SUCH ||
++           port_v37_ioc_searchdev(executive_devicedb_bytes.data,
++             PORT_V37_DEVICE_BYTES,base,&executive_devicedb_result,
++             "SYS$DISK",8u,&ignored)!=PORT_V37_IOC_LOGICAL_PENDING ||
++           port_v37_ioc_searchdev(executive_devicedb_bytes.data,
++             PORT_V37_DEVICE_BYTES,base,&executive_devicedb_result,
++             "N::MBA1",7u,&ignored)!=PORT_V37_IOC_NONLOCAL)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_ioc_ready=1u;
++        p->result->ioc_samples=executive_ioc_samples;
++        p->result->ioc_search=port_v37_ioc_searchdev;
++        p->result->signature=PORT_SYS_EXEC_IOC_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_CONPORT){
+         /* Original CONINTDSP port actions operate on a source-layout
+          * OPA0 UCB copy; actual TT class driver/TERMINALIO is absent.
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -17,10 +17,11 @@
+ #include "vms_ini_bootdev_scan.h"
+ #include "vms_ini_devicedb.h"
+ #include "vms_con_port.h"
++#include "vms_ioc_phys.h"
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=17u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=18u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -38,7 +39,8 @@
+        PORT_SYS_EXEC_INIT_BOOTDEV_SCAN=13u, PORT_SYS_EXEC_BOOTDEV_RESULT_TAG=0x56444249u,
+        PORT_SYS_EXEC_INIT_DPT_STAGES=14u, PORT_SYS_EXEC_DPT_RESULT_TAG=0x54504453u,
+        PORT_SYS_EXEC_INIT_DEVICE_DB=15u,PORT_SYS_EXEC_DEVICE_RESULT_TAG=0x42444456u,
+-       PORT_SYS_EXEC_INIT_CONPORT=16u,PORT_SYS_EXEC_CON_RESULT_TAG=0x4e4f4350u };
++       PORT_SYS_EXEC_INIT_CONPORT=16u,PORT_SYS_EXEC_CON_RESULT_TAG=0x4e4f4350u,
++       PORT_SYS_EXEC_INIT_IOC_LOOKUP=17u,PORT_SYS_EXEC_IOC_RESULT_TAG=0x434f4950u };
+ /* The IA-32 privilege-transition stack is the first live counterpart of
+  * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
+ /* SYSBOOT passes the genuine Files-11 SYS.EXE extent map through the
+@@ -94,6 +96,12 @@
+     /* Diagnostic source transitions only, not an active OP driver. */
+     const uint8_t *console_action_scratch;
+     uint32_t console_action_result;
++    /* IOSUBPAGD source physical lookup on prelinked records, diagnostic.
++     * Even a matched UCB has no live DDT; lookup status is UNBOUND. */
++    const struct port_v37_ioc_result *ioc_samples;
++    uint32_t (*ioc_search)(const uint8_t *,size_t,uint32_t,
++       const struct port_v37_device_result *,const char *,size_t,
++       struct port_v37_ioc_result *);
+     uint32_t logical_table[2];
+     uint8_t lock_max_resource_depth;
+     const struct port_ini_procvec *process_vector;
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2182,6 +2182,38 @@
+     'sections':sec,'unresolved_integration':'Only source UCB extension offsets and tank flags are mapped; no complete terminal-driver class or port runtime.'})
+ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ 
++# M120: read-only physical IOC$SEARCHDEV/GEN/ALC source-path translation.
++# This resolves real source-format DEVICEDAT DDB and UCB pointers in SYS.EXE,
++# NOT a $QIO service. LOG$TRANSLATE, mailbox allocation, device mutex, actual
++# DDTs and process ownership are still unresolved and fail closed.
++ioc_rows=[
++ (1,295,None,None,'Original VAX queues, channel allocation, IOC interfaces and source comments unresolved','unresolved'),
++ (296,298,'src/vms_ioc_searchgen.c','port_v37_ioc_searchgen','IOC$SEARCHGEN generic mode; real device availability waits for full ownership and mount privileges','partial'),
++ (299,301,'src/vms_ioc_searchalc.c','port_v37_ioc_searchalc','IOC$SEARCHALC generic allocation mode; no process ownership or ACL checks','partial'),
++ (302,325,'src/vms_ioc_searchdev.c','port_v37_ioc_searchdev','IOC$SEARCHDEV original physical entry, bounded read-only native source record lookup','partial'),
++ (326,348,'src/vms_ioc_upcase.c','port_v37_ioc_upcase','Original lowercase-to-uppercase device string copy; LOG$TRANSLATE absent','partial'),
++ (349,361,'src/vms_ioc_phys.c','port_v37_ioc_search','Original translation loop omitted and unresolvable logical names are rejected','partial'),
++ (362,384,'src/vms_ioc_strip.c','port_v37_ioc_strip','One or two leading underscores and concealed-name bit; no upstream RMS permanent-file path','partial'),
++ (385,410,'src/vms_ioc_parse.c','port_v37_ioc_parse','Reject nonlocal :: name and unknown logical translation; no real DECnet routing','partial'),
++ (411,427,'src/vms_ioc_parse.c','port_v37_ioc_parse','Parse source uppercase controller letters before digits with strict bounds','partial'),
++ (428,444,'src/vms_ioc_unit.c','port_v37_ioc_parse_unit','Original 16-bit decimal unit name with overflow check','partial'),
++ (445,460,'src/vms_ioc_parse.c','port_v37_ioc_parse','Reject nonlocal and malformed device names; original VMS status constants pending','partial'),
++ (461,490,'src/vms_ioc_phys.c','port_v37_ioc_search','Source read-only DDB/UCBB pointer lookup with explicit unbound result','partial'),
++ (491,503,'src/vms_ioc_ddb.c','port_v37_ioc_ddb','Source DDB$L_LINK counted-name search guarded against corrupt pointers','partial'),
++ (504,531,'src/vms_ioc_ucb.c','port_v37_ioc_ucb','Source UCB$L_LINK unit matching and fail-closed unallocated generic mode','partial'),
++ (532,604,None,None,'Original device I/O rest of source not yet ported','unresolved')]
++rows=[]
++for lo,hi,pc,sym,desc,status in ioc_rows:
++    if pc:
++        line=line_for_symbol(pc,sym)
++        if line is None:missing+=1
++        rows.append({'original_lines':[lo,hi],'status':status if line else 'missing',
++            'pc_file':pc,'pc_symbol':sym,'pc_line':line,'function':desc})
++    else:rows.append({'original_lines':[lo,hi],'status':status,'reason':desc})
++result['files'].append({'original_file':'SYS/SRC/IOSUBPAGD.MAR','original_lines':604,
++    'sections':rows,'unresolved_integration':'Read-only source DDB/UCB physical lookup is callable from actual resident SYS.EXE, guest-tested. Logical translation, IOC mutex, $ASSIGN/$QIO, true drivers/privileges are not implemented.'})
++assert len({f['original_file'] for f in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- /dev/null
++++ b/tools/qemu_sysboot_m120.py
+@@ -0,0 +1,124 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; check source-ordered real SYS.EXE retrieval map and INIT.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M120: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE prelinked BOOT/OPA/MBA/NLA DDB/UCB records (DDTs pending).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE read-only IOC device search resolved OPA0 MBA1 NLA0 (drivers absent).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m120-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,120,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M120: guest source DPT headers, FDT, ATA boot scan, typed LOG and early INIT verified PASS')
++        return 0
++    print('QEMU M120: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
+--- /dev/null
++++ b/tests/test_ioc_phys_host.c
+@@ -0,0 +1,53 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_ioc_phys.h"
++#define CHECK(c) do{if(!(c)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#c);return 1;}}while(0)
++static uint32_t lookup(const uint8_t *m,const struct port_v37_device_result *r,
++    const char *name,size_t n,struct port_v37_ioc_result *out){
++    return port_v37_ioc_searchdev(m,PORT_V37_DEVICE_BYTES,0x00320000u,r,name,n,out);
++}
++int main(void){
++    uint32_t storage[PORT_V37_DEVICE_BYTES/4u]={0};
++    uint8_t *m=(uint8_t *)storage;
++    struct port_v37_device_result r={0};
++    const uint32_t b=0x00320000u;
++    CHECK(port_v37_devices_prelink(m,sizeof storage,b,&r)==PORT_V37_DEV_OK);
++    struct port_v37_ioc_result got={.ddb=0xfacebad0u,.ucb=0x22222222u};
++    CHECK(lookup(m,&r,"opa0:",5u,&got)==PORT_V37_IOC_UNBOUND);
++    CHECK(got.ddb==r.ddb[1]&&got.ucb==r.ucb[1]&&got.unit==0u&&!got.driver_bound&&!got.concealed);
++    CHECK(lookup(m,&r,"_OPA0:",6u,&got)==PORT_V37_IOC_UNBOUND&&got.concealed==0u);
++    CHECK(lookup(m,&r,"__OPA0:",7u,&got)==PORT_V37_IOC_UNBOUND&&got.concealed==1u);
++    CHECK(lookup(m,&r,"_OP0:",5u,&got)==PORT_V37_IOC_UNBOUND&&got.ucb==r.ucb[1]);
++    CHECK(lookup(m,&r,"MBA1:",5u,&got)==PORT_V37_IOC_UNBOUND&&got.ucb==r.ucb[2]&&got.unit==1u);
++    CHECK(lookup(m,&r,"mb2",3u,&got)==PORT_V37_IOC_UNBOUND&&got.ucb==r.ucb[3]&&got.unit==2u);
++    CHECK(lookup(m,&r,"NLA0",4u,&got)==PORT_V37_IOC_UNBOUND&&got.ucb==r.ucb[4]&&got.unit==0u);
++    CHECK(lookup(m,&r,"OPa",3u,&got)==PORT_V37_IOC_UNBOUND&&got.ucb==r.ucb[1]);
++    struct port_v37_ioc_result before=got;
++    CHECK(lookup(m,&r,"MBA3:",5u,&got)==PORT_V37_IOC_NO_SUCH);
++    CHECK(!memcmp(&before,&got,sizeof got));
++    CHECK(lookup(m,&r,"XXA0:",5u,&got)==PORT_V37_IOC_NO_SUCH);
++    CHECK(lookup(m,&r,"a::OPa0",7u,&got)==PORT_V37_IOC_NONLOCAL);
++    CHECK(lookup(m,&r,"SYS$DISK",8u,&got)==PORT_V37_IOC_LOGICAL_PENDING);
++    CHECK(lookup(m,&r,"___OPA0",7u,&got)==PORT_V37_IOC_BAD);
++    CHECK(lookup(m,&r,"OPA65536",8u,&got)==PORT_V37_IOC_BAD);
++    CHECK(lookup(m,&r,"OPA-1",5u,&got)==PORT_V37_IOC_BAD);
++    CHECK(lookup(m,&r,"OPA:4",5u,&got)==PORT_V37_IOC_BAD);
++    CHECK(lookup(m,&r,"",0u,&got)==PORT_V37_IOC_BAD);
++    CHECK(lookup(m,&r,"OPA0:\0X",7u,&got)==PORT_V37_IOC_BAD);
++    CHECK(!memcmp(&before,&got,sizeof got));
++    CHECK(port_v37_ioc_searchgen(m,sizeof storage,b,&r,"MBA",3u,&got)==PORT_V37_IOC_UNAVAILABLE);
++    CHECK(port_v37_ioc_searchalc(m,sizeof storage,b,&r,"MBA",3u,&got)==PORT_V37_IOC_UNAVAILABLE);
++    CHECK(!memcmp(&before,&got,sizeof got));
++    CHECK(port_v37_ioc_validate(m,sizeof storage,b,&r)==PORT_V37_IOC_OK);
++    const uint8_t old=m[PORT_V37_DDB_OPA_OFF+10u];
++    m[PORT_V37_DDB_OPA_OFF+10u]=PORT_V37_DYN_UCB;
++    CHECK(lookup(m,&r,"OPA0",4u,&got)==PORT_V37_IOC_BAD);
++    m[PORT_V37_DDB_OPA_OFF+10u]=old;
++    CHECK(lookup(m,&r,"OPA0",4u,&got)==PORT_V37_IOC_UNBOUND);
++    CHECK(port_v37_ioc_searchdev(m,sizeof storage,b,&r,"OPA0",4u,0)==PORT_V37_IOC_BAD);
++    CHECK(port_v37_ioc_upcase("aaa",3u,0,0u)==PORT_V37_IOC_BAD);
++    CHECK(port_v37_ioc_parse_unit("999999",6u,&before.unit,&before.concealed)==PORT_V37_IOC_BAD);
++    puts("IOSUBPAGD.MAR read-only physical device DDB/UCB lookup and fail-closed guards PASS");
++    return 0;
++}
+--- /dev/null
++++ b/src/vms_ioc_phys.h
+@@ -0,0 +1,51 @@
++#ifndef VMS37_NATIVE_IOC_PHYS_H
++#define VMS37_NATIVE_IOC_PHYS_H
++#include <stddef.h>
++#include <stdint.h>
++#include "vms_ini_devicedb.h"
++/* SYS/SRC/IOSUBPAGD.MAR 260-531: source-form physical-device search.
++ * LOG$TRANSLATE, IOC database locks and live DDTs are not ported. An
++ * UNBOUND result is diagnostic only, never a granted channel or $QIO. */
++enum {
++    PORT_V37_IOC_OK=1u,PORT_V37_IOC_BAD=2u,PORT_V37_IOC_UNBOUND=4u,
++    PORT_V37_IOC_NO_SUCH=6u,PORT_V37_IOC_NONLOCAL=8u,
++    PORT_V37_IOC_LOGICAL_PENDING=10u,PORT_V37_IOC_UNAVAILABLE=12u,
++    PORT_V37_IOC_NAME_MAX=63u,PORT_V37_IOC_MODE_GENERIC=1u,
++    PORT_V37_IOC_MODE_PHYSICAL=2u,PORT_V37_IOC_MODE_ALLOCATION=5u
++};
++struct port_v37_ioc_name {
++    char controller[16];
++    uint8_t length,concealed,explicit_unit,reserved;
++    uint16_t unit;
++};
++struct port_v37_ioc_result {
++    uint32_t ddb,ucb;
++    uint16_t unit;
++    uint8_t concealed,driver_bound;
++};
++/* All public helpers preserve their caller-owned destination on failure. */
++uint32_t port_v37_ioc_upcase(const char *,size_t,char *,size_t);
++uint32_t port_v37_ioc_strip(const char *,size_t,unsigned *,size_t *);
++uint32_t port_v37_ioc_parse(const char *,size_t,struct port_v37_ioc_name *);
++uint32_t port_v37_ioc_parse_unit(const char *,size_t,uint16_t *,uint8_t *);
++uint32_t port_v37_ioc_validate(const uint8_t *,size_t,uint32_t,
++              const struct port_v37_device_result *);
++uint32_t port_v37_ioc_ddb(const uint8_t *,size_t,uint32_t,
++              const struct port_v37_device_result *,const char *,size_t,
++              uint32_t *,unsigned *);
++uint32_t port_v37_ioc_ucb(const uint8_t *,size_t,uint32_t,
++              const struct port_v37_device_result *,unsigned,uint16_t,
++              unsigned,uint32_t *);
++uint32_t port_v37_ioc_search(const uint8_t *,size_t,uint32_t,
++              const struct port_v37_device_result *,const char *,size_t,
++              unsigned,struct port_v37_ioc_result *);
++uint32_t port_v37_ioc_searchdev(const uint8_t *,size_t,uint32_t,
++              const struct port_v37_device_result *,const char *,size_t,
++              struct port_v37_ioc_result *);
++uint32_t port_v37_ioc_searchgen(const uint8_t *,size_t,uint32_t,
++              const struct port_v37_device_result *,const char *,size_t,
++              struct port_v37_ioc_result *);
++uint32_t port_v37_ioc_searchalc(const uint8_t *,size_t,uint32_t,
++              const struct port_v37_device_result *,const char *,size_t,
++              struct port_v37_ioc_result *);
++#endif
+--- /dev/null
++++ b/src/vms_ioc_ddb.c
+@@ -0,0 +1,29 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 491-502 SEARCHDEV: traverse the original DDB$L_LINK
++ * chain with cycle checks and counted names (NOT arbitrary C strings). */
++uint32_t port_v37_ioc_ddb(const uint8_t *m,size_t n,uint32_t base,
++        const struct port_v37_device_result *r,const char *name,size_t len,
++        uint32_t *address,unsigned *index){
++    if(!address||!index||!name||!len||len>15u||
++       port_v37_ioc_validate(m,n,base,r)!=PORT_V37_IOC_OK)
++        return PORT_V37_IOC_BAD;
++    uint32_t link=r->list_head;
++    unsigned seen=0u;
++    while(link&&seen<PORT_V37_DEVICE_DDB_COUNT){
++        if(link<base||link-base>PORT_V37_DEVICE_BYTES-PORT_V37_DDB_SIZE||
++           (link-base)%PORT_V37_DDB_SIZE)return PORT_V37_IOC_BAD;
++        unsigned idx=(link-base)/PORT_V37_DDB_SIZE;
++        if(idx>=PORT_V37_DEVICE_DDB_COUNT||(seen&&(idx<seen)))
++            return PORT_V37_IOC_BAD;
++        const uint8_t *p=m+(link-base);
++        unsigned nlen=p[20u];
++        if(nlen==len){
++            unsigned same=1u;
++            for(unsigned i=0;i<len;i++)if((uint8_t)name[i]!=p[21u+i])same=0u;
++            if(same){*address=link;*index=idx;return PORT_V37_IOC_OK;}
++        }
++        link=port_v37_read32(p);
++        seen++;
++    }
++    return link?PORT_V37_IOC_BAD:PORT_V37_IOC_NO_SUCH;
++}
+--- /dev/null
++++ b/src/vms_ioc_parse.c
+@@ -0,0 +1,37 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 397-460: parse the *physical* part only; network ::
++ * and names requiring LOG$TRANSLATE are not silently made local. */
++uint32_t port_v37_ioc_parse(const char *name,size_t n,struct port_v37_ioc_name *out){
++    if(!out||!name||n==0u||n>PORT_V37_IOC_NAME_MAX)return PORT_V37_IOC_BAD;
++    char buf[PORT_V37_IOC_NAME_MAX+1u];
++    if(port_v37_ioc_upcase(name,n,buf,sizeof buf)!=PORT_V37_IOC_OK)
++        return PORT_V37_IOC_BAD;
++    /* In the original physical lookup, a nodename followed by :: belongs
++     * to the network stack and must not be resolved through local DDBs. */
++    for(size_t i=1;i<n;i++)if(buf[i-1u]==':'&&buf[i]==':')
++        return PORT_V37_IOC_NONLOCAL;
++    unsigned prefix=0u;size_t start=0u;
++    if(port_v37_ioc_strip(buf,n,&prefix,&start)!=PORT_V37_IOC_OK)
++        return PORT_V37_IOC_BAD;
++    size_t end=n;
++    if(buf[end-1u]==':')end--;
++    if(end<=start)return PORT_V37_IOC_BAD;
++    for(size_t i=start;i<end;i++){
++        if(buf[i]=='$')return PORT_V37_IOC_LOGICAL_PENDING;
++        if(buf[i]==':')return PORT_V37_IOC_BAD;
++    }
++    size_t split=start;
++    while(split<end&&buf[split]>='A'&&buf[split]<='Z')split++;
++    size_t nalpha=split-start;
++    if(nalpha==0u||nalpha>15u)return PORT_V37_IOC_BAD;
++    for(size_t i=split;i<end;i++)if(buf[i]<'0'||buf[i]>'9')
++        return PORT_V37_IOC_BAD;
++    struct port_v37_ioc_name tmp={0};
++    for(size_t i=0;i<nalpha;i++)tmp.controller[i]=buf[start+i];
++    tmp.length=(uint8_t)nalpha;
++    tmp.concealed=(uint8_t)(prefix==2u);
++    uint32_t st=port_v37_ioc_parse_unit(buf+split,end-split,&tmp.unit,&tmp.explicit_unit);
++    if(st!=PORT_V37_IOC_OK)return st;
++    *out=tmp;
++    return PORT_V37_IOC_OK;
++}
+--- /dev/null
++++ b/src/vms_ioc_phys.c
+@@ -0,0 +1,33 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 295-531: untranslatable names are rejected, then perform
++ * original 32-bit linked list physical device and unit search. This is
++ * read-only name lookup, not an IOC lock, $ASSIGN or live $QIO. */
++uint32_t port_v37_ioc_search(const uint8_t *m,size_t n,uint32_t base,
++         const struct port_v37_device_result *r,const char *text,size_t length,
++         unsigned mode,struct port_v37_ioc_result *out){
++    if(!out||(mode!=PORT_V37_IOC_MODE_PHYSICAL&&mode!=PORT_V37_IOC_MODE_GENERIC&&mode!=PORT_V37_IOC_MODE_ALLOCATION)||
++       port_v37_ioc_validate(m,n,base,r)!=PORT_V37_IOC_OK)
++        return PORT_V37_IOC_BAD;
++    struct port_v37_ioc_name name={0};
++    uint32_t st=port_v37_ioc_parse(text,length,&name);
++    if(st!=PORT_V37_IOC_OK)return st;
++    uint32_t ddb=0u,ucb=0u;unsigned idx=0u;
++    st=port_v37_ioc_ddb(m,n,base,r,name.controller,name.length,&ddb,&idx);
++    /* Original physical-name search also tries the trailing controller-A
++     * expansion; apply only to source name ending in A (OPA, MBA, NLA). */
++    if(st==PORT_V37_IOC_NO_SUCH&&name.length<15u&&mode==PORT_V37_IOC_MODE_PHYSICAL){
++        char expanded[16];
++        for(unsigned i=0;i<name.length;i++)expanded[i]=name.controller[i];
++        expanded[name.length]='A';
++        st=port_v37_ioc_ddb(m,n,base,r,expanded,name.length+1u,&ddb,&idx);
++    }
++    if(st!=PORT_V37_IOC_OK)return st;
++    st=port_v37_ioc_ucb(m,n,base,r,idx,name.unit,mode,&ucb);
++    if(st!=PORT_V37_IOC_OK)return st;
++    const struct port_v37_ioc_result candidate={.ddb=ddb,.ucb=ucb,
++        .unit=port_v37_read16(m+(ucb-base)+72u),
++        .concealed=name.concealed,
++        .driver_bound=(uint8_t)((r->incomplete_driver_mask&(1u<<idx))==0u)};
++    *out=candidate;
++    return candidate.driver_bound?PORT_V37_IOC_OK:PORT_V37_IOC_UNBOUND;
++}
+--- /dev/null
++++ b/src/vms_ioc_searchalc.c
+@@ -0,0 +1,8 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 299-301: allocation mode stays fail-closed until actual
++ * process ownership, privilege and mounted/spooled checks are ported. */
++uint32_t port_v37_ioc_searchalc(const uint8_t *m,size_t n,uint32_t base,
++    const struct port_v37_device_result *r,const char *text,size_t length,
++    struct port_v37_ioc_result *out){
++    return port_v37_ioc_search(m,n,base,r,text,length,PORT_V37_IOC_MODE_ALLOCATION,out);
++}
+--- /dev/null
++++ b/src/vms_ioc_searchdev.c
+@@ -0,0 +1,7 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 302-303: physical search asks for the given unit. */
++uint32_t port_v37_ioc_searchdev(const uint8_t *m,size_t n,uint32_t base,
++     const struct port_v37_device_result *r,const char *text,size_t length,
++     struct port_v37_ioc_result *out){
++    return port_v37_ioc_search(m,n,base,r,text,length,PORT_V37_IOC_MODE_PHYSICAL,out);
++}
+--- /dev/null
++++ b/src/vms_ioc_searchgen.c
+@@ -0,0 +1,7 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 296-298: generic chooses an unallocated unit only. */
++uint32_t port_v37_ioc_searchgen(const uint8_t *m,size_t n,uint32_t base,
++    const struct port_v37_device_result *r,const char *text,size_t length,
++    struct port_v37_ioc_result *out){
++    return port_v37_ioc_search(m,n,base,r,text,length,PORT_V37_IOC_MODE_GENERIC,out);
++}
+--- /dev/null
++++ b/src/vms_ioc_strip.c
+@@ -0,0 +1,13 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 362-384: one underscore forces physical name; two
++ * additionally mark a concealed device. A third is invalid, never skipped. */
++uint32_t port_v37_ioc_strip(const char *s,size_t n,unsigned *prefix,size_t *start){
++    if(!s||!n||!prefix||!start)return PORT_V37_IOC_BAD;
++    unsigned k=0u;
++    while(k<n&&s[k]=='_'&&k<3u)k++;
++    if(!k&&s[0]=='\0')return PORT_V37_IOC_BAD;
++    if(k>2u||k==n)return PORT_V37_IOC_BAD;
++    *prefix=k;
++    *start=k;
++    return PORT_V37_IOC_OK;
++}
+--- /dev/null
++++ b/src/vms_ioc_ucb.c
+@@ -0,0 +1,35 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 508-531 SEARCHUNIT: traverse DDB$L_UCB then UCB$L_LINK,
++ * checking typed UCBs and unit numbers. Generic use needs an available unit;
++ * source DEVICEDAT mailbox/console templates already have REFC=1. */
++uint32_t port_v37_ioc_ucb(const uint8_t *m,size_t n,uint32_t base,
++        const struct port_v37_device_result *r,unsigned ddb_idx,
++        uint16_t unit,unsigned mode,uint32_t *address){
++    if(!address||ddb_idx>=PORT_V37_DEVICE_DDB_COUNT||
++       (mode!=PORT_V37_IOC_MODE_PHYSICAL&&mode!=PORT_V37_IOC_MODE_GENERIC&&mode!=PORT_V37_IOC_MODE_ALLOCATION)||
++       port_v37_ioc_validate(m,n,base,r)!=PORT_V37_IOC_OK)
++        return PORT_V37_IOC_BAD;
++    uint32_t link=port_v37_read32(m+(r->ddb[ddb_idx]-base)+4u);
++    unsigned walked=0u,seen_ref=0u;
++    while(link&&walked<PORT_V37_DEVICE_UCB_COUNT){
++        if(link<base||link-base>PORT_V37_DEVICE_BYTES-PORT_V37_UCB_SIZE)
++            return PORT_V37_IOC_BAD;
++        uint32_t off=link-base;
++        const uint8_t *u=m+off;
++        uint16_t declared=port_v37_read16(u+8u);
++        if(declared<PORT_V37_UCB_SIZE||declared>n-off||u[10u]!=PORT_V37_DYN_UCB||
++           port_v37_read32(u+36u)!=r->ddb[ddb_idx])return PORT_V37_IOC_BAD;
++        uint16_t ref=port_v37_read16(u+80u);
++        if(mode==PORT_V37_IOC_MODE_PHYSICAL){
++            if(port_v37_read16(u+72u)==unit){*address=link;return PORT_V37_IOC_OK;}
++        }else if(ref==0u){
++            *address=link;return PORT_V37_IOC_OK;
++        }else seen_ref=1u;
++        uint32_t next=port_v37_read32(u+44u);
++        if(next==link)return PORT_V37_IOC_BAD;
++        link=next;
++        walked++;
++    }
++    if(link)return PORT_V37_IOC_BAD;
++    return seen_ref?PORT_V37_IOC_UNAVAILABLE:PORT_V37_IOC_NO_SUCH;
++}
+--- /dev/null
++++ b/src/vms_ioc_unit.c
+@@ -0,0 +1,17 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 428-443: two-stage unsigned decimal unit conversion
++ * with carry/overflow refusal rather than wrapping the 16-bit unit. */
++uint32_t port_v37_ioc_parse_unit(const char *s,size_t n,uint16_t *unit,uint8_t *explicit_unit){
++    if(!s||!unit||!explicit_unit)return PORT_V37_IOC_BAD;
++    uint32_t v=0u;
++    for(size_t i=0;i<n;i++){
++        uint8_t ch=(uint8_t)s[i];
++        if(ch<'0'||ch>'9')return PORT_V37_IOC_BAD;
++        uint32_t digit=ch-'0';
++        if(v>(65535u-digit)/10u)return PORT_V37_IOC_BAD;
++        v=v*10u+digit;
++    }
++    *unit=(uint16_t)v;
++    *explicit_unit=(uint8_t)(n!=0u);
++    return PORT_V37_IOC_OK;
++}
+--- /dev/null
++++ b/src/vms_ioc_upcase.c
+@@ -0,0 +1,16 @@
++#include "vms_ioc_phys.h"
++/* IOSUBPAGD.MAR 329-348: copy and uppercase ASCII, one bounded pass. */
++uint32_t port_v37_ioc_upcase(const char *s,size_t n,char *out,size_t cap){
++    if(!s||!out||!n||n>PORT_V37_IOC_NAME_MAX||cap<n+1u)
++        return PORT_V37_IOC_BAD;
++    for(size_t i=0;i<n;i++){
++        unsigned char ch=(unsigned char)s[i];
++        if(!ch)return PORT_V37_IOC_BAD;
++    }
++    for(size_t i=0;i<n;i++){
++        uint8_t ch=(uint8_t)s[i];
++        out[i]=(char)(ch>='a'&&ch<='z' ? (uint8_t)(ch-32u):ch);
++    }
++    out[n]='\0';
++    return PORT_V37_IOC_OK;
++}
+--- /dev/null
++++ b/src/vms_ioc_validate.c
+@@ -0,0 +1,11 @@
++#include "vms_ioc_phys.h"
++/* IO database search is read-only; validate the full resident source DDB/
++ * UCB layout before following any 32-bit virtual link from a guest image. */
++uint32_t port_v37_ioc_validate(const uint8_t *m,size_t n,uint32_t base,
++                               const struct port_v37_device_result *r){
++    if(!m||!r||n<PORT_V37_DEVICE_BYTES||!base||base&3u||
++       r->bytes!=PORT_V37_DEVICE_BYTES||r->list_head!=base||
++       port_v37_devices_check(m,n,base,r)!=PORT_V37_DEV_OK)
++        return PORT_V37_IOC_BAD;
++    return PORT_V37_IOC_OK;
++}
