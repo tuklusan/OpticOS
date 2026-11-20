@@ -1,0 +1,507 @@
+--- a/Makefile
++++ b/Makefile
+@@ -758,7 +758,7 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h src/vms_ini_mpw.h src/vms_ini_pflvec.h src/vms_ini_syswcb.h src/vms_ini_log_templates.h src/vms_v37_dyn_tags.h src/vms_ini_syslog.h src/vms_ini_bootdev_scan.h src/vms_sys85.h | build
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h src/vms_ini_mpw.h src/vms_ini_pflvec.h src/vms_ini_syswcb.h src/vms_ini_log_templates.h src/vms_v37_dyn_tags.h src/vms_ini_syslog.h src/vms_ini_bootdev_scan.h src/vms_ini_dpt_templates.h src/vms_sys85.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_sysboot_pktmem.o: src/vms_sysboot_pktmem.c src/vms_sysboot_pktmem.h src/vms_booparam.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+@@ -772,8 +772,8 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_mpw.o: src/vms_ini_mpw.c src/vms_ini_mpw.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -797,7 +797,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1087,3 +1087,19 @@
+ v37dyntagcheck: | build
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc tests/test_vms_v37_dyn_tags_host.c -o build/v37dyntagcheck
+ 	./build/v37dyntagcheck
++
++# M117: three source-specific DPT header records; real MB/OP driver images
++# and IOC$GL_DPTLIST are still missing. DPT$W_SIZE stays zero by design.
++M117_DPT_SRCS=src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c
++build/vms_ini_dpt_templates.o: src/vms_ini_dpt_templates.c src/vms_ini_dpt_templates.h src/vms_v37_dyn_tags.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/vms_ini_dpt_mb.o: src/vms_ini_dpt_mb.c src/vms_ini_dpt_templates.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/vms_ini_dpt_nl.o: src/vms_ini_dpt_nl.c src/vms_ini_dpt_templates.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++build/vms_ini_dpt_op.o: src/vms_ini_dpt_op.c src/vms_ini_dpt_templates.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: inidpttemplatecheck
++inidpttemplatecheck: build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M117_DPT_SRCS) tests/test_ini_dpt_templates_host.c -o build/inidpttemplatecheck
++	./build/inidpttemplatecheck
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2933,6 +2933,34 @@
+     }
+     bootstrap_message("INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.");
+ 
++    /* INIT.MAR 1232-1239: source-typed MB/NL/OP DPT header bytes
++     * exist in SYS.EXE, but are not real linkable driver images.
++     * DPT$W_SIZE=0 intentionally prevents IOC insertion. */
++    static struct port_sys_exec_result dpt_result;
++    const struct port_sys_exec_start dpt_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&dpt_result,
++        .phase=PORT_SYS_EXEC_INIT_DPT_STAGES};
++    if(loaded_sys(&dpt_request)!=PORT_SYS_EXEC_NORMAL ||
++       dpt_result.signature!=PORT_SYS_EXEC_DPT_RESULT_TAG ||
++       !dpt_result.dpt_stages ||
++       (uintptr_t)dpt_result.dpt_stages<PORT_SYS_ELF_START ||
++       (uintptr_t)dpt_result.dpt_stages>
++                 PORT_SYS_ELF_LIMIT-3u*PORT_V37_DPT_STAGE_BYTES ||
++       dpt_result.dpt_stages[0][10u]!=PORT_V37_DYN_DPT ||
++       dpt_result.dpt_stages[1][10u]!=PORT_V37_DYN_DPT ||
++       dpt_result.dpt_stages[2][10u]!=PORT_V37_DYN_DPT ||
++       dpt_result.dpt_stages[0][8u]!=0u ||
++       dpt_result.dpt_stages[1][8u]!=0u ||
++       dpt_result.dpt_stages[2][8u]!=0u ||
++       dpt_result.dpt_stages[0][14u]!=132u ||
++       dpt_result.dpt_stages[1][14u]!=116u ||
++       dpt_result.dpt_stages[2][14u]!=188u){
++        bootstrap_message("INIT: resident SYS.EXE DPT prologue staging failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).");
++
+     /* NLDRIVER.MAR read/write/EOF routines were linked into SYS.EXE.
+      * Check actual native text execution before linking any driver into
+      * the unported IOC database. This is not a real $QIO request. */
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -4,6 +4,7 @@
+ #include "vms_exe_gettim.h"
+ #include "vms_sysloavec.h"
+ #include "vms_ini_log_templates.h"
++#include "vms_ini_dpt_templates.h"
+ #include "vms_ini_syslog.h"
+ #include <stdint.h>
+ /* All state belongs to SYS.EXE's separately loaded resident supervisor
+@@ -54,6 +55,11 @@
+ static uint8_t executive_sysdevlog[PORT_INI_LOG_TEMPLATE_BYTES];
+ static struct port_ini_syslog_result executive_syslog;
+ static uint32_t executive_syslog_ready;
++/* Source DPTAB prefix bytes live in the loaded native SYS.EXE. All
++ * lengths are intentionally invalid for IOC insertion until the
++ * original MB, NL and OP driver text and dispatch exist. */
++static uint8_t executive_dpt_stages[3][PORT_V37_DPT_STAGE_BYTES] __attribute__((aligned(4)));
++static uint32_t executive_dpt_stages_ready;
+ static uint32_t executive_null_fdt_ready;
+ static struct port_ini_bootdev_result executive_bootdev_scan;
+ static uint32_t executive_bootdev_scan_ready;
+@@ -367,11 +373,28 @@
+         p->result->signature=PORT_SYS_EXEC_SYSWCB_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_DPT_STAGES){
++        /* INIT.MAR 1232-1239 requires the 3 actual linked DPT driver
++         * images. Stage source-defined headers, but DO NOT put them on
++         * IOC$GL_DPTLIST: their DPT$W_SIZE=0 and DDTs are incomplete. */
++        if(!executive_system_wcb_ready || executive_dpt_stages_ready ||
++           executive_null_fdt_ready ||
++           !port_v37_dpt_stage_mb(executive_dpt_stages[0]) ||
++           !port_v37_dpt_stage_nl(executive_dpt_stages[1]) ||
++           !port_v37_dpt_stage_op(executive_dpt_stages[2]) ||
++           !port_v37_dpt_validate_staged((const uint8_t (*)[PORT_V37_DPT_STAGE_BYTES])executive_dpt_stages))
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_dpt_stages_ready=1u;
++        p->result->dpt_stages=(const uint8_t (*)[PORT_V37_DPT_STAGE_BYTES])executive_dpt_stages;
++        p->result->signature=PORT_SYS_EXEC_DPT_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_NL_FDT){
+         /* Original NLDRIVER.MAR 49-133: the native SYS.EXE already
+          * contains the exact five read/write/EOF FDT decisions. Expose
+          * its real text address without inventing IOC or FINISHIOC. */
+-        if(!executive_system_wcb_ready || executive_null_fdt_ready ||
++        if(!executive_system_wcb_ready || !executive_dpt_stages_ready ||
++           executive_null_fdt_ready ||
+            executive_syslog_ready || port_nl_driver_dpt.ucb_size!=116u ||
+            port_nl_driver_dpt.count!=5u ||
+            port_nl_driver_dpt.device_functions[0]!=PORT_SYS85_READLBLK ||
+@@ -460,8 +483,8 @@
+        !executive_lockdb_ready || !executive_procvec_ready ||
+        !executive_phvswap_ready || !executive_mpw_ready ||
+        !executive_pflvec_ready || !executive_interrupt_stack_ready ||
+-       !executive_system_wcb_ready || !executive_null_fdt_ready ||
+-       !executive_bootdev_scan_ready || !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
++       !executive_system_wcb_ready || !executive_dpt_stages_ready ||
++       !executive_null_fdt_ready || !executive_bootdev_scan_ready || !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
+ 
+     /* Hardware-dependent EXE$INIBOOTADP/EXE$INIPROCREG are called through
+      * the self-relative vectors that were linked into SYS.EXE. */
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -13,11 +13,12 @@
+ #include "vms_exe_sched.h"
+ #include "vms_ini_syswcb.h"
+ #include "vms_ini_syslog.h"
++#include "vms_ini_dpt_templates.h"
+ #include "vms_ini_bootdev_scan.h"
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=14u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=15u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -32,7 +33,8 @@
+        PORT_SYS_EXEC_INIT_SYSWCB=10u,PORT_SYS_EXEC_SYSWCB_RESULT_TAG=0x42435753u,
+        PORT_SYS_EXEC_INIT_SYSLOG=11u,PORT_SYS_EXEC_SYSLOG_RESULT_TAG=0x474f4c53u,
+        PORT_SYS_EXEC_INIT_NL_FDT=12u, PORT_SYS_EXEC_NL_RESULT_TAG=0x4c554e4cu,
+-       PORT_SYS_EXEC_INIT_BOOTDEV_SCAN=13u, PORT_SYS_EXEC_BOOTDEV_RESULT_TAG=0x56444249u };
++       PORT_SYS_EXEC_INIT_BOOTDEV_SCAN=13u, PORT_SYS_EXEC_BOOTDEV_RESULT_TAG=0x56444249u,
++       PORT_SYS_EXEC_INIT_DPT_STAGES=14u, PORT_SYS_EXEC_DPT_RESULT_TAG=0x54504453u };
+ /* The IA-32 privilege-transition stack is the first live counterpart of
+  * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
+ /* SYSBOOT passes the genuine Files-11 SYS.EXE extent map through the
+@@ -73,6 +75,8 @@
+     const struct port_ini_pflvec *pagefile_vector;
+     const struct port_ini_syswcb *system_wcb;
+     const struct port_ini_syslog_result *syslog;
++    /* Original MB/NL/OP 56-byte DPT prologues only: not linked to IOC. */
++    const uint8_t (*dpt_stages)[PORT_V37_DPT_STAGE_BYTES];
+     /* Guest-resident FDT exists; there is no IOC$GL_DPTLIST attachment yet. */
+     const struct port_sys85_null_dpt *null_driver_dpt;
+     uint32_t (*null_driver_io)(uint16_t,void *,port_sys85_finish_io_fn);
+--- /dev/null
++++ b/src/vms_ini_dpt_templates.c
+@@ -0,0 +1,46 @@
++#include "vms_ini_dpt_templates.h"
++/* Original DPTAB macro's fixed 56-byte structure. DPT$W_SIZE denotes
++ * the WHOLE linked driver, not this 56-byte prefix. It must remain zero
++ * here; these records MUST NOT join IOC$GL_DPTLIST as active DPTs. */
++static void w16(uint8_t *p,uint16_t x){p[0]=(uint8_t)x;p[1]=(uint8_t)(x>>8);}
++static uint16_t r16(const uint8_t *p){return (uint16_t)((unsigned)p[0]|((unsigned)p[1]<<8));}
++uint32_t port_v37_dpt_fill(uint8_t *r,size_t cap,uint16_t ucb,
++                          const char *name,unsigned len){
++    if(!r || !name || cap<PORT_V37_DPT_STAGE_BYTES || len==0u || len>11u || !ucb)
++        return 0u;
++    for(unsigned i=0;i<PORT_V37_DPT_STAGE_BYTES;i++)r[i]=0u;
++    /* 0-7 FLINK,BLINK: deliberately empty until driver executable. */
++    /* 8-9 SIZE: 0 means unavailable driver END / not publishable. */
++    r[10]=PORT_V37_DYN_DPT;
++    r[12]=PORT_V37_DPT_AT_UBA; /* source UBA literal, NOT PC hardware */
++    w16(r+14u,ucb);
++    w16(r+16u,PORT_V37_DPT_PREFIX_BYTES);
++    w16(r+18u,PORT_V37_DPT_PREFIX_BYTES);
++    w16(r+22u,PORT_V37_DPT_MAXUNITS);
++    w16(r+24u,PORT_V37_DPT_VERSION);
++    w16(r+26u,PORT_V37_DPT_DEFUNITS);
++    r[32]=(uint8_t)len;
++    for(unsigned i=0;i<len;i++)r[33u+i]=(uint8_t)name[i];
++    /* Empty DPT_STORE INIT,REINIT,END: terminator at 56. */
++    return 1u;
++}
++static int match(const uint8_t *p,uint16_t ucb,const char *name,unsigned len){
++    if(r16(p+8u)!=0u || p[10]!=PORT_V37_DYN_DPT || p[11]!=0u ||
++       p[12]!=PORT_V37_DPT_AT_UBA || p[13]!=0u ||
++       r16(p+14u)!=ucb || r16(p+16u)!=PORT_V37_DPT_PREFIX_BYTES ||
++       r16(p+18u)!=PORT_V37_DPT_PREFIX_BYTES || r16(p+20u)!=0u ||
++       r16(p+22u)!=PORT_V37_DPT_MAXUNITS ||
++       r16(p+24u)!=PORT_V37_DPT_VERSION ||
++       r16(p+26u)!=PORT_V37_DPT_DEFUNITS ||
++       r16(p+28u)!=0u || r16(p+30u)!=0u ||p[32u]!=len)
++        return 0;
++    for(unsigned i=0;i<8u;i++)if(p[i]!=0u)return 0;
++    for(unsigned i=0;i<len;i++)if(p[33u+i]!=(uint8_t)name[i])return 0;
++    for(unsigned i=33u+len;i<PORT_V37_DPT_STAGE_BYTES;i++)if(p[i]!=0u)return 0;
++    return 1;
++}
++uint32_t port_v37_dpt_validate_staged(const uint8_t rows[3][PORT_V37_DPT_STAGE_BYTES]){
++    return rows && match(rows[0],PORT_V37_DPT_MB_UCBSIZE,"MBDRIVER",8u) &&
++         match(rows[1],PORT_V37_DPT_NL_UCBSIZE,"NLDRIVER",8u) &&
++         match(rows[2],PORT_V37_DPT_OP_UCBSIZE,"OPERATOR",8u);
++}
+--- /dev/null
++++ b/src/vms_ini_dpt_templates.h
+@@ -0,0 +1,23 @@
++#ifndef PORT_V37_DPT_TEMPLATES_H
++#define PORT_V37_DPT_TEMPLATES_H
++#include <stdint.h>
++#include <stddef.h>
++#include "vms_v37_dyn_tags.h"
++/* Original SHRLIB/SYSMAR.MAR DPTAB at 334-385, SYSDEF.MDL 1290-1327.
++ * 56-byte fixed prologue plus the empty init/reinit table terminator,
++ * padded to 60 bytes for 32-bit IA-32 alignment. This is metadata,
++ * NOT a full driver. DPT$W_SIZE=0 poisons IOC publication until real
++ * linked driver END, INITAB, DDT/FDT, and adapter binding exist. */
++enum {PORT_V37_DPT_PREFIX_BYTES=56u,PORT_V37_DPT_STAGE_BYTES=60u,
++      PORT_V37_DPT_AT_UBA=1u,PORT_V37_DPT_MAXUNITS=8u,
++      PORT_V37_DPT_DEFUNITS=1u,PORT_V37_DPT_COUNT=3u,
++      PORT_V37_DPT_MB_UCBSIZE=132u,PORT_V37_DPT_NL_UCBSIZE=116u,
++      PORT_V37_DPT_OP_UCBSIZE=188u};
++uint32_t port_v37_dpt_fill(uint8_t *record,size_t capacity,
++                          uint16_t ucb_bytes,const char *driver_name,
++                          unsigned name_length);
++uint32_t port_v37_dpt_stage_mb(uint8_t record[PORT_V37_DPT_STAGE_BYTES]);
++uint32_t port_v37_dpt_stage_nl(uint8_t record[PORT_V37_DPT_STAGE_BYTES]);
++uint32_t port_v37_dpt_stage_op(uint8_t record[PORT_V37_DPT_STAGE_BYTES]);
++uint32_t port_v37_dpt_validate_staged(const uint8_t records[3][PORT_V37_DPT_STAGE_BYTES]);
++#endif
+--- /dev/null
++++ b/src/vms_ini_dpt_mb.c
+@@ -0,0 +1,5 @@
++#include "vms_ini_dpt_templates.h"
++/* SYS/SRC/MBDRIVER.MAR 107-119. Source prologue only; no hardware driver or IOC posting. */
++uint32_t port_v37_dpt_stage_mb(uint8_t record[PORT_V37_DPT_STAGE_BYTES]){
++    return port_v37_dpt_fill(record,PORT_V37_DPT_STAGE_BYTES,PORT_V37_DPT_MB_UCBSIZE,"MBDRIVER",8u);
++}
+--- /dev/null
++++ b/src/vms_ini_dpt_nl.c
+@@ -0,0 +1,5 @@
++#include "vms_ini_dpt_templates.h"
++/* SYS/SRC/NLDRIVER.MAR 46-58. Source prologue only; no hardware driver or IOC posting. */
++uint32_t port_v37_dpt_stage_nl(uint8_t record[PORT_V37_DPT_STAGE_BYTES]){
++    return port_v37_dpt_fill(record,PORT_V37_DPT_STAGE_BYTES,PORT_V37_DPT_NL_UCBSIZE,"NLDRIVER",8u);
++}
+--- /dev/null
++++ b/src/vms_ini_dpt_op.c
+@@ -0,0 +1,5 @@
++#include "vms_ini_dpt_templates.h"
++/* SYS/SRC/CONINTDSP.MAR 83-97. Source prologue only; no hardware driver or IOC posting. */
++uint32_t port_v37_dpt_stage_op(uint8_t record[PORT_V37_DPT_STAGE_BYTES]){
++    return port_v37_dpt_fill(record,PORT_V37_DPT_STAGE_BYTES,PORT_V37_DPT_OP_UCBSIZE,"OPERATOR",8u);
++}
+--- /dev/null
++++ b/tests/test_ini_dpt_templates_host.c
+@@ -0,0 +1,38 @@
++#include "vms_ini_dpt_templates.h"
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"FAIL %s:%d: %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++static unsigned rd16(const uint8_t *p){return p[0]|((unsigned)p[1]<<8);}
++int main(void){
++    uint8_t data[3][PORT_V37_DPT_STAGE_BYTES];
++    memset(data,0xa5,sizeof data);
++    CHECK(!port_v37_dpt_fill(0,PORT_V37_DPT_STAGE_BYTES,116u,"NLDRIVER",8u));
++    CHECK(!port_v37_dpt_fill(data[0],59u,116u,"NLDRIVER",8u));
++    CHECK(data[0][0]==0xa5u);
++    CHECK(!port_v37_dpt_fill(data[0],60u,116u,"NLDRIVER",12u));
++    CHECK(data[0][0]==0xa5u);
++    CHECK(port_v37_dpt_stage_mb(data[0]));
++    CHECK(port_v37_dpt_stage_nl(data[1]));
++    CHECK(port_v37_dpt_stage_op(data[2]));
++    CHECK(port_v37_dpt_validate_staged((const uint8_t (*)[60])data));
++    const unsigned ucbs[]={132u,116u,188u};
++    const char *names[]={"MBDRIVER","NLDRIVER","OPERATOR"};
++    for(unsigned i=0;i<3u;i++){
++        uint8_t *r=data[i];
++        CHECK(r[10]==30u && r[11]==0u && r[12]==1u && r[13]==0u);
++        CHECK(rd16(r+8u)==0u); /* deliberate nonpublishable size */
++        CHECK(rd16(r+14u)==ucbs[i]);
++        CHECK(rd16(r+16u)==56u && rd16(r+18u)==56u);
++        CHECK(rd16(r+22u)==8u && rd16(r+24u)==3u && rd16(r+26u)==1u);
++        CHECK(r[32]==8u && memcmp(r+33u,names[i],8u)==0);
++        for(unsigned j=41u;j<60u;j++)CHECK(r[j]==0u);
++    }
++    data[2][10u]=0u;
++    CHECK(!port_v37_dpt_validate_staged((const uint8_t (*)[60])data));
++    data[2][10u]=PORT_V37_DYN_DPT;
++    data[1][8u]=0x40u; /* fabricated live image length must be rejected */
++    CHECK(!port_v37_dpt_validate_staged((const uint8_t (*)[60])data));
++    puts("VMS 3.7 MB/NL/OP source-specific 56-byte DPT prologues, unlinked PASS");
++    return 0;
++}
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1508,7 +1508,6 @@
+     ('RTL/SRC/LIBCVTPTZ.MAR',138,102,136,'src/vms_rtl85_tables.c','port_lib_ab_cvtpt_z','Original 256-byte decimal conversion table.'),
+     ('RTL/SRC/LIBCVTTPZ.MAR',139,103,137,'src/vms_rtl85_tables.c','port_lib_ab_cvttp_z','Original 256-byte decimal conversion table.'),
+     ('SYS/SRC/CVTATB.MAR',176,114,169,'src/vms_rtl85.c','port_sys_cvt_dtb','The three numeric conversion entry points are port_sys_cvt_dtb, port_sys_cvt_otb and port_sys_cvt_htb.'),
+-    ('SYS/SRC/NLDRIVER.MAR',136,49,133,'src/vms_sys85.c','port_nl_driver_io','Original read EOF/write success FDT executes in native SYS.EXE under QEMU; original FINISHIOC, DPT installation and actual QIO dispatch still require I/O database binding.'),
+     ('SYS/SRC/RMSRESET.MAR',155,121,151,'src/vms_sys85.c','port_rm_reset','RMS impure data reset requires per-process RMS data to be bound.'),
+     ('SYS/SRC/MTFDT.MAR',93,81,90,'src/vms_sys85.c','port_mt_check_access','Device and access-rights callbacks need native I/O database binding.'),
+     ('SYS/SRC/CVTFILNAM.MAR',319,137,317,'src/vms_sys85.c','port_fil_cvtfilnam','Files-11 RAD50 word format and version conversion.'),
+@@ -1520,7 +1519,39 @@
+         (last+1,total,None,None,'Assembler termination or blank lines')
+     ],note)
+ 
+-exe_mapped_source('SYS/SRC/SVAPTE.MAR',247,[
++# M117: source-exact 56-byte MB/NL/OP DPTAB headers, not active drivers.
++# The size field is intentionally zero, and original MB/OP dispatch is absent.
++for original,total,first,last,path,sym in [
++    ('SYS/SRC/MBDRIVER.MAR',840,107,119,'src/vms_ini_dpt_mb.c','port_v37_dpt_stage_mb'),
++    ('SYS/SRC/CONINTDSP.MAR',556,83,97,'src/vms_ini_dpt_op.c','port_v37_dpt_stage_op')]:
++    result['files'].append({'original_file':original,'original_lines':total,
++        'sections':[
++          {'original_lines':[1,first-1],'status':'unresolved',
++           'reason':'Original driver prelude, register details and interfaces require full translation'},
++          {'original_lines':[first,last],'status':'partial','pc_file':path,'pc_symbol':sym,
++           'pc_line':line_for_symbol(path,sym),
++           'function':'Source prologue values only; no linked driver END/dispatch, IOC or full original driver'},
++          {'original_lines':[last+1,total],'status':'unresolved',
++           'reason':'Original driver dispatch, hardware and full I/O behavior remain unimplemented'}],
++        'unresolved_integration':'These original drivers are not yet linked as working VMS device images.'})
++result['files'].append({'original_file':'SYS/SRC/NLDRIVER.MAR',
++    'original_lines':136,
++    'sections':[
++      {'original_lines':[1,48],'status':'excluded',
++       'reason':'Original copyright, edit history and source interface declarations'},
++      {'original_lines':[49,58],'status':'partial',
++       'pc_file':'src/vms_ini_dpt_nl.c','pc_symbol':'port_v37_dpt_stage_nl',
++       'pc_line':line_for_symbol('src/vms_ini_dpt_nl.c','port_v37_dpt_stage_nl'),
++       'function':'Original NL DPT prologue bytes only; full driver END and IOC attachment are missing'},
++      {'original_lines':[59,133],'status':'partial',
++       'pc_file':'src/vms_sys85.c','pc_symbol':'port_nl_driver_io',
++       'pc_line':line_for_symbol('src/vms_sys85.c','port_nl_driver_io'),
++       'function':'Guest null FDT read/write status paths; original FINISHIOC and genuine QIO missing'},
++      {'original_lines':[134,136],'status':'excluded',
++       'reason':'Final source label and assembler END directives'}],
++    'unresolved_integration':'Native NL status paths run, but no actual native IOC driver activation.'})
++
++exe_mapped_source('SYS/SRC/SVAPTE.MAR' ,247,[
+     (1,122,None,None,'DEC license, page-table layout and interface text'),
+     (123,198,'src/vms_exe_memory85.c','port_mmg_svaptechk','native IA-32 system PTE reference and bounds'),
+     (199,220,'src/vms_exe_memory85.c','port_mmg_pteadrchk','native validated PTE address'),
+@@ -1684,7 +1715,7 @@
+     (1184,1188,'src/vms_ini_procvec.c','port_ini_procvec_init','SYSTEM PCB physical process header and process-index setup remains partial','partial'),
+     (1189,1212,'src/vms_ini_syswcb.c','port_ini_syswcb_from_boot_map','Actual guest-executed 8-to-6 byte extent compaction in resident SYS.EXE from real Files-11 BOO$L_SYS_MAP, with resident partial native WCB header; original WCB constants and ACP consumers still unresolved','partial'),
+     (1213,1231,None,None,'Original VAX PR$_NICR/ICCS/ICR clock-counter timing loop needs real IA-32 hardware equivalent','hardware-excluded'),
+-    (1232,1239,'src/vms_ini_dptlist.c','port_ini_dpt_attach_three','32-bit VAX INSQUE source-ordered MB, NL, OP DPT prologue list layout; host-tested but actual driver records and guest IOC attachment remain unresolved','partial'),
++    (1232,1239,'src/vms_ini_dptlist.c','port_ini_dpt_attach_three','Source-verified DPTAB metadata bytes are staged in loaded SYS.EXE; actual linked driver images and IOC$GL_DPTLIST remain unresolved','partial'),
+     (1240,1255,'src/vms_ini_syslog.c','port_ini_syslog_init','Original DYN$C_LOG=11 typed 48-byte records copied into guest SYS.EXE nonpaged addresses; DPT, boot UCB, SWAPINIT and live logical-name service pending','partial'),
+     (1256,1288,'src/vms_ini_ttydrv.c','port_ini_tty_class_relocate','Source DPTAB prologue type/UCB size checks and class vector self-relative relocation; host tested; terminal service and live IOC/DDB/UCB are pending','partial'),
+     (1289,1304,'src/vms_ini_ttydrv.c','port_ini_tty_bind_console','Original DEVICEDAT/TTYDEF DDB and OPA0 UCB class/port dispatch fields; host-tested but actual TTDRIVER/OP$DPT images and I/O service not running','partial'),
+--- /dev/null
++++ b/tools/qemu_sysboot_m117.py
+@@ -0,0 +1,118 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; check source-ordered real SYS.EXE retrieval map and INIT.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M117: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m117-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,117,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M117: guest source DPT headers, FDT, ATA boot scan, typed LOG and early INIT verified PASS')
++        return 0
++    print('QEMU M117: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
