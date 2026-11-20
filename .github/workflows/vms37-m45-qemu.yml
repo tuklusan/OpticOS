@@ -1,4 +1,4 @@
-name: VMS37 IA-32 M110 36 source audits + RTL slices and real M106 QEMU regression
+name: VMS37 IA-32 M111 40 source-specific RTL modules and single M106 QEMU boot regression
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M110
+      - name: Rebuild pinned native source through M111
         shell: bash
         run: |
           set -euo pipefail
@@ -54,12 +54,13 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m108-native.patch
           patch --batch -p1 < ../ci-vms37/m109-native.patch
           patch --batch -p1 < ../ci-vms37/m110-native.patch
+          patch --batch -p1 < ../ci-vms37/m111-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           # Replay the 46 exact SHA-256-verified current guest-layout fixtures, not stale M89 copies.
           python3 tools/m110_sync_test_fixtures.py
           make -j2 all
-          make rtl85check rtl107check rtl108check rtl109check rtl110check sourcerangecheck m21bootcheck
+          make rtl85check rtl107check rtl108check rtl109check rtl110check rtl111check sourcerangecheck m21bootcheck
           # Run the full historical guest-layout/host test suite, not only the modern smoke subset.
           make test
           make bootcheck imagecheck sysnativecheck sysnormalizedmapcheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
@@ -71,7 +72,7 @@ jobs:
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Regress real QEMU M106 resident SYSWCB map (M110 RTL modules remain host-only)
+      - name: Regress real QEMU M106 resident SYSWCB map (M111 RTL modules remain host-only)
         shell: bash
         run: |
           set -euo pipefail
@@ -81,7 +82,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m110-ci-m106-guest-serial
+          name: vms37-m111-ci-m106-guest-serial
           path: |
             vms37-native-x86-m89/qemu-m106-serial.log
           if-no-files-found: warn

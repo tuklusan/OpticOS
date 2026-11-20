@@ -1,0 +1,1714 @@
+--- a/Makefile
++++ b/Makefile
+@@ -1007,3 +1007,21 @@
+ 	./build/rtl110check
+ 	python3 tests/test_rtl_m110_integrity.py
+ all: build/rtl-m110-partial.o
++
++# M111: 40 pinned VMS 3.7 RTL source modules compiled to native IA-32.
++M111_MODULE_SRCS=$(wildcard src/native_rtl_m111/*.c)
++M111_MODULE_OBJS=$(patsubst src/native_rtl_m111/%.c,build/m111/%.o,$(M111_MODULE_SRCS))
++build/vms_rtl_m111.o: src/vms_rtl_m111.c src/vms_rtl_m111.h src/vms_rtl_m109_x87.h | build
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/m111/%.o: src/native_rtl_m111/%.c src/vms_rtl_m111.h | build
++	mkdir -p build/m111
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/rtl-m111-partial.o: build/vms_rtl_m111.o build/vms_rtl_m109.o build/vms_rtl_m109_x87.o $(M111_MODULE_OBJS)
++	$(LD) -m elf_i386 -r -o $@ $^
++.PHONY: rtl111check
++rtl111check: build/rtl-m111-partial.o
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc src/vms_rtl_m111.c src/vms_rtl_m109.c src/vms_rtl_m109_x87.c $(M111_MODULE_SRCS) tests/test_rtl_m111.c -o build/rtl111check
++	./build/rtl111check
++	python3 tools/gen_source_coverage.py
++	python3 tests/test_rtl_m111_integrity.py
++all: build/rtl-m111-partial.o
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1918,6 +1918,63 @@
+ assert len(m110_seen)==34
+ assert len({x['original_file'] for x in result['files']})==len(result['files'])
+ 
++# M111: 40 distinct pinned VMS 3.7 RTL sources with explicit partial areas.
++# Every entry has one source-specific native function. Claimed partial only:
++# VAX condition delivery, runtime descriptors, exception frames, and live guest
++# image integration are still absent. This is NOT full functional coverage.
++m111=json.loads((ROOT/'tools/m111_originals.json').read_text())
++assert m111['revision']==REVISION and m111['file_count']==40
++special={
++    'OTSPOWDD':['otspowdr','otspowrd','otspowdd'],
++    'OTSLUN':['otslun_get','otslun_free','otslun_take'],
++    'OTSCVTTLL':['otscvttll_compat','otscvttll'],
++    'OTSCVTTIL':['otscvttil_compat','otscvttil'],
++    'OTSMOVE':['otsmove','otsmove_r5'],
++    'BASMULDDI':['basmulddi_mul','basmulddi_div'],
++    'BASCOPYFD':['bascopyfd_f','bascopyfd_d'],
++    'BASDET':['basdet_f','basdet_d','basdet_store']
++}
++m111_seen=set()
++for item in m111['modules']:
++    name=item['name']; original=item['source']; total=item['lines']
++    assert original.startswith('RTL/SRC/') and original.endswith('.MAR')
++    assert original not in m111_seen and total>4
++    m111_seen.add(original)
++    native='src/native_rtl_m111/'+name.lower()+'.c'
++    assert (ROOT/native).is_file()
++    entries=item['entries']
++    assert entries and all(0<e['line']<total-1 for e in entries)
++    assert [e['line'] for e in entries]==sorted(e['line'] for e in entries)
++    symbols=special.get(name,[name.lower()])
++    assert len(symbols)==len(entries),(name,symbols,entries)
++    sections=[]
++    if entries[0]['line']>1:
++        sections.append({'original_lines':[1,entries[0]['line']-1],
++            'status':'unresolved',
++            'reason':'Original declarations, VAX ABI, condition handlers and source-specific pre-entry control or constants not yet translated'})
++    for i,e in enumerate(entries):
++        first=e['line'];last=(entries[i+1]['line']-1 if i+1<len(entries) else total-2)
++        assert first<=last,(name,first,last)
++        symbol='port111_'+symbols[i]
++        line=line_for_symbol(native,symbol)
++        if line is None:missing+=1
++        sections.append({'original_lines':[first,last],
++            'status':'partial' if line else 'missing',
++            'pc_file':native,'pc_symbol':symbol,'pc_line':line,
++            'function':'Native IA-32 bounded subset for original '+e['label']+
++                       '; VAX exceptional condition/accuracy, full argument ABI, DEC exactness and live guest dispatch unresolved'})
++    sections.append({'original_lines':[total-1,total],
++                     'status':'excluded',
++                     'reason':'VAX assembler .END directive and final non-executable blank line'})
++    result['files'].append({'original_file':original,
++        'original_lines':total,'sections':sections,
++        'unresolved_integration':('Standalone guest-architecture ELF32 object and native host tests only. '
++              'Source-derived functional subset; source pre-entry code unresolved. Exact VAX RTL '
++              'fault/condition semantics, FP rounding and descriptor conventions incomplete. '
++              'Guest SYS.EXE/DCL/DECnet integration and QEMU execution of these routines absent.')})
++assert len(m111_seen)==40
++assert len({f['original_file'] for f in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- a/tools/m111_originals.json
++++ b/tools/m111_originals.json
+@@ -0,0 +1,532 @@
++{
++  "reference": "https://github.com/calmsacibis995/vms37-src",
++  "revision": "2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752",
++  "file_count": 40,
++  "scope": "Source-specific freestanding IA-32 partial RTL translation. VAX call frames and guest linkage unresolved.",
++  "modules": [
++    {
++      "name": "FORTIME",
++      "source": "RTL/SRC/FORTIME.MAR",
++      "lines": 132,
++      "entries": [
++        {
++          "line": 123,
++          "label": "FOR$TIME"
++        }
++      ],
++      "kind": "time"
++    },
++    {
++      "name": "FORTIMEDS",
++      "source": "RTL/SRC/FORTIMEDS.MAR",
++      "lines": 134,
++      "entries": [
++        {
++          "line": 120,
++          "label": "FOR$TIME_T_DS"
++        }
++      ],
++      "kind": "time"
++    },
++    {
++      "name": "FORJDATE",
++      "source": "RTL/SRC/FORJDATE.MAR",
++      "lines": 135,
++      "entries": [
++        {
++          "line": 121,
++          "label": "FOR$JDATE"
++        }
++      ],
++      "kind": "time"
++    },
++    {
++      "name": "FORIDATE",
++      "source": "RTL/SRC/FORIDATE.MAR",
++      "lines": 136,
++      "entries": [
++        {
++          "line": 122,
++          "label": "FOR$IDATE"
++        }
++      ],
++      "kind": "time"
++    },
++    {
++      "name": "FORDATE",
++      "source": "RTL/SRC/FORDATE.MAR",
++      "lines": 137,
++      "entries": [
++        {
++          "line": 123,
++          "label": "FOR$DATE"
++        }
++      ],
++      "kind": "time"
++    },
++    {
++      "name": "FORDATEDS",
++      "source": "RTL/SRC/FORDATEDS.MAR",
++      "lines": 138,
++      "entries": [
++        {
++          "line": 123,
++          "label": "FOR$DATE_T_DS"
++        }
++      ],
++      "kind": "time"
++    },
++    {
++      "name": "FORSECNDS",
++      "source": "RTL/SRC/FORSECNDS.MAR",
++      "lines": 150,
++      "entries": [
++        {
++          "line": 126,
++          "label": "FOR$SECNDS"
++        }
++      ],
++      "kind": "time"
++    },
++    {
++      "name": "OTSMULCD",
++      "source": "RTL/SRC/OTSMULCD.MAR",
++      "lines": 143,
++      "entries": [
++        {
++          "line": 126,
++          "label": "OTS$MULCD_R3"
++        }
++      ],
++      "kind": "complex_arith"
++    },
++    {
++      "name": "OTSMULCG",
++      "source": "RTL/SRC/OTSMULCG.MAR",
++      "lines": 143,
++      "entries": [
++        {
++          "line": 126,
++          "label": "OTS$MULCG_R3"
++        }
++      ],
++      "kind": "complex_arith"
++    },
++    {
++      "name": "OTSDIVC",
++      "source": "RTL/SRC/OTSDIVC.MAR",
++      "lines": 178,
++      "entries": [
++        {
++          "line": 144,
++          "label": "OTS$DIVC"
++        }
++      ],
++      "kind": "complex_arith"
++    },
++    {
++      "name": "OTSDIVCD",
++      "source": "RTL/SRC/OTSDIVCD.MAR",
++      "lines": 178,
++      "entries": [
++        {
++          "line": 144,
++          "label": "OTS$DIVCD_R3"
++        }
++      ],
++      "kind": "complex_arith"
++    },
++    {
++      "name": "OTSDIVCG",
++      "source": "RTL/SRC/OTSDIVCG.MAR",
++      "lines": 178,
++      "entries": [
++        {
++          "line": 144,
++          "label": "OTS$DIVCG_R3"
++        }
++      ],
++      "kind": "complex_arith"
++    },
++    {
++      "name": "OTSPOWCC",
++      "source": "RTL/SRC/OTSPOWCC.MAR",
++      "lines": 176,
++      "entries": [
++        {
++          "line": 132,
++          "label": "OTS$POWCC"
++        }
++      ],
++      "kind": "complex_pow"
++    },
++    {
++      "name": "OTSPOWCDC",
++      "source": "RTL/SRC/OTSPOWCDC.MAR",
++      "lines": 170,
++      "entries": [
++        {
++          "line": 135,
++          "label": "OTS$POWCDCD_R3"
++        }
++      ],
++      "kind": "complex_pow"
++    },
++    {
++      "name": "OTSPOWCGC",
++      "source": "RTL/SRC/OTSPOWCGC.MAR",
++      "lines": 170,
++      "entries": [
++        {
++          "line": 135,
++          "label": "OTS$POWCGCG_R3"
++        }
++      ],
++      "kind": "complex_pow"
++    },
++    {
++      "name": "OTSPOWLUL",
++      "source": "RTL/SRC/OTSPOWLUL.MAR",
++      "lines": 149,
++      "entries": [
++        {
++          "line": 112,
++          "label": "OTS$POWLULU"
++        }
++      ],
++      "kind": "integer_pow"
++    },
++    {
++      "name": "OTSPOWHH",
++      "source": "RTL/SRC/OTSPOWHH.MAR",
++      "lines": 185,
++      "entries": [
++        {
++          "line": 155,
++          "label": "OTS$POWHH_R3"
++        }
++      ],
++      "kind": "real_pow"
++    },
++    {
++      "name": "OTSPOWGG",
++      "source": "RTL/SRC/OTSPOWGG.MAR",
++      "lines": 194,
++      "entries": [
++        {
++          "line": 163,
++          "label": "OTS$POWGG"
++        }
++      ],
++      "kind": "real_pow"
++    },
++    {
++      "name": "OTSPOWRR",
++      "source": "RTL/SRC/OTSPOWRR.MAR",
++      "lines": 196,
++      "entries": [
++        {
++          "line": 163,
++          "label": "OTS$POWRR"
++        }
++      ],
++      "kind": "real_pow"
++    },
++    {
++      "name": "OTSPOWCDJ",
++      "source": "RTL/SRC/OTSPOWCDJ.MAR",
++      "lines": 220,
++      "entries": [
++        {
++          "line": 148,
++          "label": "OTS$POWCDJ_R3"
++        }
++      ],
++      "kind": "complex_intpow"
++    },
++    {
++      "name": "OTSPOWCGJ",
++      "source": "RTL/SRC/OTSPOWCGJ.MAR",
++      "lines": 220,
++      "entries": [
++        {
++          "line": 148,
++          "label": "OTS$POWCGJ_R3"
++        }
++      ],
++      "kind": "complex_intpow"
++    },
++    {
++      "name": "OTSPOWII",
++      "source": "RTL/SRC/OTSPOWII.MAR",
++      "lines": 241,
++      "entries": [
++        {
++          "line": 160,
++          "label": "OTS$POWII"
++        }
++      ],
++      "kind": "integer_pow"
++    },
++    {
++      "name": "OTSPOWDD",
++      "source": "RTL/SRC/OTSPOWDD.MAR",
++      "lines": 226,
++      "entries": [
++        {
++          "line": 177,
++          "label": "OTS$POWDR"
++        },
++        {
++          "line": 187,
++          "label": "OTS$POWRD"
++        },
++        {
++          "line": 193,
++          "label": "OTS$POWDD"
++        }
++      ],
++      "kind": "real_pow"
++    },
++    {
++      "name": "OTSPOWJJ",
++      "source": "RTL/SRC/OTSPOWJJ.MAR",
++      "lines": 243,
++      "entries": [
++        {
++          "line": 160,
++          "label": "OTS$POWJJ"
++        }
++      ],
++      "kind": "integer_pow"
++    },
++    {
++      "name": "OTSPOWCJ",
++      "source": "RTL/SRC/OTSPOWCJ.MAR",
++      "lines": 222,
++      "entries": [
++        {
++          "line": 156,
++          "label": "OTS$POWCJ"
++        }
++      ],
++      "kind": "complex_intpow"
++    },
++    {
++      "name": "OTSLUN",
++      "source": "RTL/SRC/OTSLUN.MAR",
++      "lines": 337,
++      "entries": [
++        {
++          "line": 125,
++          "label": "OTS$$GET_LUN"
++        },
++        {
++          "line": 211,
++          "label": "OTS$$FREE_LUN"
++        },
++        {
++          "line": 296,
++          "label": "OTS$$TAKE_LUN"
++        }
++      ],
++      "kind": "lun"
++    },
++    {
++      "name": "OTSCVTTLL",
++      "source": "RTL/SRC/OTSCVTTLL.MAR",
++      "lines": 215,
++      "entries": [
++        {
++          "line": 155,
++          "label": "FOR$CNV_IN_L"
++        },
++        {
++          "line": 156,
++          "label": "OTS$CVT_TL_L"
++        }
++      ],
++      "kind": "logical"
++    },
++    {
++      "name": "OTSCVTTIL",
++      "source": "RTL/SRC/OTSCVTTIL.MAR",
++      "lines": 301,
++      "entries": [
++        {
++          "line": 168,
++          "label": "FOR$CNV_IN_I"
++        },
++        {
++          "line": 169,
++          "label": "OTS$CVT_TI_L"
++        }
++      ],
++      "kind": "text_integer"
++    },
++    {
++      "name": "OTSMOVE",
++      "source": "RTL/SRC/OTSMOVE.MAR",
++      "lines": 219,
++      "entries": [
++        {
++          "line": 118,
++          "label": "OTS$MOVE3"
++        },
++        {
++          "line": 166,
++          "label": "OTS$MOVE3_R5"
++        }
++      ],
++      "kind": "memory_move"
++    },
++    {
++      "name": "BASPOWRJ",
++      "source": "RTL/SRC/BASPOWRJ.MAR",
++      "lines": 183,
++      "entries": [
++        {
++          "line": 134,
++          "label": "BAS$POWRJ"
++        }
++      ],
++      "kind": "basic_pow"
++    },
++    {
++      "name": "BASPOWDJ",
++      "source": "RTL/SRC/BASPOWDJ.MAR",
++      "lines": 183,
++      "entries": [
++        {
++          "line": 134,
++          "label": "BAS$POWDJ"
++        }
++      ],
++      "kind": "basic_pow"
++    },
++    {
++      "name": "BASPOWJJ",
++      "source": "RTL/SRC/BASPOWJJ.MAR",
++      "lines": 183,
++      "entries": [
++        {
++          "line": 134,
++          "label": "BAS$POWJJ"
++        }
++      ],
++      "kind": "basic_pow"
++    },
++    {
++      "name": "BASPOWII",
++      "source": "RTL/SRC/BASPOWII.MAR",
++      "lines": 185,
++      "entries": [
++        {
++          "line": 135,
++          "label": "BAS$POWII"
++        }
++      ],
++      "kind": "basic_pow"
++    },
++    {
++      "name": "BASPOWRR",
++      "source": "RTL/SRC/BASPOWRR.MAR",
++      "lines": 202,
++      "entries": [
++        {
++          "line": 137,
++          "label": "BAS$POWRR"
++        }
++      ],
++      "kind": "basic_pow"
++    },
++    {
++      "name": "BASPOWDD",
++      "source": "RTL/SRC/BASPOWDD.MAR",
++      "lines": 202,
++      "entries": [
++        {
++          "line": 137,
++          "label": "BAS$POWDD"
++        }
++      ],
++      "kind": "basic_pow"
++    },
++    {
++      "name": "BASMULDDI",
++      "source": "RTL/SRC/BASMULDDI.MAR",
++      "lines": 202,
++      "entries": [
++        {
++          "line": 130,
++          "label": "BAS$$MULD"
++        },
++        {
++          "line": 186,
++          "label": "BAS$$DIVD"
++        }
++      ],
++      "kind": "basic_arith"
++    },
++    {
++      "name": "BASCOPYFD",
++      "source": "RTL/SRC/BASCOPYFD.MAR",
++      "lines": 179,
++      "entries": [
++        {
++          "line": 131,
++          "label": "BAS$$COPY_F_R1"
++        },
++        {
++          "line": 173,
++          "label": "BAS$$COPY_D_R1"
++        }
++      ],
++      "kind": "basic_copy"
++    },
++    {
++      "name": "BASDET",
++      "source": "RTL/SRC/BASDET.MAR",
++      "lines": 227,
++      "entries": [
++        {
++          "line": 131,
++          "label": "BAS$DET_F"
++        },
++        {
++          "line": 175,
++          "label": "BAS$DET_D"
++        },
++        {
++          "line": 220,
++          "label": "BAS$$STORE_DET"
++        }
++      ],
++      "kind": "basic_det"
++    },
++    {
++      "name": "BASXLATE",
++      "source": "RTL/SRC/BASXLATE.MAR",
++      "lines": 242,
++      "entries": [
++        {
++          "line": 148,
++          "label": "BAS$XLATE"
++        }
++      ],
++      "kind": "basic_translate"
++    },
++    {
++      "name": "COBMULQ",
++      "source": "RTL/SRC/COBMULQ.MAR",
++      "lines": 151,
++      "entries": [
++        {
++          "line": 137,
++          "label": "COB$MULQ_R8"
++        }
++      ],
++      "kind": "quad_mul"
++    }
++  ]
++}
+--- a/src/vms_rtl_m111.h
++++ b/src/vms_rtl_m111.h
+@@ -0,0 +1,94 @@
++#ifndef VMS37_RTL_M111_H
++#define VMS37_RTL_M111_H
++#include <stddef.h>
++#include <stdint.h>
++#include "vms_rtl_m109.h"
++/* Source-specific IA-32 RTL routines. Inputs are VAX F/D/G/H 16-bit-word
++ * encodings, never an emulated VAX register file. The live guest ABI,
++ * signal dispatch, descriptor traps and integration remain UNIMPLEMENTED.
++ * Partial/approximation return statuses must not be interpreted as VMS SS$_NORMAL.
++ */
++struct port111_clock {unsigned year,month,day,hour,minute,second,centisecond;};
++struct port111_lun {uint32_t bits[4];};
++struct port111_det {uint16_t d[4];};
++int port111_clock_valid(const struct port111_clock *clock);
++int port111_date(const struct port111_clock *clock,char *out,size_t capacity,int is_time);
++int port111_date_descriptor(const struct port111_clock *clock,char *out,size_t cap,int is_time);
++int port111_mdy(const struct port111_clock *clock,void *month,void *day,void *year,unsigned bits);
++int port111_seconds(const struct port111_clock *clock,const uint16_t *start,uint16_t *out);
++int port111_complex_mul(enum port_m107_fmt fmt,const uint16_t *left,const uint16_t *right,uint16_t *result);
++int port111_complex_div(enum port_m107_fmt fmt,const uint16_t *left,const uint16_t *right,uint16_t *result);
++int port111_complex_pow(enum port_m107_fmt fmt,const uint16_t *base,const uint16_t *exponent,uint16_t *result);
++int port111_complex_intpow(enum port_m107_fmt fmt,const uint16_t *base,int32_t exponent,uint16_t *result);
++int port111_real_pow(enum port_m107_fmt fmt,const uint16_t *base,const uint16_t *exponent,uint16_t *result,int basic_semantics);
++int port111_real_intpow(enum port_m107_fmt fmt,const uint16_t *base,int32_t exponent,uint16_t *result,int basic_semantics);
++int port111_integer_pow(int64_t base,int64_t exponent,unsigned bits,int64_t *result);
++int port111_ulogpow(uint32_t base,uint32_t exponent,uint32_t *out);
++void port111_lun_init(struct port111_lun *pool);
++int port111_lun_get(struct port111_lun *pool,unsigned *unit);
++int port111_lun_free(struct port111_lun *pool,unsigned unit);
++int port111_lun_take(struct port111_lun *pool,unsigned unit);
++int port111_parse_logical(const char *str,size_t len,unsigned bits,void *out);
++int port111_parse_integer(const char *str,size_t len,unsigned bits,int allow_tabs,void *out);
++int port111_move(const void *src,void *dst,size_t n);
++int port111_d_arith(const uint16_t *a,const uint16_t *b,uint16_t *out,int divide);
++int port111_copy_float(enum port_m107_fmt fmt,const uint16_t *source,uint16_t *target);
++int port111_det_store(struct port111_det *d,const uint16_t *value);
++int port111_det_get(const struct port111_det *d,enum port_m107_fmt fmt,uint16_t *out);
++int port111_xlate(const uint8_t *src,size_t n,const uint8_t *table,size_t table_n,
++                  uint8_t *dst,size_t capacity,size_t *written);
++int port111_mulq(const uint32_t a[2],const uint32_t b[2],uint32_t result[2]);
++/* Every source module has a separate native symbol and .c file. */
++int port111_fortime(const struct port111_clock *t,char out[8]);
++int port111_fortimeds(const struct port111_clock *t,char *out,size_t cap);
++int port111_forjdate(const struct port111_clock *t,int32_t *m,int32_t *d,int32_t *y);
++int port111_foridate(const struct port111_clock *t,int16_t *m,int16_t *d,int16_t *y);
++int port111_fordate(const struct port111_clock *t,char out[9]);
++int port111_fordateds(const struct port111_clock *t,char *out,size_t cap);
++int port111_forsecnds(const struct port111_clock *t,const uint16_t *start,uint16_t *out);
++int port111_otsmulcd(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otsmulcg(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otsdivc(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otsdivcd(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otsdivcg(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otspowcc(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otspowcdc(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otspowcgc(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otspowlul(uint32_t a,uint32_t b,uint32_t *out);
++int port111_otspowhh(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otspowgg(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otspowrr(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_otspowcdj(const uint16_t *a,int32_t exp,uint16_t *out);
++int port111_otspowcgj(const uint16_t *a,int32_t exp,uint16_t *out);
++int port111_otspowii(int16_t a,int16_t b,int16_t *out);
++int port111_otspowdr(const uint16_t *base_d,const uint16_t *exp_f,uint16_t *out);
++int port111_otspowrd(const uint16_t *base_f,const uint16_t *exp_d,uint16_t *out);
++int port111_otspowdd(const uint16_t *base_d,const uint16_t *exp_d,uint16_t *out);
++int port111_otspowjj(int32_t a,int32_t b,int32_t *out);
++int port111_otspowcj(const uint16_t *a,int32_t exp,uint16_t *out);
++int port111_otslun_get(struct port111_lun *p,unsigned *unit);
++int port111_otslun_free(struct port111_lun *p,unsigned unit);
++int port111_otslun_take(struct port111_lun *p,unsigned unit);
++int port111_otscvttll(const char *src,size_t n,unsigned bits,void *out);
++int port111_otscvttll_compat(const char *src,size_t n,unsigned bits,void *out);
++int port111_otscvttil(const char *src,size_t n,unsigned bits,int tabs,void *out);
++int port111_otscvttil_compat(const char *src,size_t n,unsigned bits,int tabs,void *out);
++int port111_otsmove(const void *src,void *dst,size_t n);
++int port111_otsmove_r5(const void *src,void *dst,size_t n);
++int port111_baspowrj(const uint16_t *base,int32_t exp,uint16_t *out);
++int port111_baspowdj(const uint16_t *base,int32_t exp,uint16_t *out);
++int port111_baspowjj(int32_t base,int32_t exp,int32_t *out);
++int port111_baspowii(int16_t base,int16_t exp,int16_t *out);
++int port111_baspowrr(const uint16_t *base,const uint16_t *exp,uint16_t *out);
++int port111_baspowdd(const uint16_t *base,const uint16_t *exp,uint16_t *out);
++int port111_basmulddi_mul(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_basmulddi_div(const uint16_t *a,const uint16_t *b,uint16_t *out);
++int port111_bascopyfd_f(const uint16_t *src,uint16_t *out);
++int port111_bascopyfd_d(const uint16_t *src,uint16_t *out);
++int port111_basdet_store(struct port111_det *s,const uint16_t *v);
++int port111_basdet_d(const struct port111_det *s,uint16_t *out);
++int port111_basdet_f(const struct port111_det *s,uint16_t *out);
++int port111_basxlate(const uint8_t *src,size_t n,const uint8_t *table,size_t table_n,
++                     uint8_t *dst,size_t cap,size_t *written);
++int port111_cobmulq(const uint32_t a[2],const uint32_t b[2],uint32_t out[2]);
++#endif
+--- a/src/vms_rtl_m111.c
++++ b/src/vms_rtl_m111.c
+@@ -0,0 +1,278 @@
++#include "vms_rtl_m111.h"
++#include "vms_rtl_m109_x87.h"
++/* Native source-derived subsets. For source-only DEC references, no original
++ * DEC source code or machine image is redistributed. This file is explicitly
++ * NOT linked into SYS.EXE, so live guest validation is outstanding. */
++static unsigned nwords(enum port_m107_fmt fmt){
++    return fmt==PORT_M107_F?2u:(fmt==PORT_M107_D||fmt==PORT_M107_G)?4u:fmt==PORT_M107_H?8u:0u;
++}
++static void words_copy(uint16_t *dst,const uint16_t *src,unsigned n){
++    for(unsigned i=0;i<n;i++)dst[i]=src[i];
++}
++static void bytes_copy(uint8_t *dst,const uint8_t *src,size_t n){
++    for(size_t i=0;i<n;i++)dst[i]=src[i];
++}
++static int good(long double v){return __builtin_isfinite(v);}
++static long double absolute(long double v){return v<0?-v:v;}
++static int read_pair(enum port_m107_fmt f,const uint16_t *p,long double *a,long double *b){
++    int s=port109_decode(f,p,a);if(s!=PORT109_OK)return s;
++    return port109_decode(f,p+nwords(f),b);
++}
++static int write_scalar(enum port_m107_fmt f,long double v,uint16_t *out){
++    uint16_t local[8]={0};
++    if(!good(v))return PORT109_RANGE;
++    int s=port109_encode(f,v,local);if(s!=PORT109_OK)return s;
++    words_copy(out,local,nwords(f));return PORT109_APPROX;
++}
++static int write_pair(enum port_m107_fmt f,long double a,long double b,uint16_t *out){
++    uint16_t local[16]={0};unsigned n=nwords(f);
++    if(!good(a)||!good(b))return PORT109_RANGE;
++    int s=port109_encode(f,a,local);if(s!=PORT109_OK)return s;
++    s=port109_encode(f,b,local+n);if(s!=PORT109_OK)return s;
++    words_copy(out,local,2*n);return PORT109_APPROX;
++}
++static int leap(unsigned y){return y%4==0&&(y%100!=0||y%400==0);}
++int port111_clock_valid(const struct port111_clock *t){
++    static const unsigned month_days[12]={31,28,31,30,31,30,31,31,30,31,30,31};
++    if(!t||t->year<1||t->year>9999||t->month<1||t->month>12||t->hour>23||t->minute>59||t->second>59||t->centisecond>99)return 0;
++    unsigned days=month_days[t->month-1]+(t->month==2&&leap(t->year));
++    return t->day>0&&t->day<=days;
++}
++static void two(unsigned value,char *dest){dest[0]=(char)('0'+value/10);dest[1]=(char)('0'+value%10);}
++int port111_date(const struct port111_clock *t,char *out,size_t capacity,int is_time){
++    static const char months[12][3]={{'J','A','N'},{'F','E','B'},{'M','A','R'},{'A','P','R'},
++        {'M','A','Y'},{'J','U','N'},{'J','U','L'},{'A','U','G'},
++        {'S','E','P'},{'O','C','T'},{'N','O','V'},{'D','E','C'}};
++    size_t required=is_time?8u:9u;
++    if(!out||capacity<required||!port111_clock_valid(t))return PORT109_BAD_ARG;
++    char local[9];
++    if(is_time){two(t->hour,local);local[2]=':';two(t->minute,local+3);
++        local[5]=':';two(t->second,local+6);}
++    else{two(t->day,local);local[2]='-';for(unsigned i=0;i<3;i++)local[3+i]=months[t->month-1][i];
++        local[6]='-';two(t->year%100,local+7);}
++    bytes_copy((uint8_t*)out,(const uint8_t*)local,required);return PORT109_OK;
++}
++int port111_date_descriptor(const struct port111_clock *t,char *out,size_t cap,int is_time){
++    if(!out||cap>65535u||!port111_clock_valid(t))return PORT109_BAD_ARG;
++    char temp[9]={0};int s=port111_date(t,temp,sizeof temp,is_time);if(s!=PORT109_OK)return s;
++    size_t n=is_time?8u:9u;
++    for(size_t i=0;i<cap;i++)out[i]=i<n?temp[i]:' ';
++    return PORT109_OK;
++}
++int port111_mdy(const struct port111_clock *t,void *month,void *day,void *year,unsigned bits){
++    if(!port111_clock_valid(t)||!month||!day||!year||(bits!=16&&bits!=32))return PORT109_BAD_ARG;
++    unsigned yy=t->year%100u;
++    if(bits==16){*(int16_t*)month=(int16_t)t->month;*(int16_t*)day=(int16_t)t->day;*(int16_t*)year=(int16_t)yy;}
++    else{*(int32_t*)month=(int32_t)t->month;*(int32_t*)day=(int32_t)t->day;*(int32_t*)year=(int32_t)yy;}
++    return PORT109_OK;
++}
++int port111_seconds(const struct port111_clock *t,const uint16_t *start,uint16_t *out){
++    if(!port111_clock_valid(t)||!start||!out)return PORT109_BAD_ARG;
++    long double begin=0;
++    int s=port109_decode(PORT_M107_F,start,&begin);if(s!=PORT109_OK)return s;
++    long double now=(long double)(t->hour*3600u+t->minute*60u+t->second)+((long double)t->centisecond)/100.0L;
++    long double elapsed=now-begin;
++    if(elapsed<0.0L)elapsed+=86400.0L; /* VMS FOR$SECNDS rollover */
++    return write_scalar(PORT_M107_F,elapsed,out);
++}
++int port111_complex_mul(enum port_m107_fmt f,const uint16_t *a,const uint16_t *b,uint16_t *out){
++    if(!nwords(f)||!a||!b||!out)return PORT109_BAD_ARG;
++    long double ar,ai,br,bi;
++    int s=read_pair(f,a,&ar,&ai);if(s!=PORT109_OK)return s;
++    s=read_pair(f,b,&br,&bi);if(s!=PORT109_OK)return s;
++    return write_pair(f,ar*br-ai*bi,ar*bi+ai*br,out);
++}
++int port111_complex_div(enum port_m107_fmt f,const uint16_t *a,const uint16_t *b,uint16_t *out){
++    if(!nwords(f)||!a||!b||!out)return PORT109_BAD_ARG;
++    long double ar,ai,br,bi;
++    int s=read_pair(f,a,&ar,&ai);if(s!=PORT109_OK)return s;
++    s=read_pair(f,b,&br,&bi);if(s!=PORT109_OK)return s;
++    long double scale=absolute(br)>absolute(bi)?absolute(br):absolute(bi);
++    if(scale==0.0L)return PORT109_DOMAIN;
++    /* Native scale matches intent of the original exponent scaling: avoid
++       overflow and spurious divide faults from large complex denominators. */
++    long double cr=br/scale,ci=bi/scale,den=cr*cr+ci*ci;
++    return write_pair(f,(ar*cr+ai*ci)/(den*scale),(ai*cr-ar*ci)/(den*scale),out);
++}
++int port111_complex_pow(enum port_m107_fmt f,const uint16_t *base,const uint16_t *exponent,uint16_t *out){
++    if(!nwords(f)||!base||!exponent||!out)return PORT109_BAD_ARG;
++    long double ar,ai,br,bi;
++    int s=read_pair(f,base,&ar,&ai);if(s!=PORT109_OK)return s;
++    s=read_pair(f,exponent,&br,&bi);if(s!=PORT109_OK)return s;
++    if(ar==0.0L&&ai==0.0L){if(br<=0.0L||bi!=0.0L)return PORT109_DOMAIN;return write_pair(f,0,0,out);}
++    long double radius=port109_x87_sqrt(ar*ar+ai*ai);
++    long double x=port109_x87_ln(radius),y=port109_x87_atan2(ai,ar);
++    long double er=br*x-bi*y,ei=bi*x+br*y;
++    if(absolute(ei)>1.0e6L)return PORT109_PARTIAL;
++    long double mag=port109_x87_exp(er);
++    return write_pair(f,mag*port109_x87_cos(ei),mag*port109_x87_sin(ei),out);
++}
++int port111_complex_intpow(enum port_m107_fmt f,const uint16_t *base,int32_t exp,uint16_t *out){
++    if(!nwords(f)||!base||!out)return PORT109_BAD_ARG;
++    long double ar,ai;int s=read_pair(f,base,&ar,&ai);if(s!=PORT109_OK)return s;
++    if(ar==0.0L&&ai==0.0L&&exp<=0)return PORT109_DOMAIN;
++    long double rr=1,ri=0;long double xr=ar,xi=ai;
++    uint32_t n=exp<0?(uint32_t)(-(int64_t)exp):(uint32_t)exp;
++    while(n){if(n&1u){long double nr=rr*xr-ri*xi,ni=rr*xi+ri*xr;rr=nr;ri=ni;}
++        n>>=1;if(n){long double nr=xr*xr-xi*xi,ni=2*xr*xi;xr=nr;xi=ni;}
++        if(!good(rr)||!good(ri)||!good(xr)||!good(xi))return PORT109_RANGE;}
++    if(exp<0){long double den=rr*rr+ri*ri;if(den==0.0L)return PORT109_RANGE;
++        long double re=rr/den;ri=-ri/den;rr=re;}
++    return write_pair(f,rr,ri,out);
++}
++int port111_real_pow(enum port_m107_fmt f,const uint16_t *base,const uint16_t *exponent,uint16_t *out,int basic){
++    if(!nwords(f)||!base||!exponent||!out)return PORT109_BAD_ARG;
++    long double b,e;int s=port109_decode(f,base,&b);if(s!=PORT109_OK)return s;
++    s=port109_decode(f,exponent,&e);if(s!=PORT109_OK)return s;
++    if(b==0.0L){if(e<=0.0L)return PORT109_DOMAIN;return write_scalar(f,0.0L,out);}
++    if(e==0.0L)return write_scalar(f,1.0L,out);
++    int negative=(b<0);
++    if(negative&&!basic)return PORT109_DOMAIN; /* OTS negative real base rejects */
++    if(negative&&(absolute(e)>2147483647.0L||e!=(long double)(int32_t)e))return PORT109_DOMAIN;
++    long double mag=port109_x87_exp(e*port109_x87_ln(absolute(b)));
++    if(negative&&((int32_t)e&1))mag=-mag;
++    return write_scalar(f,mag,out);
++}
++int port111_real_intpow(enum port_m107_fmt f,const uint16_t *base,int32_t exp,uint16_t *out,int basic){
++    if(!nwords(f)||!base||!out)return PORT109_BAD_ARG;
++    long double b;int s=port109_decode(f,base,&b);if(s!=PORT109_OK)return s;
++    if(b==0.0L&&exp<=0)return PORT109_DOMAIN;
++    if(b<0.0L&&!basic)return PORT109_DOMAIN;
++    long double prod=1,x=b;uint32_t e=exp<0?(uint32_t)(-(int64_t)exp):(uint32_t)exp;
++    while(e){if(e&1u)prod*=x;e>>=1;if(e)x*=x;
++        if(!good(prod)||!good(x))return PORT109_RANGE;}
++    if(exp<0)prod=1.0L/prod;
++    return write_scalar(f,prod,out);
++}
++int port111_integer_pow(int64_t base,int64_t exponent,unsigned bits,int64_t *out){
++    if(!out||(bits!=16&&bits!=32))return PORT109_BAD_ARG;
++    int64_t limit=bits==16?32767:2147483647;
++    int64_t lower=-limit-1;
++    if(base<lower||base>limit)return PORT109_BAD_ARG;
++    if(exponent<=0){
++        if(base==0)return PORT109_DOMAIN;
++        *out=exponent==0?1:(base==1?1:(base==-1?((uint64_t)exponent&1u)?-1:1:0));
++        return PORT109_OK;
++    }
++    int64_t acc=1,x=base;uint64_t e=(uint64_t)exponent;
++    while(e){if(e&1u){acc*=x;if(acc>limit||acc<lower)return PORT109_RANGE;}
++        e>>=1;if(e){x*=x;if(x>limit||x<lower)return PORT109_RANGE;}}
++    *out=acc;return PORT109_OK;
++}
++int port111_ulogpow(uint32_t base,uint32_t exponent,uint32_t *out){
++    if(!out)return PORT109_BAD_ARG;
++    if(base==0&&exponent==0)return PORT109_DOMAIN;
++    uint32_t acc=1,x=base;
++    while(exponent){if(exponent&1u)acc*=x;exponent>>=1;if(exponent)x*=x;}
++    *out=acc;return PORT109_OK; /* Defined unsigned modulo 2^32 */
++}
++void port111_lun_init(struct port111_lun *p){if(p)for(unsigned i=0;i<4;i++)p->bits[i]=0;}
++int port111_lun_get(struct port111_lun *p,unsigned *unit){
++    if(!p||!unit)return PORT109_BAD_ARG;
++    for(unsigned i=0;i<100;i++){uint32_t mask=1u<<(i%32u);uint32_t *slot=&p->bits[i/32u];
++        if(!(*slot&mask)){*slot|=mask;*unit=i;return PORT109_OK;}}
++    return PORT109_PARTIAL;
++}
++int port111_lun_free(struct port111_lun *p,unsigned unit){
++    if(!p||unit>=100)return PORT109_BAD_ARG;
++    uint32_t mask=1u<<(unit%32),*slot=&p->bits[unit/32];
++    if(!(*slot&mask))return PORT109_PARTIAL;
++    *slot&=~mask;return PORT109_OK;
++}
++int port111_lun_take(struct port111_lun *p,unsigned unit){
++    if(!p||unit>=100)return PORT109_BAD_ARG;
++    uint32_t mask=1u<<(unit%32),*slot=&p->bits[unit/32];
++    if(*slot&mask)return PORT109_PARTIAL;
++    *slot|=mask;return PORT109_OK;
++}
++static int put_int(void *out,unsigned bits,int32_t v){
++    if(!out||(bits!=8&&bits!=16&&bits!=32))return PORT109_BAD_ARG;
++    if(bits==8){if(v< -128||v>127)return PORT109_RANGE;*(int8_t*)out=(int8_t)v;}
++    else if(bits==16){if(v< -32768||v>32767)return PORT109_RANGE;*(int16_t*)out=(int16_t)v;}
++    else *(int32_t*)out=v;
++    return PORT109_OK;
++}
++int port111_parse_logical(const char *text,size_t n,unsigned bits,void *out){
++    if(!text||!out||n>65535)return PORT109_BAD_ARG;
++    size_t i=0;while(i<n&&text[i]==' ')i++;
++    int v=0;
++    if(i<n){if(text[i]=='.')i++;
++        if(i>=n)return PORT109_BAD_ARG;
++        char c=text[i];if(c=='T'||c=='t')v=-1;else if(c!='F'&&c!='f')return PORT109_BAD_ARG;}
++    return put_int(out,bits,v);
++}
++int port111_parse_integer(const char *text,size_t n,unsigned bits,int tabs,void *out){
++    if(!text||!out||n>65535||(tabs!=0&&tabs!=1))return PORT109_BAD_ARG;
++    size_t i=0;
++    while(i<n&&(text[i]==' '||(tabs&&text[i]=='\t')))i++;
++    int negative=0;if(i<n&&(text[i]=='-'||text[i]=='+'))negative=(text[i++]=='-');
++    int64_t value=0;size_t digits=0;
++    for(;i<n;i++){
++        char c=text[i];if(c==' ')c='0';
++        if(c<'0'||c>'9')return PORT109_BAD_ARG;
++        value=value*10+(c-'0');digits++;
++        if(value>2147483648LL)return PORT109_RANGE;
++    }
++    /* OTS$CVT_TI_L's SKPC branch treats an all-blank field as zero.
++       An isolated sign similarly reaches DONE with an empty accumulator. */
++    if(!digits)return put_int(out,bits,0);
++    if(negative)value=-value;
++    if(value<(-2147483647LL-1)||value>2147483647LL)return PORT109_RANGE;
++    return put_int(out,bits,(int32_t)value);
++}
++int port111_move(const void *src,void *dst,size_t n){
++    if(n>0&&(!src||!dst))return PORT109_BAD_ARG;
++    if(n>0xffffffffu)return PORT109_BAD_ARG;
++    if(n==0||src==dst)return PORT109_OK;
++    const uint8_t *from=src;uint8_t *to=dst;
++    /* Source MOVE3_R5 handles multi-segment overlap. Never rely on UB from
++       comparisons of pointers to unrelated objects; use integer addresses. */
++    uintptr_t a=(uintptr_t)from,b=(uintptr_t)to;
++    if(b>a&&b-a<n){for(size_t i=n;i!=0;i--)to[i-1]=from[i-1];}
++    else{for(size_t i=0;i<n;i++)to[i]=from[i];}
++    return PORT109_OK;
++}
++int port111_d_arith(const uint16_t *a,const uint16_t *b,uint16_t *out,int divide){
++    if(!a||!b||!out||(divide!=0&&divide!=1))return PORT109_BAD_ARG;
++    long double x,y;int s=port109_decode(PORT_M107_D,a,&x);if(s!=PORT109_OK)return s;
++    s=port109_decode(PORT_M107_D,b,&y);if(s!=PORT109_OK)return s;
++    if(divide&&y==0)return PORT109_DOMAIN;
++    return write_scalar(PORT_M107_D,divide?x/y:x*y,out);
++}
++int port111_copy_float(enum port_m107_fmt fmt,const uint16_t *src,uint16_t *dst){
++    if(!nwords(fmt)||!src||!dst)return PORT109_BAD_ARG;
++    /* MOVF/MOVD can trap reserved operands, unlike raw MOVL/MOVQ. */
++    long double decoded;int s=port109_decode(fmt,src,&decoded);
++    if(s!=PORT109_OK)return s;
++    words_copy(dst,src,nwords(fmt));return PORT109_OK;
++}
++int port111_det_store(struct port111_det *d,const uint16_t *v){
++    if(!d||!v)return PORT109_BAD_ARG;
++    long double decoded;int s=port109_decode(PORT_M107_D,v,&decoded);if(s!=PORT109_OK)return s;
++    words_copy(d->d,v,4);return PORT109_OK;
++}
++int port111_det_get(const struct port111_det *d,enum port_m107_fmt fmt,uint16_t *out){
++    if(!d||!out||(fmt!=PORT_M107_F&&fmt!=PORT_M107_D))return PORT109_BAD_ARG;
++    long double x;int s=port109_decode(PORT_M107_D,d->d,&x);if(s!=PORT109_OK)return s;
++    if(fmt==PORT_M107_D){words_copy(out,d->d,4);return PORT109_OK;}
++    return write_scalar(PORT_M107_F,x,out);
++}
++int port111_xlate(const uint8_t *src,size_t n,const uint8_t *table,size_t table_n,
++                  uint8_t *dst,size_t cap,size_t *written){
++    if(!src||!table||!dst||!written||table_n>256||cap<n)return PORT109_BAD_ARG;
++    /* BAS$XLATE MOVTUC: zero means deletion, not an output NUL. */
++    size_t actual=0;
++    for(size_t i=0;i<n;i++){
++        uint8_t c=src[i],replacement=c<table_n?table[c]:0;
++        if(replacement!=0)dst[actual++]=replacement;
++    }
++    *written=actual;
++    return PORT109_APPROX; /* Caller still owns the complete BASIC descriptor. */
++}
++int port111_mulq(const uint32_t a[2],const uint32_t b[2],uint32_t out[2]){
++    if(!a||!b||!out)return PORT109_BAD_ARG;
++    uint64_t lo=(uint64_t)a[0]*(uint64_t)b[0];
++    uint32_t hi=(uint32_t)(lo>>32)+(uint32_t)(a[0]*b[1])+(uint32_t)(a[1]*b[0]);
++    uint32_t outlow=(uint32_t)lo;
++    out[0]=outlow;out[1]=hi;return PORT109_OK; /* unsigned modulo 2^64 */
++}
+--- a/tests/test_rtl_m111.c
++++ b/tests/test_rtl_m111.c
+@@ -0,0 +1,189 @@
++#include "../src/vms_rtl_m111.h"
++#include <assert.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++static const enum port_m107_fmt fmts[4]={PORT_M107_F,PORT_M107_D,PORT_M107_G,PORT_M107_H};
++static unsigned nwords(enum port_m107_fmt fmt){return fmt==PORT_M107_F?2:fmt==PORT_M107_H?8:4;}
++static int success(int s){return s==PORT109_OK||s==PORT109_APPROX;}
++static long double dist(long double a,long double b){return a>b?a-b:b-a;}
++static void init(enum port_m107_fmt f,long double v,uint16_t *p){
++    assert(port109_encode(f,v,p)==PORT109_OK);
++}
++static void expect(enum port_m107_fmt f,const uint16_t *p,long double value){
++    long double found=0;assert(port109_decode(f,p,&found)==PORT109_OK);
++    if(!(dist(found,value)<0.000008L*(1.0L+(value<0?-value:value)))){
++        fprintf(stderr,"Numeric F/D/G/H check failed: fmt=%u actual=%.12Lg expected=%.12Lg\n",(unsigned)f,found,value);
++        assert(0);
++    }
++}
++static void clock_tests(void){
++    struct port111_clock t={2026,11,20,9,7,5,50};char data[24];
++    assert(port111_clock_valid(&t));
++    memset(data,'#',sizeof data);
++    assert(port111_fortime(&t,data)==PORT109_OK&&!memcmp(data,"09:07:05",8)&&data[8]=='#');
++    assert(port111_fordate(&t,data)==PORT109_OK&&!memcmp(data,"20-NOV-26",9));
++    assert(port111_fortimeds(&t,data,12)==PORT109_OK&&!memcmp(data,"09:07:05    ",12));
++    assert(port111_fordateds(&t,data,12)==PORT109_OK&&!memcmp(data,"20-NOV-26   ",12));
++    assert(port111_fordateds(&t,data,4)==PORT109_OK&&!memcmp(data,"20-N",4));
++    int16_t m=0,d=0,y=0;int32_t m4=0,d4=0,y4=0;
++    assert(port111_foridate(&t,&m,&d,&y)==PORT109_OK&&m==11&&d==20&&y==26);
++    assert(port111_forjdate(&t,&m4,&d4,&y4)==PORT109_OK&&m4==11&&d4==20&&y4==26);
++    t.month=2;t.day=29;t.year=2024;assert(port111_clock_valid(&t));
++    t.year=2025;assert(!port111_clock_valid(&t));
++    char unchanged[12];memset(unchanged,'!',sizeof unchanged);
++    assert(port111_fortimeds(&t,unchanged,12)==PORT109_BAD_ARG&&unchanged[0]=='!');
++    t.year=2026;t.month=11;t.day=20;t.hour=0;t.minute=0;t.second=5;t.centisecond=0;
++    uint16_t start[2]={0},out[2]={0};init(PORT_M107_F,86399.0L,start);
++    assert(success(port111_forsecnds(&t,start,out)));expect(PORT_M107_F,out,6.0L);
++    init(PORT_M107_F,1.0L,start);
++    assert(success(port111_forsecnds(&t,start,out)));expect(PORT_M107_F,out,4.0L);
++}
++static void complex_tests(void){
++    for(unsigned k=0;k<3;k++){
++        const enum port_m107_fmt f=fmts[k];unsigned n=nwords(f);
++        uint16_t a[16]={0},b[16]={0},o[16]={0};
++        init(f,1,a);init(f,2,a+n);init(f,3,b);init(f,4,b+n);
++        int(*mult)(const uint16_t*,const uint16_t*,uint16_t*)=k==1?port111_otsmulcd:k==2?port111_otsmulcg:NULL;
++        int(*div)(const uint16_t*,const uint16_t*,uint16_t*)=k==0?port111_otsdivc:k==1?port111_otsdivcd:port111_otsdivcg;
++        if(mult){assert(success(mult(a,b,o)));expect(f,o,-5);expect(f,o+n,10);}
++        assert(success(div(a,b,o)));expect(f,o,11.0L/25.0L);expect(f,o+n,2.0L/25.0L);
++        init(f,0,b);init(f,0,b+n);memset(o,0x5a,sizeof o);
++        assert(div(a,b,o)==PORT109_DOMAIN);
++        for(size_t i=0;i<sizeof o;i++)assert(((uint8_t*)o)[i]==0x5a);
++        init(f,1,a);init(f,0,a+n);init(f,3,b);init(f,2,b+n);
++        int(*cpow)(const uint16_t*,const uint16_t*,uint16_t*)=k==0?port111_otspowcc:k==1?port111_otspowcdc:port111_otspowcgc;
++        assert(success(cpow(a,b,o)));expect(f,o,1);expect(f,o+n,0);
++        init(f,0,a);memset(o,0x73,sizeof o);
++        assert(cpow(a,b,o)==PORT109_DOMAIN); /* 0^(3+2i) non-real exponent */
++        for(size_t i=0;i<sizeof o;i++)assert(((uint8_t*)o)[i]==0x73);
++        init(f,2,a);init(f,1,a+n);
++        int(*ipow)(const uint16_t*,int32_t,uint16_t*)=k==0?port111_otspowcj:k==1?port111_otspowcdj:port111_otspowcgj;
++        assert(success(ipow(a,2,o)));expect(f,o,3);expect(f,o+n,4);
++        assert(success(ipow(a,-1,o)));expect(f,o,0.4L);expect(f,o+n,-0.2L);
++        memset(a,0,sizeof a);assert(ipow(a,-1,o)==PORT109_DOMAIN);
++    }
++    assert(port111_otsdivc(NULL,NULL,NULL)==PORT109_BAD_ARG);
++}
++static void realpow_tests(void){
++    uint16_t a[8]={0},b[8]={0},o[8]={0};
++    for(unsigned k=0;k<4;k++){
++        const enum port_m107_fmt f=fmts[k];
++        int(*powf)(const uint16_t*,const uint16_t*,uint16_t*)=k==0?port111_otspowrr:k==2?port111_otspowgg:k==3?port111_otspowhh:port111_otspowdd;
++        init(f,2,a);init(f,3,b);
++        assert(success(powf(a,b,o)));expect(f,o,8);
++        init(f,-2,a);memset(o,0x11,sizeof o);
++        assert(powf(a,b,o)==PORT109_DOMAIN);
++        assert(o[0]==0x1111);
++    }
++    init(PORT_M107_D,2,a);init(PORT_M107_F,3,b);
++    assert(success(port111_otspowdr(a,b,o)));expect(PORT_M107_D,o,8);
++    init(PORT_M107_F,2,a);init(PORT_M107_D,3,b);
++    assert(success(port111_otspowrd(a,b,o)));expect(PORT_M107_D,o,8);
++    init(PORT_M107_F,-2,a);init(PORT_M107_F,3,b);
++    assert(success(port111_baspowrr(a,b,o)));expect(PORT_M107_F,o,-8);
++    assert(success(port111_baspowrj(a,3,o)));expect(PORT_M107_F,o,-8);
++    assert(success(port111_baspowrj(a,-2,o)));expect(PORT_M107_F,o,0.25L);
++    init(PORT_M107_F,0,a);
++    assert(port111_baspowrj(a,-1,o)==PORT109_DOMAIN);
++    init(PORT_M107_F,-2,a);init(PORT_M107_F,0.5L,b);
++    assert(port111_baspowrr(a,b,o)==PORT109_DOMAIN);
++    init(PORT_M107_D,-2,a);init(PORT_M107_D,3,b);
++    assert(success(port111_baspowdd(a,b,o)));expect(PORT_M107_D,o,-8);
++    assert(success(port111_baspowdj(a,3,o)));expect(PORT_M107_D,o,-8);
++    assert(success(port111_baspowdj(a,-2,o)));expect(PORT_M107_D,o,0.25L);
++    init(PORT_M107_D,-2,a);init(PORT_M107_D,0.5L,b);
++    assert(port111_baspowdd(a,b,o)==PORT109_DOMAIN);
++    assert(port111_baspowdj(NULL,3,o)==PORT109_BAD_ARG);
++}
++static void integer_tests(void){
++    int16_t i16=777;int32_t i32=777;uint32_t u32=0;
++    assert(port111_otspowii(3,4,&i16)==PORT109_OK&&i16==81);
++    assert(port111_otspowjj(3,4,&i32)==PORT109_OK&&i32==81);
++    assert(port111_baspowii(-2,3,&i16)==PORT109_OK&&i16==-8);
++    assert(port111_baspowjj(-2,3,&i32)==PORT109_OK&&i32==-8);
++    assert(port111_otspowii(-1,-3,&i16)==PORT109_OK&&i16==-1);
++    assert(port111_otspowjj(-1,-4,&i32)==PORT109_OK&&i32==1);
++    assert(port111_baspowjj(2,-3,&i32)==PORT109_OK&&i32==0);
++    assert(port111_otspowii(0,0,&i16)==PORT109_DOMAIN&&i16==-1);
++    assert(port111_otspowjj(0,-1,&i32)==PORT109_DOMAIN&&i32==0);
++    assert(port111_baspowii(100,3,&i16)==PORT109_RANGE&&i16==-1);
++    assert(port111_baspowjj(100000,3,&i32)==PORT109_RANGE&&i32==0);
++    assert(port111_otspowlul(2,8,&u32)==PORT109_OK&&u32==256);
++    assert(port111_otspowlul(0,0,&u32)==PORT109_DOMAIN&&u32==256);
++    assert(port111_otspowlul(0xffffffffu,2,&u32)==PORT109_OK&&u32==1);
++    assert(port111_otspowii(5,3,NULL)==PORT109_BAD_ARG);
++}
++static void lun_tests(void){
++    struct port111_lun pool;port111_lun_init(&pool);
++    unsigned num=101;
++    for(unsigned i=0;i<100;i++)assert(port111_otslun_get(&pool,&num)==PORT109_OK&&num==i);
++    assert(port111_otslun_get(&pool,&num)==PORT109_PARTIAL&&num==99);
++    assert(port111_otslun_take(&pool,3)==PORT109_PARTIAL);
++    assert(port111_otslun_free(&pool,3)==PORT109_OK);
++    assert(port111_otslun_free(&pool,3)==PORT109_PARTIAL);
++    assert(port111_otslun_take(&pool,3)==PORT109_OK);
++    assert(port111_otslun_get(&pool,&num)==PORT109_PARTIAL);
++    assert(port111_otslun_take(&pool,100)==PORT109_BAD_ARG);
++}
++static void parse_tests(void){
++    int32_t x=123;int16_t shortv=123;int8_t bytev=12;
++    assert(port111_otscvttll(" .TRUE.",7,32,&x)==PORT109_OK&&x==-1);
++    assert(port111_otscvttll_compat(" .FALSE.",8,16,&shortv)==PORT109_OK&&shortv==0);
++    assert(port111_otscvttll("   ",3,8,&bytev)==PORT109_OK&&bytev==0);
++    assert(port111_otscvttll(".",1,32,&x)==PORT109_BAD_ARG&&x==-1);
++    assert(port111_otscvttil("  -00012",8,32,0,&x)==PORT109_OK&&x==-12);
++    assert(port111_otscvttil("   ",3,32,0,&x)==PORT109_OK&&x==0);
++    assert(port111_otscvttil("-",1,32,0,&x)==PORT109_OK&&x==0);
++    assert(port111_otscvttil_compat("\t+42",4,16,1,&shortv)==PORT109_OK&&shortv==42);
++    assert(port111_otscvttil("\t+42",4,16,0,&shortv)==PORT109_BAD_ARG&&shortv==42);
++    assert(port111_otscvttil("2147483648",10,32,0,&x)==PORT109_RANGE&&x==0);
++    assert(port111_otscvttil("12",2,8,0,&bytev)==PORT109_OK&&bytev==12);
++    assert(port111_otscvttil("300",3,8,0,&bytev)==PORT109_RANGE&&bytev==12);
++    assert(port111_otscvttil("12A",3,32,0,&x)==PORT109_BAD_ARG&&x==0);
++}
++static void move_tests(void){
++    char buf[32]="abcdefghij";
++    assert(port111_otsmove(buf,buf+2,8)==PORT109_OK);
++    assert(!memcmp(buf,"ababcdefgh",10));
++    assert(port111_otsmove_r5(buf+2,buf,8)==PORT109_OK);
++    assert(!memcmp(buf,"abcdefghgh",10));
++    static uint8_t large[70040];
++    for(size_t i=0;i<sizeof large;i++)large[i]=(uint8_t)(i%251u);
++    assert(port111_otsmove(large,large+20,70000)==PORT109_OK);
++    for(size_t i=0;i<70000;i++)assert(large[20+i]==(uint8_t)(i%251u));
++    assert(port111_otsmove(NULL,NULL,1)==PORT109_BAD_ARG);
++    assert(port111_otsmove(NULL,NULL,0)==PORT109_OK);
++}
++static void basic_tests(void){
++    uint16_t a[8]={0},b[8]={0},out[8]={0};
++    init(PORT_M107_D,2,a);init(PORT_M107_D,3,b);
++    assert(success(port111_basmulddi_mul(a,b,out)));expect(PORT_M107_D,out,6);
++    assert(success(port111_basmulddi_div(a,b,out)));expect(PORT_M107_D,out,2.0L/3.0L);
++    init(PORT_M107_D,0,b);
++    memset(out,0x48,sizeof out);
++    assert(port111_basmulddi_div(a,b,out)==PORT109_DOMAIN&&out[0]==0x4848);
++    init(PORT_M107_D,2,b);
++    assert(port111_bascopyfd_d(b,out)==PORT109_OK&&!memcmp(b,out,8));
++    init(PORT_M107_F,1.5L,b);
++    assert(port111_bascopyfd_f(b,out)==PORT109_OK&&!memcmp(b,out,4));
++    struct port111_det det={{0}};
++    init(PORT_M107_D,5,b);
++    assert(port111_basdet_store(&det,b)==PORT109_OK);
++    assert(port111_basdet_f(&det,out)==PORT109_APPROX);expect(PORT_M107_F,out,5);
++    assert(port111_basdet_d(&det,out)==PORT109_OK);expect(PORT_M107_D,out,5);
++    assert(port111_basdet_store(NULL,b)==PORT109_BAD_ARG);
++    uint8_t mapping[256]={0},txt[5]={'a','b','c','d','e'},dst[5]={0};size_t count=44;
++    mapping['a']='A';mapping['c']='C';mapping['e']='E';
++    assert(port111_basxlate(txt,5,mapping,256,dst,5,&count)==PORT109_APPROX);
++    assert(count==3&&!memcmp(dst,"ACE",3));
++    count=44;assert(port111_basxlate(txt,5,mapping,256,dst,2,&count)==PORT109_BAD_ARG&&count==44);
++    uint32_t left[2]={0xffffffffu,0xffffffffu},right[2]={2,0},product[2]={0};
++    assert(port111_cobmulq(left,right,product)==PORT109_OK&&product[0]==0xfffffffeu&&product[1]==0xffffffffu);
++    assert(port111_cobmulq(left,right,left)==PORT109_OK&&left[0]==0xfffffffeu&&left[1]==0xffffffffu);
++}
++int main(void){clock_tests();complex_tests();realpow_tests();integer_tests();lun_tests();
++    parse_tests();move_tests();basic_tests();
++    puts("M111: 40 original RTL source modules, IA-32 freestanding subsets, edge tests PASS (guest integration UNVERIFIED)");
++    return 0;
++}
+--- a/tests/test_rtl_m111_integrity.py
++++ b/tests/test_rtl_m111_integrity.py
+@@ -0,0 +1,55 @@
++#!/usr/bin/env python3
++"""M111 40-module source-specific ELF32, pinned line ranges and no false coverage."""
++import json
++import re
++import subprocess
++from pathlib import Path
++root=Path(__file__).resolve().parents[1]
++manifest=json.loads((root/'tools/m111_originals.json').read_text())
++assert manifest['revision']=='2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752'
++assert manifest['file_count']==40 and len(manifest['modules'])==40
++assert len({x['source'] for x in manifest['modules']})==40
++inventory=json.loads((root/'source-coverage.json').read_text())
++rows={x['original_file']:x for x in inventory['files']}
++assert len(rows)==len(inventory['files'])==350
++syms=set();partial=0;unresolved=0
++for mod in manifest['modules']:
++    path=root/'src/native_rtl_m111'/(mod['name'].lower()+'.c')
++    assert path.is_file(),str(path)
++    source=path.read_text()
++    assert 'Copyrighted DEC source text is NOT copied' in source
++    exported=re.findall(r'\bint\s+(port111_[a-zA-Z0-9_]+)\s*\(',source)
++    assert exported,(path,'no native callable entry')
++    assert len(set(exported))==len(exported)
++    syms.update(exported)
++    row=rows[mod['source']]
++    assert row['original_lines']==mod['lines']
++    secs=row['sections']
++    assert secs[0]['original_lines'][0]==1 and secs[-1]['original_lines'][1]==mod['lines']
++    cursor=1
++    for sec in secs:
++        assert sec['original_lines'][0]==cursor,(mod['source'],sec,cursor)
++        cursor=sec['original_lines'][1]+1
++        assert sec['status'] in ('partial','unresolved','excluded'),sec
++        if sec['status']=='partial':
++            partial+=1
++            assert sec['pc_file']=='src/native_rtl_m111/'+mod['name'].lower()+'.c'
++            assert sec['pc_symbol'] in exported
++            assert sec['pc_line']>0
++        if sec['status']=='unresolved':
++            unresolved+=1
++            assert 'reason' in sec
++    assert cursor==mod['lines']+1
++    assert secs[0]['status']=='unresolved'
++assert partial==51,(partial,'expected mapped entry count')
++assert unresolved==40,(unresolved,'expected explicit unresolved source preambles')
++obj=root/'build/rtl-m111-partial.o'
++elf=subprocess.check_output(['readelf','-h',str(obj)],text=True)
++assert 'ELF32' in elf and 'Intel 80386' in elf and 'REL (Relocatable file)' in elf
++missing=subprocess.check_output(['nm','-u',str(obj)],text=True)
++assert not missing.strip(),missing
++names=subprocess.check_output(['nm','-g','--defined-only',str(obj)],text=True)
++exports={s.split()[-1] for s in names.splitlines() if s.strip()}
++assert syms<=exports,sorted(syms-exports)
++assert len(syms)==51,(len(syms),sorted(syms))
++print('M111: 40 distinct pinned original source files, 51 source-specific ELF32 symbols; 51 partial / 40 unresolved ranges PASS')
+--- a/src/native_rtl_m111/bascopyfd.c
++++ b/src/native_rtl_m111/bascopyfd.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation: BASCOPYFD.MAR, pinned VMS 3.7.
++ * Original lines 1..179; original entries: BAS$$COPY_F_R1, BAS$$COPY_D_R1.
++ * basic_copy source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_bascopyfd_f(const uint16_t *src,uint16_t *out){return port111_copy_float(PORT_M107_F,src,out);}
++int port111_bascopyfd_d(const uint16_t *src,uint16_t *out){return port111_copy_float(PORT_M107_D,src,out);}
+--- a/src/native_rtl_m111/basdet.c
++++ b/src/native_rtl_m111/basdet.c
+@@ -0,0 +1,10 @@
++/* Native IA-32 partial translation: BASDET.MAR, pinned VMS 3.7.
++ * Original lines 1..227; original entries: BAS$DET_F, BAS$DET_D, BAS$$STORE_DET.
++ * basic_det source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_basdet_store(struct port111_det *d,const uint16_t *value){return port111_det_store(d,value);}
++int port111_basdet_d(const struct port111_det *d,uint16_t *out){return port111_det_get(d,PORT_M107_D,out);}
++int port111_basdet_f(const struct port111_det *d,uint16_t *out){return port111_det_get(d,PORT_M107_F,out);}
+--- a/src/native_rtl_m111/basmulddi.c
++++ b/src/native_rtl_m111/basmulddi.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation: BASMULDDI.MAR, pinned VMS 3.7.
++ * Original lines 1..202; original entries: BAS$$MULD, BAS$$DIVD.
++ * basic_arith source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_basmulddi_mul(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_d_arith(a,b,out,0);}
++int port111_basmulddi_div(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_d_arith(a,b,out,1);}
+--- a/src/native_rtl_m111/baspowdd.c
++++ b/src/native_rtl_m111/baspowdd.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: BASPOWDD.MAR, pinned VMS 3.7.
++ * Original lines 1..202; original entries: BAS$POWDD.
++ * basic_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_baspowdd(const uint16_t *a,const uint16_t *e,uint16_t *out){return port111_real_pow(PORT_M107_D,a,e,out,1);}
+--- a/src/native_rtl_m111/baspowdj.c
++++ b/src/native_rtl_m111/baspowdj.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: BASPOWDJ.MAR, pinned VMS 3.7.
++ * Original lines 1..183; original entries: BAS$POWDJ.
++ * basic_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_baspowdj(const uint16_t *a,int32_t exp,uint16_t *out){return port111_real_intpow(PORT_M107_D,a,exp,out,1);}
+--- a/src/native_rtl_m111/baspowii.c
++++ b/src/native_rtl_m111/baspowii.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: BASPOWII.MAR, pinned VMS 3.7.
++ * Original lines 1..185; original entries: BAS$POWII.
++ * basic_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_baspowii(int16_t a,int16_t b,int16_t *out){int64_t v=0;int st=port111_integer_pow(a,b,16,&v);if(st==PORT109_OK&&out)*out=(int16_t)v;return out?st:PORT109_BAD_ARG;}
+--- a/src/native_rtl_m111/baspowjj.c
++++ b/src/native_rtl_m111/baspowjj.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: BASPOWJJ.MAR, pinned VMS 3.7.
++ * Original lines 1..183; original entries: BAS$POWJJ.
++ * basic_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_baspowjj(int32_t a,int32_t b,int32_t *out){int64_t v=0;int st=port111_integer_pow(a,b,32,&v);if(st==PORT109_OK&&out)*out=(int32_t)v;return out?st:PORT109_BAD_ARG;}
+--- a/src/native_rtl_m111/baspowrj.c
++++ b/src/native_rtl_m111/baspowrj.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: BASPOWRJ.MAR, pinned VMS 3.7.
++ * Original lines 1..183; original entries: BAS$POWRJ.
++ * basic_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_baspowrj(const uint16_t *a,int32_t exp,uint16_t *out){return port111_real_intpow(PORT_M107_F,a,exp,out,1);}
+--- a/src/native_rtl_m111/baspowrr.c
++++ b/src/native_rtl_m111/baspowrr.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: BASPOWRR.MAR, pinned VMS 3.7.
++ * Original lines 1..202; original entries: BAS$POWRR.
++ * basic_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_baspowrr(const uint16_t *a,const uint16_t *e,uint16_t *out){return port111_real_pow(PORT_M107_F,a,e,out,1);}
+--- a/src/native_rtl_m111/basxlate.c
++++ b/src/native_rtl_m111/basxlate.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: BASXLATE.MAR, pinned VMS 3.7.
++ * Original lines 1..242; original entries: BAS$XLATE.
++ * basic_translate source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_basxlate(const uint8_t *src,size_t n,const uint8_t *table,size_t table_n,uint8_t *dst,size_t cap,size_t *written){return port111_xlate(src,n,table,table_n,dst,cap,written);}
+--- a/src/native_rtl_m111/cobmulq.c
++++ b/src/native_rtl_m111/cobmulq.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: COBMULQ.MAR, pinned VMS 3.7.
++ * Original lines 1..151; original entries: COB$MULQ_R8.
++ * quad_mul source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_cobmulq(const uint32_t a[2],const uint32_t b[2],uint32_t out[2]){return port111_mulq(a,b,out);}
+--- a/src/native_rtl_m111/fordate.c
++++ b/src/native_rtl_m111/fordate.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: FORDATE.MAR, pinned VMS 3.7.
++ * Original lines 1..137; original entries: FOR$DATE.
++ * time source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_fordate(const struct port111_clock *t,char out[9]){return port111_date(t,out,9,0);}
+--- a/src/native_rtl_m111/fordateds.c
++++ b/src/native_rtl_m111/fordateds.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: FORDATEDS.MAR, pinned VMS 3.7.
++ * Original lines 1..138; original entries: FOR$DATE_T_DS.
++ * time source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_fordateds(const struct port111_clock *t,char *out,size_t cap){return port111_date_descriptor(t,out,cap,0);}
+--- a/src/native_rtl_m111/foridate.c
++++ b/src/native_rtl_m111/foridate.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: FORIDATE.MAR, pinned VMS 3.7.
++ * Original lines 1..136; original entries: FOR$IDATE.
++ * time source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_foridate(const struct port111_clock *t,int16_t *m,int16_t *d,int16_t *y){return port111_mdy(t,m,d,y,16);}
+--- a/src/native_rtl_m111/forjdate.c
++++ b/src/native_rtl_m111/forjdate.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: FORJDATE.MAR, pinned VMS 3.7.
++ * Original lines 1..135; original entries: FOR$JDATE.
++ * time source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_forjdate(const struct port111_clock *t,int32_t *m,int32_t *d,int32_t *y){return port111_mdy(t,m,d,y,32);}
+--- a/src/native_rtl_m111/forsecnds.c
++++ b/src/native_rtl_m111/forsecnds.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: FORSECNDS.MAR, pinned VMS 3.7.
++ * Original lines 1..150; original entries: FOR$SECNDS.
++ * time source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_forsecnds(const struct port111_clock *t,const uint16_t *start,uint16_t *out){return port111_seconds(t,start,out);}
+--- a/src/native_rtl_m111/fortime.c
++++ b/src/native_rtl_m111/fortime.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: FORTIME.MAR, pinned VMS 3.7.
++ * Original lines 1..132; original entries: FOR$TIME.
++ * time source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_fortime(const struct port111_clock *t,char out[8]){return port111_date(t,out,8,1);}
+--- a/src/native_rtl_m111/fortimeds.c
++++ b/src/native_rtl_m111/fortimeds.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: FORTIMEDS.MAR, pinned VMS 3.7.
++ * Original lines 1..134; original entries: FOR$TIME_T_DS.
++ * time source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_fortimeds(const struct port111_clock *t,char *out,size_t cap){return port111_date_descriptor(t,out,cap,1);}
+--- a/src/native_rtl_m111/otscvttil.c
++++ b/src/native_rtl_m111/otscvttil.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation: OTSCVTTIL.MAR, pinned VMS 3.7.
++ * Original lines 1..301; original entries: FOR$CNV_IN_I, OTS$CVT_TI_L.
++ * text_integer source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otscvttil(const char *src,size_t n,unsigned bits,int tabs,void *out){return port111_parse_integer(src,n,bits,tabs,out);}
++int port111_otscvttil_compat(const char *src,size_t n,unsigned bits,int tabs,void *out){return port111_otscvttil(src,n,bits,tabs,out);}
+--- a/src/native_rtl_m111/otscvttll.c
++++ b/src/native_rtl_m111/otscvttll.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation: OTSCVTTLL.MAR, pinned VMS 3.7.
++ * Original lines 1..215; original entries: FOR$CNV_IN_L, OTS$CVT_TL_L.
++ * logical source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otscvttll(const char *src,size_t n,unsigned bits,void *out){return port111_parse_logical(src,n,bits,out);}
++int port111_otscvttll_compat(const char *src,size_t n,unsigned bits,void *out){return port111_otscvttll(src,n,bits,out);}
+--- a/src/native_rtl_m111/otsdivc.c
++++ b/src/native_rtl_m111/otsdivc.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSDIVC.MAR, pinned VMS 3.7.
++ * Original lines 1..178; original entries: OTS$DIVC.
++ * complex_arith source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otsdivc(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_complex_div(PORT_M107_F,a,b,out);}
+--- a/src/native_rtl_m111/otsdivcd.c
++++ b/src/native_rtl_m111/otsdivcd.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSDIVCD.MAR, pinned VMS 3.7.
++ * Original lines 1..178; original entries: OTS$DIVCD_R3.
++ * complex_arith source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otsdivcd(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_complex_div(PORT_M107_D,a,b,out);}
+--- a/src/native_rtl_m111/otsdivcg.c
++++ b/src/native_rtl_m111/otsdivcg.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSDIVCG.MAR, pinned VMS 3.7.
++ * Original lines 1..178; original entries: OTS$DIVCG_R3.
++ * complex_arith source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otsdivcg(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_complex_div(PORT_M107_G,a,b,out);}
+--- a/src/native_rtl_m111/otslun.c
++++ b/src/native_rtl_m111/otslun.c
+@@ -0,0 +1,10 @@
++/* Native IA-32 partial translation: OTSLUN.MAR, pinned VMS 3.7.
++ * Original lines 1..337; original entries: OTS$$GET_LUN, OTS$$FREE_LUN, OTS$$TAKE_LUN.
++ * lun source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otslun_get(struct port111_lun *pool,unsigned *unit){return port111_lun_get(pool,unit);}
++int port111_otslun_free(struct port111_lun *pool,unsigned unit){return port111_lun_free(pool,unit);}
++int port111_otslun_take(struct port111_lun *pool,unsigned unit){return port111_lun_take(pool,unit);}
+--- a/src/native_rtl_m111/otsmove.c
++++ b/src/native_rtl_m111/otsmove.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation: OTSMOVE.MAR, pinned VMS 3.7.
++ * Original lines 1..219; original entries: OTS$MOVE3, OTS$MOVE3_R5.
++ * memory_move source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otsmove(const void *src,void *dst,size_t n){return port111_move(src,dst,n);}
++int port111_otsmove_r5(const void *src,void *dst,size_t n){return port111_move(src,dst,n);}
+--- a/src/native_rtl_m111/otsmulcd.c
++++ b/src/native_rtl_m111/otsmulcd.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSMULCD.MAR, pinned VMS 3.7.
++ * Original lines 1..143; original entries: OTS$MULCD_R3.
++ * complex_arith source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otsmulcd(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_complex_mul(PORT_M107_D,a,b,out);}
+--- a/src/native_rtl_m111/otsmulcg.c
++++ b/src/native_rtl_m111/otsmulcg.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSMULCG.MAR, pinned VMS 3.7.
++ * Original lines 1..143; original entries: OTS$MULCG_R3.
++ * complex_arith source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otsmulcg(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_complex_mul(PORT_M107_G,a,b,out);}
+--- a/src/native_rtl_m111/otspowcc.c
++++ b/src/native_rtl_m111/otspowcc.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWCC.MAR, pinned VMS 3.7.
++ * Original lines 1..176; original entries: OTS$POWCC.
++ * complex_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowcc(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_complex_pow(PORT_M107_F,a,b,out);}
+--- a/src/native_rtl_m111/otspowcdc.c
++++ b/src/native_rtl_m111/otspowcdc.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWCDC.MAR, pinned VMS 3.7.
++ * Original lines 1..170; original entries: OTS$POWCDCD_R3.
++ * complex_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowcdc(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_complex_pow(PORT_M107_D,a,b,out);}
+--- a/src/native_rtl_m111/otspowcdj.c
++++ b/src/native_rtl_m111/otspowcdj.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWCDJ.MAR, pinned VMS 3.7.
++ * Original lines 1..220; original entries: OTS$POWCDJ_R3.
++ * complex_intpow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowcdj(const uint16_t *a,int32_t exp,uint16_t *out){return port111_complex_intpow(PORT_M107_D,a,exp,out);}
+--- a/src/native_rtl_m111/otspowcgc.c
++++ b/src/native_rtl_m111/otspowcgc.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWCGC.MAR, pinned VMS 3.7.
++ * Original lines 1..170; original entries: OTS$POWCGCG_R3.
++ * complex_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowcgc(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_complex_pow(PORT_M107_G,a,b,out);}
+--- a/src/native_rtl_m111/otspowcgj.c
++++ b/src/native_rtl_m111/otspowcgj.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWCGJ.MAR, pinned VMS 3.7.
++ * Original lines 1..220; original entries: OTS$POWCGJ_R3.
++ * complex_intpow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowcgj(const uint16_t *a,int32_t exp,uint16_t *out){return port111_complex_intpow(PORT_M107_G,a,exp,out);}
+--- a/src/native_rtl_m111/otspowcj.c
++++ b/src/native_rtl_m111/otspowcj.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWCJ.MAR, pinned VMS 3.7.
++ * Original lines 1..222; original entries: OTS$POWCJ.
++ * complex_intpow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowcj(const uint16_t *a,int32_t exp,uint16_t *out){return port111_complex_intpow(PORT_M107_F,a,exp,out);}
+--- a/src/native_rtl_m111/otspowdd.c
++++ b/src/native_rtl_m111/otspowdd.c
+@@ -0,0 +1,20 @@
++/* Native IA-32 partial translation: OTSPOWDD.MAR, pinned VMS 3.7.
++ * Original lines 1..226; original entries: OTS$POWDR, OTS$POWRD, OTS$POWDD.
++ * real_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowdr(const uint16_t *base_d,const uint16_t *exp_f,uint16_t *out){
++    if(!base_d||!exp_f||!out)return PORT109_BAD_ARG;
++    long double e;int st=port109_decode(PORT_M107_F,exp_f,&e);if(st!=PORT109_OK)return st;
++    uint16_t temp[4]={0};st=port109_encode(PORT_M107_D,e,temp);if(st!=PORT109_OK)return st;
++    return port111_real_pow(PORT_M107_D,base_d,temp,out,0);
++}
++int port111_otspowrd(const uint16_t *base_f,const uint16_t *exp_d,uint16_t *out){
++    if(!base_f||!exp_d||!out)return PORT109_BAD_ARG;
++    long double b;int st=port109_decode(PORT_M107_F,base_f,&b);if(st!=PORT109_OK)return st;
++    uint16_t temp[4]={0};st=port109_encode(PORT_M107_D,b,temp);if(st!=PORT109_OK)return st;
++    return port111_real_pow(PORT_M107_D,temp,exp_d,out,0);
++}
++int port111_otspowdd(const uint16_t *base_d,const uint16_t *exp_d,uint16_t *out){return port111_real_pow(PORT_M107_D,base_d,exp_d,out,0);}
+--- a/src/native_rtl_m111/otspowgg.c
++++ b/src/native_rtl_m111/otspowgg.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWGG.MAR, pinned VMS 3.7.
++ * Original lines 1..194; original entries: OTS$POWGG.
++ * real_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowgg(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_real_pow(PORT_M107_G,a,b,out,0);}
+--- a/src/native_rtl_m111/otspowhh.c
++++ b/src/native_rtl_m111/otspowhh.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWHH.MAR, pinned VMS 3.7.
++ * Original lines 1..185; original entries: OTS$POWHH_R3.
++ * real_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowhh(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_real_pow(PORT_M107_H,a,b,out,0);}
+--- a/src/native_rtl_m111/otspowii.c
++++ b/src/native_rtl_m111/otspowii.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWII.MAR, pinned VMS 3.7.
++ * Original lines 1..241; original entries: OTS$POWII.
++ * integer_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowii(int16_t a,int16_t b,int16_t *out){int64_t v=0;int st=port111_integer_pow(a,b,16,&v);if(st==PORT109_OK&&out)*out=(int16_t)v;return out?st:PORT109_BAD_ARG;}
+--- a/src/native_rtl_m111/otspowjj.c
++++ b/src/native_rtl_m111/otspowjj.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWJJ.MAR, pinned VMS 3.7.
++ * Original lines 1..243; original entries: OTS$POWJJ.
++ * integer_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowjj(int32_t a,int32_t b,int32_t *out){int64_t v=0;int st=port111_integer_pow(a,b,32,&v);if(st==PORT109_OK&&out)*out=(int32_t)v;return out?st:PORT109_BAD_ARG;}
+--- a/src/native_rtl_m111/otspowlul.c
++++ b/src/native_rtl_m111/otspowlul.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWLUL.MAR, pinned VMS 3.7.
++ * Original lines 1..149; original entries: OTS$POWLULU.
++ * integer_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowlul(uint32_t a,uint32_t b,uint32_t *out){return port111_ulogpow(a,b,out);}
+--- a/src/native_rtl_m111/otspowrr.c
++++ b/src/native_rtl_m111/otspowrr.c
+@@ -0,0 +1,8 @@
++/* Native IA-32 partial translation: OTSPOWRR.MAR, pinned VMS 3.7.
++ * Original lines 1..196; original entries: OTS$POWRR.
++ * real_pow source semantics are represented in explicit native helpers.
++ * Copyrighted DEC source text is NOT copied into this file.
++ * VAX calling frame, exact condition signals and live guest binding pending.
++ */
++#include "../vms_rtl_m111.h"
++int port111_otspowrr(const uint16_t *a,const uint16_t *b,uint16_t *out){return port111_real_pow(PORT_M107_F,a,b,out,0);}
