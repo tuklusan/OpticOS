@@ -1,6 +1,15 @@
 --- a/Makefile
 +++ b/Makefile
-@@ -795,8 +795,8 @@
+@@ -788,6 +788,8 @@
+ M119_CON_OBJS=$(patsubst src/%.c,build/%.o,$(M119_CON_SRCS))
+ M120_IOC_SRCS=$(wildcard src/vms_ioc_*.c)
+ M120_IOC_OBJS=$(patsubst src/%.c,build/%.o,$(M120_IOC_SRCS))
++M121_QIO_SRCS=$(wildcard src/vms_qio_*.c)
++M121_QIO_OBJS=$(patsubst src/%.c,build/%.o,$(M121_QIO_SRCS))
+ $(M119_CON_OBJS): build/%.o: src/%.c src/vms_con_port.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ .PHONY: conportcheck
+@@ -795,8 +797,8 @@
  	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
  	./build/conportcheck
  
@@ -11,7 +20,7 @@
  build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
  	$(CC) $(CFLAGS) -c $< -o $@
  build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
-@@ -820,7 +820,7 @@
+@@ -820,7 +822,7 @@
  	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
  .PHONY: sysexecentrycheck
  sysexecentrycheck: | build
@@ -20,15 +29,13 @@
  	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
  .PHONY: inicpbuscheck
  inicpbuscheck: | build
-@@ -1135,3 +1135,14 @@
+@@ -1135,3 +1137,12 @@
  iocphyscheck: $(M120_IOC_OBJS) | build
  	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M120_IOC_SRCS) $(M118_DB_SRCS) tests/test_ioc_phys_host.c -o build/iocphyscheck
  	./build/iocphyscheck
 +
 +# M121: source SYSQIOREQ.MAR EXE$FINISHIOC to IOC post queue, used
 +# by NLDRIVER.MAR; this is not a user $QIO/AST delivery interface.
-+M121_QIO_SRCS=$(wildcard src/vms_qio_*.c)
-+M121_QIO_OBJS=$(patsubst src/%.c,build/%.o,$(M121_QIO_SRCS))
 +$(M121_QIO_OBJS): build/%.o: src/%.c src/vms_qio_post.h | build
 +	$(CC) $(CFLAGS) -c $< -o $@
 +.PHONY: qiopostcheck
