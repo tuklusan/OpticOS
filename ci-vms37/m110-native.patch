@@ -1,0 +1,1934 @@
+--- a/Makefile
++++ b/Makefile
+@@ -981,3 +981,29 @@
+ 	python3 tools/gen_source_coverage.py
+ 	python3 tests/test_rtl_m109_integrity.py
+ all: build/rtl-m109-partial.o
++
++# M110: strict original line inventory checker and maintained CHS-stage test.
++.PHONY: sourcerangecheck m21bootcheck
++sourcerangecheck:
++	python3 tools/gen_source_coverage.py
++	python3 tools/validate_source_ranges.py
++	python3 tests/test_coverage_ranges.py
++m21bootcheck: build/boot.bin build/kernel.bin vms37lab.ima
++	python3 tests/test_m21_boot.py
++
++# M110: 34 original RTL module slices alongside two SYS executive mappings.
++M110_MODULE_SRCS=$(wildcard src/native_rtl_m110/*.c)
++M110_MODULE_OBJS=$(patsubst src/native_rtl_m110/%.c,build/m110/%.o,$(M110_MODULE_SRCS))
++build/vms_rtl_m110.o: src/vms_rtl_m110.c src/vms_rtl_m110.h src/vms_rtl_m109.h | build
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/m110/%.o: src/native_rtl_m110/%.c src/vms_rtl_m110.h | build
++	mkdir -p build/m110
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/rtl-m110-partial.o: build/vms_rtl_m110.o build/vms_rtl_m109.o build/vms_rtl_m109_x87.o $(M110_MODULE_OBJS)
++	$(LD) -m elf_i386 -r -o $@ $^
++.PHONY: rtl110check
++rtl110check: build/rtl-m110-partial.o
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc src/vms_rtl_m109.c src/vms_rtl_m109_x87.c src/vms_rtl_m110.c $(M110_MODULE_SRCS) tests/test_rtl_m110.c -o build/rtl110check
++	./build/rtl110check
++	python3 tests/test_rtl_m110_integrity.py
++all: build/rtl-m110-partial.o
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -318,12 +318,16 @@
+     'status':'partial; only UAF structure mapped',
+     'original_lines':6969,
+     'sections':[
++      {'original_lines':[1,6142], 'status':'unresolved',
++       'reason':'Original system-wide definitions before the UAF layout are not ported'},
+       {'original_lines':[6143,6146], 'status':'excluded',
+        'reason':'structure introduction and source headings'},
+       {'original_lines':[6147,6232], 'status':'mapped',
+        'pc_file':'src/vms_uaf_v37.c','pc_symbol':'vms37_uaf_decode',
+        'pc_line':line_for_symbol('src/vms_uaf_v37.c','vms37_uaf_decode'),
+        'function':'VMS 3.7 UAF field offsets, password, flags and salt'},
++      {'original_lines':[6233,6969], 'status':'unresolved',
++       'reason':'Original system-wide definitions after UAF layout are not ported'},
+     ],
+     'unresolved_integration':'Real RMS indexed-file access and remaining original SYSDEF definitions are not yet ported'
+ })
+@@ -442,12 +446,60 @@
+                         'original_lines':97,'sections':new,
+                         'unresolved_integration':
+                         'Other internal DCL image implementations remain unfinished; this file defines their identifiers only'})
+-# The earlier source files are not marked done by this index until their
+-# line ranges receive the same check.
+-for source, target in [('SYS/SRC/ASTDEL.MAR', 'src/vms_astdel.c'),
+-                       ('SYS/SRC/POSTEF.MAR', 'src/vms_postef.c')]:
+-    result['files'].append({'original_file': source, 'status': 'line review pending',
+-                            'pc_file': target})
++# M110: Audit both live native AST/event modules line by line. All runtime
++# code remains partial: there is no original VAX REI/PSL frame, multiprocessor
++# interlock, guest scheduler, or completed signal/condition delivery.
++def append_source_ranges(original, count, native, spec, unresolved):
++    ranges=[]
++    next_line=1
++    for last, state, symbol, explanation in spec:
++        assert next_line <= last <= count, (original,next_line,last)
++        sec={'original_lines':[next_line,last], 'status':state}
++        if state in ('partial','mapped'):
++            line=line_for_symbol(native,symbol)
++            if line is None:
++                global missing
++                missing+=1
++                sec['status']='missing'
++            sec.update({'pc_file':native,'pc_symbol':symbol,'pc_line':line,
++                'function':explanation})
++        else:
++            sec['reason']=explanation
++        ranges.append(sec)
++        next_line=last+1
++    assert next_line==count+1, (original,next_line,count)
++    result['files'].append({'original_file':original,'original_lines':count,
++        'sections':ranges,'unresolved_integration':unresolved})
++
++append_source_ranges('SYS/SRC/ASTDEL.MAR',671,'src/vms_astdel.c',[
++  (89,'excluded',None,'Source history, declarations and VAX PSECT directives; not executable'),
++  (131,'excluded',None,'ASTDEL dispatch interface description and register contract'),
++  (146,'partial','port_astdel_deliver','Current PCB and AST delivery interrupt select; guest trap frame absent'),
++  (177,'partial','port_astdel_deliver','Special kernel AST eligibility and queue exit'),
++  (223,'partial','port_astdel_deliver','Spurious/blocked AST exit, bit clearing and level recomputation'),
++  (266,'partial','port_astdel_deliver','Normal AST priority and mode selection'),
++  (343,'partial','port_astdel_deliver','Kernel AST callback dispatch; no VAX CALLS/REI/PSL ABI'),
++  (426,'unresolved',None,'Normal executive/supervisor/user AST user-stack frame and VAX CHMK return paths are not implemented'),
++  (454,'partial','port_astdel_queue_ipast','IPAST vector and special piggyback kernel AST enqueue'),
++  (496,'excluded',None,'AST queue argument and condition descriptions'),
++  (586,'partial','port_astdel_queue','Queue AST requests with eligibility; VAX interlocks/multiprocessor handoffs not yet available'),
++  (602,'excluded',None,'New AST level call contract and explanatory comments'),
++  (626,'partial','port_astdel_new_level','Compute AST eligibility from per-mode queues'),
++  (661,'excluded',None,'Swap and remove AST interface descriptions'),
++  (668,'partial','port_astdel_swap','Queue replacement/removal entry; no native VAX register ABI'),
++  (671,'excluded',None,'Original assembler END and file close')
++], 'No live scheduler/guest process binding, VAX AST return/user frame, IPL transition, or multiprocessor interlocks.')
++append_source_ranges('SYS/SRC/POSTEF.MAR',403,'src/vms_postef.c',[
++  (94,'excluded',None,'Original file history, declarations and VAX PSECT directives'),
++  (135,'excluded',None,'SCH$POSTEF call contract and non-executable comments'),
++  (175,'partial','port_postef_post','Post private event flags, return WASSET/WASCLR and wake eligible PCB'),
++  (228,'partial','port_postef_post_mask','Common EF post and waiter wake; multiprocessor replication is host-only simulation'),
++  (250,'excluded',None,'CHKWAIT entry contract and event mask description'),
++  (271,'partial','port_postef_wait','Event wait-all/wait-any mask and process state update'),
++  (349,'unresolved',None,'Shared-memory secondary CPU event delivery, packet and synchronization setup absent'),
++  (401,'unresolved',None,'EXE$SHM_CEF_REQ VAX MPC/MA$REQUEST transport and interprocessor signaling absent'),
++  (403,'excluded',None,'Original assembler END directive and trailing blank')
++], 'Guest event flag system service, actual PCB scheduler wakeup, and interprocessor CEF request engine remain unresolved.')
+ goto_sections=[
+     (1, 85, None, None, 'source banner, VAX declarations and calling convention'),
+     (86, 94, 'src/vms_dcl_goto.c', 'port_dcl_goto',
+@@ -1628,7 +1680,7 @@
+     (1240,1255,'src/vms_ini_syslog.c','port_ini_syslog_init','Validated copy of SYS$DISK and SYS$SYSDEVICE LOG records into aligned nonpaged pool and two temporary LOG$AL_LOGTBL slots; host-only until native logical-name service is live','partial'),
+     (1256,1288,'src/vms_ini_ttydrv.c','port_ini_tty_class_relocate','Source DPTAB prologue type/UCB size checks and class vector self-relative relocation; host tested; terminal service and live IOC/DDB/UCB are pending','partial'),
+     (1289,1304,'src/vms_ini_ttydrv.c','port_ini_tty_bind_console','Original DEVICEDAT/TTYDEF DDB and OPA0 UCB class/port dispatch fields; host-tested but actual TTDRIVER/OP$DPT images and I/O service not running','partial'),
+-    (1301,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
++    (1305,1906,None,None,'Console device registration, INIT teardown and pool policies unresolved','unresolved')]
+ parts=[]
+ for first,last,path,symbol,purpose,status in init_parts:
+     if not path:
+@@ -1800,6 +1852,72 @@
+ assert len(m109_seen)==36
+ assert len({x['original_file'] for x in result['files']})==len(result['files'])
+ 
++# M110: 34 additional source-specific, freestanding IA-32 RTL modules.
++# All are *partial* numerical adapters or strict table/pool subsets. Their
++# VAX register conventions, arithmetic fault dispatch and guest link remain
++# unresolved. Earlier M110 ASTDEL/POSTEF line mapping is also partial.
++m110_manifest=json.loads((ROOT/'tools/m110_originals.json').read_text())
++assert m110_manifest['revision']==REVISION
++assert m110_manifest['file_count']==34
++m110_seen=set()
++for mod in m110_manifest['modules']:
++    original=mod['source'];total=mod['lines'];entries=mod['entries']
++    assert original not in m110_seen
++    m110_seen.add(original)
++    assert entries and all(0<z['line']<total-1 for z in entries)
++    assert [z['line'] for z in entries]==sorted(z['line'] for z in entries)
++    filename=original.rsplit('/',1)[-1].lower().replace('.mar','.c')
++    path='src/native_rtl_m110/'+filename
++    assert (ROOT/path).is_file()
++    modname=filename[:-2]
++    prefix='port110_'+modname
++    parts=[]
++    if entries[0]['line']>1:
++        parts.append({'original_lines':[1,entries[0]['line']-1],
++            'status':'unresolved','reason':'Original declarations, coefficient tables, VAX hardware data and non-entry code not migrated line-by-line'})
++    def entry_symbol(index):
++        if mod['kind']=='complex' and modname.endswith(('sinco','sinc')):
++            return prefix+('_sin' if index==0 else '_cos')
++        if mod['kind']=='sincos':
++            return [prefix,prefix+'_sin',prefix+'_cos',prefix+'d',prefix+'_sind',prefix+'_cosd'][index]
++        if modname=='mthcvtdg':
++            return [None,None,prefix+'_d_g',prefix+'_g_d'][index]
++        if modname=='mthconver':
++            # Only these source-defined conversion entry points are native;
++            # the remaining source variants remain explicitly unresolved.
++            mapped={0:prefix+'_dfloti',1:prefix+'_dflotj',2:prefix+'_iint',
++                    3:prefix+'_iint',4:prefix+'_jint',5:prefix+'_jint',
++                    11:prefix+'_dble',12:prefix+'_sngl'}
++            return mapped.get(index)
++        if modname=='libef':return prefix+'_'+['get','free','reserve'][index]
++        if modname=='liblun':return prefix+'_'+['get','free'][index]
++        return prefix
++    for index,entry in enumerate(entries):
++        first=entry['line']
++        last=entries[index+1]['line']-1 if index+1<len(entries) else total-2
++        assert first<=last,(original,first,last)
++        sym=entry_symbol(index)
++        if sym is None:
++            parts.append({'original_lines':[first,last],'status':'unresolved',
++               'reason':'Source entry '+entry['label']+' not translated; explicit VAX ABI/array operation pending'})
++            continue
++        line=line_for_symbol(path,sym)
++        if line is None:missing+=1
++        parts.append({'original_lines':[first,last],
++            'status':'partial' if line else 'missing',
++            'pc_file':path,'pc_symbol':sym,'pc_line':line,
++            'function':'Source entry '+entry['label']+' native IA-32 bounded subset; original machine-code rounding, signal handling, descriptor calling frame and live guest binding absent'})
++    parts.append({'original_lines':[total-1,total],
++        'status':'excluded','reason':'Original assembler END directive and non-executable final line'})
++    result['files'].append({'original_file':original,'original_lines':total,
++        'sections':parts,
++        'unresolved_integration':('This host-tested source-specific IA-32 RTL module is not called by real guest VMS. '
++           'Shared x87 numerical operations are approximations, not DEC polynomial equivalence. '
++           'Original VAX format H cannot retain 113-bit precision on an 80-bit x87; '
++           'condition signaling, all argument and calling conventions, or full table/EF-LUN system services are not complete.')})
++assert len(m110_seen)==34
++assert len({x['original_file'] for x in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- a/tests/test_m21_boot.py
++++ b/tests/test_m21_boot.py
+@@ -1,10 +1,35 @@
+ from pathlib import Path
+-r=Path(__file__).resolve().parent.parent
+-s=(r/'src/boot.s').read_text()
+-for v in ('$0x1000','$0x8e00','$0xb200','$0xd600','$3, %ch'):
+-    assert v in s,v
+-assert s.count('call bios_read_retry')==15
+-assert 'bios_read_retry:' in s
+-assert (r/'build/boot.bin').stat().st_size==512
+-assert (r/'build/kernel.bin').stat().st_size<=251*512
+-print('M21+ stage-1 CHS loader and bounds PASS')
++import struct
++
++root = Path(__file__).resolve().parent.parent
++source = (root/'src/boot.s').read_text()
++boot = (root/'build/boot.bin').read_bytes()
++kernel = (root/'build/kernel.bin').read_bytes()
++floppy = (root/'vms37lab.ima').read_bytes()
++assert len(boot) == 512 and boot[-2:] == b'\x55\xaa'
++assert 0 < len(kernel) <= 251*512
++assert source.count('call bios_read_retry') == 1, 'One repeated single-sector CHS read loop'
++for instruction in ('movw $0x1000, %si', 'movw $251, %bp',
++                    'movw stage2_count, %bp', 'movw stage2_lbn, %di',
++                    'movb $1, %al', 'int $0x13', 'ljmp $0x08, $0x00010000',
++                    'vmb_e820_next:', 'vmb_e820_invalid:', 'bios_read_retry:',
++                    'disk_error:', '0xaa55'):
++    if instruction == 'movw $251, %bp':
++        continue  # Explicit 251-block bound is CMP, not an unbounded MOV.
++    assert instruction in source, instruction
++assert 'cmpw $251, %bp' in source
++assert 'cmpw $2880, %ax' in source
++assert 'jnz read_block' in source
++assert 'movw $3, %si' in source and 'jnz .retry' in source
++# The M21 $8e00/$b200/$d600 hardcoded segment assumptions were removed
++# when SYSBOOT began reading an explicitly counted contiguous stage-2.
++assert all(old not in source for old in ('$0x8e00','$0xb200','$0xd600'))
++position = boot.find(b'VMSB')
++assert 0 <= position <= 510-8, 'Recorded sector stage-2 parameters'
++# build/boot.bin is an unpatched template; the imaged floppy has live count.
++assert floppy[:position+4] == boot[:position+4]
++count, lbn = struct.unpack_from('<HH', floppy, position+4)
++assert 1 <= count <= 251 and 1 <= lbn < 2880
++assert lbn+count <= 2880
++assert count*512 >= len(kernel), 'Recorded disk allocation must fit stage-2'
++print('Current live counted CHS boot loader and bounds PASS')
+--- a/src/vms_rtl_m109_x87.c
++++ b/src/vms_rtl_m109_x87.c
+@@ -65,3 +65,15 @@
+     *e=(int)exp+1;
+     return normalized*0.5L;
+ }
++long double port109_x87_sin(long double x){
++    long double out;
++    __asm__ __volatile__("fldt %1\n\tfsin\n\tfstpt %0"
++        : "=m"(out) : "m"(x) : "st");
++    return out;
++}
++long double port109_x87_cos(long double x){
++    long double out;
++    __asm__ __volatile__("fldt %1\n\tfcos\n\tfstpt %0"
++        : "=m"(out) : "m"(x) : "st");
++    return out;
++}
+--- a/src/vms_rtl_m109_x87.h
++++ b/src/vms_rtl_m109_x87.h
+@@ -9,4 +9,9 @@
+ long double port109_x87_exp(long double x);
+ long double port109_x87_scale(long double x,int e);
+ long double port109_x87_extract(long double x,int *e);
++
++/* M110 uses the native x87 trig instructions; the VAX polynomial tables
++ * and DEC error/PSL signaling remain independently unresolved. */
++long double port109_x87_sin(long double x);
++long double port109_x87_cos(long double x);
+ #endif
+--- a/tools/validate_source_ranges.py
++++ b/tools/validate_source_ranges.py
+@@ -0,0 +1,107 @@
++#!/usr/bin/env python3
++"""Fail closed on untracked, repeated, or invented original-source line ranges.
++
++This validator measures *inventory quality*, not executable parity. A partial
++or unresolved original line never becomes a claim of full porting coverage.
++"""
++import argparse
++import json
++from collections import Counter
++from pathlib import Path
++
++ALLOWED = {'mapped', 'partial', 'unresolved', 'missing', 'excluded',
++           'hardware-excluded'}
++CODE = {'mapped', 'partial'}
++
++
++def validate(document, root):
++    errors = []
++    seen = set()
++    totals = Counter()
++    for obj in document.get('files', []):
++        name = obj.get('original_file')
++        if not isinstance(name, str) or not name or name in seen:
++            errors.append(f'{name}: duplicate or invalid source path')
++            continue
++        seen.add(name)
++        n = obj.get('original_lines')
++        if not isinstance(n, int) or n <= 0:
++            errors.append(f'{name}: original line count missing')
++            continue
++        coverage = bytearray(n)
++        if not obj.get('sections'):
++            errors.append(f'{name}: source has no line-by-line sections')
++            continue
++        for index, section in enumerate(obj['sections']):
++            label = f'{name} section {index}'
++            pair = section.get('original_lines')
++            if not isinstance(pair, list) or len(pair) != 2 or not all(isinstance(x,int) for x in pair):
++                errors.append(f'{label}: missing line bounds')
++                continue
++            start, end = pair
++            if not (1 <= start <= end <= n):
++                errors.append(f'{label}: invalid original lines {pair} of {n}')
++                continue
++            status = section.get('status')
++            if status not in ALLOWED:
++                errors.append(f'{label}: unknown status {status!r}')
++            totals[status] += end - start + 1
++            for k in range(start-1, end):
++                if coverage[k]:
++                    errors.append(f'{name}: overlapping original line {k+1}')
++                    break
++                coverage[k] = 1
++            if status in CODE:
++                pcfile = section.get('pc_file')
++                sym = section.get('pc_symbol')
++                pcline = section.get('pc_line')
++                if not isinstance(pcfile,str) or not isinstance(sym,str) or not sym:
++                    errors.append(f'{label}: no native source/symbol')
++                elif not (root/pcfile).is_file():
++                    errors.append(f'{label}: native file absent: {pcfile}')
++                if not isinstance(pcline,int) or pcline <= 0:
++                    errors.append(f'{label}: native symbol line missing')
++                elif pcfile and (root/pcfile).is_file() and pcline > sum(1 for _ in (root/pcfile).open()):
++                    errors.append(f'{label}: native symbol line outside file')
++            elif status in ('unresolved', 'missing', 'excluded', 'hardware-excluded'):
++                if not section.get('reason'):
++                    errors.append(f'{label}: no justification or unresolved dependency')
++        gap = coverage.count(0)
++        if gap:
++            totals['unindexed_original_lines'] += gap
++            pos = coverage.index(0) + 1
++            errors.append(f'{name}: {gap} unmapped original lines (first line {pos})')
++    if not seen:
++        errors.append('No source file entries')
++    return {'passed': not errors, 'indexed_original_files':len(seen),
++            'reported_line_counts':sum(v.get('original_lines', 0) for v in document.get('files',[]) if isinstance(v.get('original_lines'),int)),
++            'counts':dict(sorted(totals.items())), 'errors':errors}
++
++
++def main():
++    parser=argparse.ArgumentParser()
++    parser.add_argument('--coverage',default='source-coverage.json')
++    parser.add_argument('--root',default='.')
++    parser.add_argument('--original-file-total',type=int,default=4566)
++    parser.add_argument('--require-full-port',action='store_true')
++    args=parser.parse_args()
++    root=Path(args.root)
++    result=validate(json.loads((root/args.coverage).read_text()),root)
++    total=args.original_file_total
++    result['original_repository_files']=total
++    result['unindexed_original_files']=total-result['indexed_original_files']
++    if total < result['indexed_original_files']:
++        result['errors'].append('Indexed more files than pinned repository total')
++    if args.require_full_port:
++        if result['unindexed_original_files']:
++            result['errors'].append('Full port incomplete: original files not indexed')
++        for status in ('partial','unresolved','missing'):
++            if result['counts'].get(status,0):
++                result['errors'].append(f'Full port incomplete: {status} source lines remain')
++    result['passed']=not result['errors']
++    print(json.dumps(result,indent=2))
++    return 0 if result['passed'] else 1
++
++
++if __name__=='__main__':
++    raise SystemExit(main())
+--- a/tools/m110_originals.json
++++ b/tools/m110_originals.json
+@@ -0,0 +1,677 @@
++{
++  "reference": "https://github.com/calmsacibis995/vms37-src",
++  "revision": "2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752",
++  "file_count": 34,
++  "modules": [
++    {
++      "name": "MTHCEXP",
++      "source": "RTL/SRC/MTHCEXP.MAR",
++      "lines": 146,
++      "entries": [
++        {
++          "line": 123,
++          "label": "MTH$CEXP"
++        }
++      ],
++      "format": "F",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCLOG",
++      "source": "RTL/SRC/MTHCLOG.MAR",
++      "lines": 138,
++      "entries": [
++        {
++          "line": 124,
++          "label": "MTH$CLOG"
++        }
++      ],
++      "format": "F",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCSQRT",
++      "source": "RTL/SRC/MTHCSQRT.MAR",
++      "lines": 167,
++      "entries": [
++        {
++          "line": 134,
++          "label": "MTH$CSQRT"
++        }
++      ],
++      "format": "F",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCSINCO",
++      "source": "RTL/SRC/MTHCSINCO.MAR",
++      "lines": 221,
++      "entries": [
++        {
++          "line": 124,
++          "label": "MTH$CSIN"
++        },
++        {
++          "line": 170,
++          "label": "MTH$CCOS"
++        }
++      ],
++      "format": "F",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCDEXP",
++      "source": "RTL/SRC/MTHCDEXP.MAR",
++      "lines": 144,
++      "entries": [
++        {
++          "line": 122,
++          "label": "MTH$CDEXP"
++        }
++      ],
++      "format": "D",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCDLOG",
++      "source": "RTL/SRC/MTHCDLOG.MAR",
++      "lines": 144,
++      "entries": [
++        {
++          "line": 127,
++          "label": "MTH$CDLOG"
++        }
++      ],
++      "format": "D",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCDSQRT",
++      "source": "RTL/SRC/MTHCDSQRT.MAR",
++      "lines": 171,
++      "entries": [
++        {
++          "line": 134,
++          "label": "MTH$CDSQRT"
++        }
++      ],
++      "format": "D",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCDSINC",
++      "source": "RTL/SRC/MTHCDSINC.MAR",
++      "lines": 226,
++      "entries": [
++        {
++          "line": 124,
++          "label": "MTH$CDSIN"
++        },
++        {
++          "line": 173,
++          "label": "MTH$CDCOS"
++        }
++      ],
++      "format": "D",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCGEXP",
++      "source": "RTL/SRC/MTHCGEXP.MAR",
++      "lines": 144,
++      "entries": [
++        {
++          "line": 122,
++          "label": "MTH$CGEXP"
++        }
++      ],
++      "format": "G",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCGLOG",
++      "source": "RTL/SRC/MTHCGLOG.MAR",
++      "lines": 145,
++      "entries": [
++        {
++          "line": 128,
++          "label": "MTH$CGLOG"
++        }
++      ],
++      "format": "G",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCGSQRT",
++      "source": "RTL/SRC/MTHCGSQRT.MAR",
++      "lines": 170,
++      "entries": [
++        {
++          "line": 133,
++          "label": "MTH$CGSQRT"
++        }
++      ],
++      "format": "G",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHCGSINC",
++      "source": "RTL/SRC/MTHCGSINC.MAR",
++      "lines": 226,
++      "entries": [
++        {
++          "line": 124,
++          "label": "MTH$CGSIN"
++        },
++        {
++          "line": 173,
++          "label": "MTH$CGCOS"
++        }
++      ],
++      "format": "G",
++      "kind": "complex"
++    },
++    {
++      "name": "MTHATANH",
++      "source": "RTL/SRC/MTHATANH.MAR",
++      "lines": 375,
++      "entries": [
++        {
++          "line": 229,
++          "label": "MTH$ATANH"
++        }
++      ],
++      "format": "F",
++      "kind": "atanh"
++    },
++    {
++      "name": "MTHDATANH",
++      "source": "RTL/SRC/MTHDATANH.MAR",
++      "lines": 388,
++      "entries": [
++        {
++          "line": 242,
++          "label": "MTH$DATANH"
++        }
++      ],
++      "format": "D",
++      "kind": "atanh"
++    },
++    {
++      "name": "MTHGATANH",
++      "source": "RTL/SRC/MTHGATANH.MAR",
++      "lines": 386,
++      "entries": [
++        {
++          "line": 238,
++          "label": "MTH$GATANH"
++        }
++      ],
++      "format": "G",
++      "kind": "atanh"
++    },
++    {
++      "name": "MTHHATANH",
++      "source": "RTL/SRC/MTHHATANH.MAR",
++      "lines": 405,
++      "entries": [
++        {
++          "line": 252,
++          "label": "MTH$HATANH"
++        }
++      ],
++      "format": "H",
++      "kind": "atanh"
++    },
++    {
++      "name": "MTHSINCOS",
++      "source": "RTL/SRC/MTHSINCOS.MAR",
++      "lines": 1599,
++      "entries": [
++        {
++          "line": 348,
++          "label": "MTH$SINCOS"
++        },
++        {
++          "line": 367,
++          "label": "MTH$SIN"
++        },
++        {
++          "line": 384,
++          "label": "MTH$COS"
++        },
++        {
++          "line": 436,
++          "label": "MTH$SINCOSD"
++        },
++        {
++          "line": 449,
++          "label": "MTH$SIND"
++        },
++        {
++          "line": 460,
++          "label": "MTH$COSD"
++        }
++      ],
++      "format": "F",
++      "kind": "sincos"
++    },
++    {
++      "name": "MTHDSINCO",
++      "source": "RTL/SRC/MTHDSINCO.MAR",
++      "lines": 1788,
++      "entries": [
++        {
++          "line": 356,
++          "label": "MTH$DSINCOS"
++        },
++        {
++          "line": 375,
++          "label": "MTH$DSIN"
++        },
++        {
++          "line": 392,
++          "label": "MTH$DCOS"
++        },
++        {
++          "line": 444,
++          "label": "MTH$DSINCOSD"
++        },
++        {
++          "line": 457,
++          "label": "MTH$DSIND"
++        },
++        {
++          "line": 468,
++          "label": "MTH$DCOSD"
++        }
++      ],
++      "format": "D",
++      "kind": "sincos"
++    },
++    {
++      "name": "MTHGSINCO",
++      "source": "RTL/SRC/MTHGSINCO.MAR",
++      "lines": 1731,
++      "entries": [
++        {
++          "line": 335,
++          "label": "MTH$GSINCOS"
++        },
++        {
++          "line": 354,
++          "label": "MTH$GSIN"
++        },
++        {
++          "line": 371,
++          "label": "MTH$GCOS"
++        },
++        {
++          "line": 423,
++          "label": "MTH$GSINCOSD"
++        },
++        {
++          "line": 436,
++          "label": "MTH$GSIND"
++        },
++        {
++          "line": 447,
++          "label": "MTH$GCOSD"
++        }
++      ],
++      "format": "G",
++      "kind": "sincos"
++    },
++    {
++      "name": "MTHHSINCO",
++      "source": "RTL/SRC/MTHHSINCO.MAR",
++      "lines": 2020,
++      "entries": [
++        {
++          "line": 425,
++          "label": "MTH$HSINCOS"
++        },
++        {
++          "line": 450,
++          "label": "MTH$HSIN"
++        },
++        {
++          "line": 468,
++          "label": "MTH$HCOS"
++        },
++        {
++          "line": 520,
++          "label": "MTH$HSINCOSD"
++        },
++        {
++          "line": 533,
++          "label": "MTH$HSIND"
++        },
++        {
++          "line": 545,
++          "label": "MTH$HCOSD"
++        }
++      ],
++      "format": "H",
++      "kind": "sincos"
++    },
++    {
++      "name": "LIBPOLYF",
++      "source": "RTL/SRC/LIBPOLYF.MAR",
++      "lines": 208,
++      "entries": [
++        {
++          "line": 155,
++          "label": "LIB$POLYF"
++        }
++      ],
++      "format": "F",
++      "kind": "poly"
++    },
++    {
++      "name": "LIBPOLYD",
++      "source": "RTL/SRC/LIBPOLYD.MAR",
++      "lines": 208,
++      "entries": [
++        {
++          "line": 155,
++          "label": "LIB$POLYD"
++        }
++      ],
++      "format": "D",
++      "kind": "poly"
++    },
++    {
++      "name": "LIBPOLYG",
++      "source": "RTL/SRC/LIBPOLYG.MAR",
++      "lines": 204,
++      "entries": [
++        {
++          "line": 151,
++          "label": "LIB$POLYG"
++        }
++      ],
++      "format": "G",
++      "kind": "poly"
++    },
++    {
++      "name": "LIBPOLYH",
++      "source": "RTL/SRC/LIBPOLYH.MAR",
++      "lines": 205,
++      "entries": [
++        {
++          "line": 152,
++          "label": "LIB$POLYH"
++        }
++      ],
++      "format": "H",
++      "kind": "poly"
++    },
++    {
++      "name": "LIBEMODF",
++      "source": "RTL/SRC/LIBEMODF.MAR",
++      "lines": 200,
++      "entries": [
++        {
++          "line": 155,
++          "label": "LIB$EMODF"
++        }
++      ],
++      "format": "F",
++      "kind": "emod"
++    },
++    {
++      "name": "LIBEMODD",
++      "source": "RTL/SRC/LIBEMODD.MAR",
++      "lines": 198,
++      "entries": [
++        {
++          "line": 153,
++          "label": "LIB$EMODD"
++        }
++      ],
++      "format": "D",
++      "kind": "emod"
++    },
++    {
++      "name": "LIBEMODG",
++      "source": "RTL/SRC/LIBEMODG.MAR",
++      "lines": 197,
++      "entries": [
++        {
++          "line": 152,
++          "label": "LIB$EMODG"
++        }
++      ],
++      "format": "G",
++      "kind": "emod"
++    },
++    {
++      "name": "LIBEMODH",
++      "source": "RTL/SRC/LIBEMODH.MAR",
++      "lines": 197,
++      "entries": [
++        {
++          "line": 151,
++          "label": "LIB$EMODH"
++        }
++      ],
++      "format": "H",
++      "kind": "emod"
++    },
++    {
++      "name": "MTHCVTDG",
++      "source": "RTL/SRC/MTHCVTDG.MAR",
++      "lines": 371,
++      "entries": [
++        {
++          "line": 174,
++          "label": "MTH$CVT_DA_GA"
++        },
++        {
++          "line": 180,
++          "label": "MTH$CVT_GA_DA"
++        },
++        {
++          "line": 187,
++          "label": "MTH$CVT_D_G"
++        },
++        {
++          "line": 193,
++          "label": "MTH$CVT_G_D"
++        }
++      ],
++      "format": "-",
++      "kind": "convert"
++    },
++    {
++      "name": "MTHCONVER",
++      "source": "RTL/SRC/MTHCONVER.MAR",
++      "lines": 1195,
++      "entries": [
++        {
++          "line": 128,
++          "label": "MTH$DFLOTI"
++        },
++        {
++          "line": 167,
++          "label": "MTH$DFLOTJ"
++        },
++        {
++          "line": 206,
++          "label": "MTH$IINT"
++        },
++        {
++          "line": 207,
++          "label": "MTH$IIFIX"
++        },
++        {
++          "line": 248,
++          "label": "MTH$JINT"
++        },
++        {
++          "line": 249,
++          "label": "MTH$JIFIX"
++        },
++        {
++          "line": 289,
++          "label": "MTH$IIDINT"
++        },
++        {
++          "line": 329,
++          "label": "MTH$JIDINT"
++        },
++        {
++          "line": 368,
++          "label": "MTH$REAL"
++        },
++        {
++          "line": 407,
++          "label": "MTH$AIMAG"
++        },
++        {
++          "line": 450,
++          "label": "MTH$CMPLX"
++        },
++        {
++          "line": 491,
++          "label": "MTH$DBLE"
++        },
++        {
++          "line": 531,
++          "label": "MTH$SNGL"
++        },
++        {
++          "line": 572,
++          "label": "MTH$SNGLG"
++        },
++        {
++          "line": 610,
++          "label": "MTH$FLOATI"
++        },
++        {
++          "line": 648,
++          "label": "MTH$FLOATJ"
++        },
++        {
++          "line": 687,
++          "label": "MTH$GFLOTI"
++        },
++        {
++          "line": 726,
++          "label": "MTH$GFLOTJ"
++        },
++        {
++          "line": 766,
++          "label": "MTH$IIGINT"
++        },
++        {
++          "line": 806,
++          "label": "MTH$JIGINT"
++        },
++        {
++          "line": 846,
++          "label": "MTH$IIHINT"
++        },
++        {
++          "line": 886,
++          "label": "MTH$JIHINT"
++        },
++        {
++          "line": 925,
++          "label": "MTH$DREAL"
++        },
++        {
++          "line": 964,
++          "label": "MTH$GREAL"
++        },
++        {
++          "line": 1003,
++          "label": "MTH$DIMAG"
++        },
++        {
++          "line": 1043,
++          "label": "MTH$GIMAG"
++        },
++        {
++          "line": 1093,
++          "label": "MTH$DCMPLX"
++        },
++        {
++          "line": 1146,
++          "label": "MTH$GCMPLX"
++        },
++        {
++          "line": 1189,
++          "label": "MTH$GDBLE"
++        }
++      ],
++      "format": "-",
++      "kind": "convert"
++    },
++    {
++      "name": "LIBTRAA2E",
++      "source": "RTL/SRC/LIBTRAA2E.MAR",
++      "lines": 328,
++      "entries": [
++        {
++          "line": 167,
++          "label": "LIB$TRA_ASC_EBC"
++        }
++      ],
++      "format": "-",
++      "kind": "translate"
++    },
++    {
++      "name": "LIBTRAE2A",
++      "source": "RTL/SRC/LIBTRAE2A.MAR",
++      "lines": 334,
++      "entries": [
++        {
++          "line": 170,
++          "label": "LIB$TRA_EBC_ASC"
++        }
++      ],
++      "format": "-",
++      "kind": "translate"
++    },
++    {
++      "name": "LIBEF",
++      "source": "RTL/SRC/LIBEF.MAR",
++      "lines": 385,
++      "entries": [
++        {
++          "line": 145,
++          "label": "LIB$GET_EF"
++        },
++        {
++          "line": 236,
++          "label": "LIB$FREE_EF"
++        },
++        {
++          "line": 336,
++          "label": "LIB$RESERVE_EF"
++        }
++      ],
++      "format": "-",
++      "kind": "ef"
++    },
++    {
++      "name": "LIBLUN",
++      "source": "RTL/SRC/LIBLUN.MAR",
++      "lines": 284,
++      "entries": [
++        {
++          "line": 150,
++          "label": "LIB$GET_LUN"
++        },
++        {
++          "line": 239,
++          "label": "LIB$FREE_LUN"
++        }
++      ],
++      "format": "-",
++      "kind": "lun"
++    }
++  ]
++}
+--- a/tests/test_rtl_m110.c
++++ b/tests/test_rtl_m110.c
+@@ -0,0 +1,112 @@
++#include "../src/vms_rtl_m110.h"
++#include <assert.h>
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++
++static const char *stage="unknown";
++static const enum port_m107_fmt fmt[]={PORT_M107_F,PORT_M107_D,PORT_M107_G,PORT_M107_H};
++static int ok(int result){return result==PORT109_APPROX||result==PORT109_OK;}
++static long double absld(long double x){return x<0.0L?-x:x;}
++static void check(enum port_m107_fmt f,const uint16_t *a,long double v){
++    long double x=0.0L;
++    assert(port109_decode(f,a,&x)==PORT109_OK);
++    if(!(absld(x-v)<0.000006L*(1.0L+absld(v)))){fprintf(stderr,"Mismatch %s fmt=%d actual=%Lg expected=%Lg\n",stage,f,x,v);assert(0);}
++}
++static unsigned words(enum port_m107_fmt f){return f==PORT_M107_F?2u:f==PORT_M107_H?8u:4u;}
++static void from(enum port_m107_fmt f,long double x,uint16_t *out){assert(port109_encode(f,x,out)==PORT109_OK);}
++
++static void complex_tests(void){
++    for(unsigned k=0;k<3;k++){
++        enum port_m107_fmt f=fmt[k];const unsigned n=words(f);
++        uint16_t x[16]={0},out[16]={0},pristine[16];
++        int(*exp)(const uint16_t*,uint16_t*)=(k==0?port110_mthcexp:k==1?port110_mthcdexp:port110_mthcgexp);
++        int(*log)(const uint16_t*,uint16_t*)=(k==0?port110_mthclog:k==1?port110_mthcdlog:port110_mthcglog);
++        int(*sqrtf)(const uint16_t*,uint16_t*)=(k==0?port110_mthcsqrt:k==1?port110_mthcdsqrt:port110_mthcgsqrt);
++        int(*sin)(const uint16_t*,uint16_t*)=(k==0?port110_mthcsinco_sin:k==1?port110_mthcdsinc_sin:port110_mthcgsinc_sin);
++        int(*cos)(const uint16_t*,uint16_t*)=(k==0?port110_mthcsinco_cos:k==1?port110_mthcdsinc_cos:port110_mthcgsinc_cos);
++        stage="complex exp";assert(ok(exp(x,out)));check(f,out,1.0L);check(f,out+n,0.0L);
++        from(f,1.0L,x);stage="complex log";assert(ok(log(x,out)));check(f,out,0.0L);check(f,out+n,0.0L);
++        memset(x,0,sizeof x);memset(out,0x5a,sizeof out);memcpy(pristine,out,sizeof out);
++        assert(log(x,out)==PORT109_DOMAIN && !memcmp(out,pristine,sizeof out));
++        from(f,4.0L,x);stage="complex sqrt";assert(ok(sqrtf(x,out)));check(f,out,2.0L);check(f,out+n,0.0L);
++        from(f,-1.0L,x);stage="complex sqrt";assert(ok(sqrtf(x,out)));check(f,out,0.0L);check(f,out+n,1.0L);
++        memset(x,0,sizeof x);stage="complex sin";assert(ok(sin(x,out)));check(f,out,0.0L);check(f,out+n,0.0L);
++        stage="complex cos";assert(ok(cos(x,out)));check(f,out,1.0L);check(f,out+n,0.0L);
++        assert(sin(NULL,out)==PORT109_BAD_ARG);
++        from(f,0.0L,x);from(f,1.0L,x+n);
++        stage="complex sin";assert(ok(sin(x,out)));check(f,out,0.0L);check(f,out+n,1.17520119364380145L);
++    }
++}
++static void scalar_tests(void){
++    for(unsigned k=0;k<4;k++){
++        enum port_m107_fmt f=fmt[k];unsigned n=words(f);
++        uint16_t x[8]={0},s[8]={0},c[8]={0};
++        int(*atanh)(const uint16_t*,uint16_t*)=(k==0?port110_mthatanh:k==1?port110_mthdatanh:k==2?port110_mthgatanh:port110_mthhatanh);
++        int(*sincos)(const uint16_t*,uint16_t*,uint16_t*)=(k==0?port110_mthsincos:k==1?port110_mthdsinco:k==2?port110_mthgsinco:port110_mthhsinco);
++        int(*sincosd)(const uint16_t*,uint16_t*,uint16_t*)=(k==0?port110_mthsincosd:k==1?port110_mthdsincod:k==2?port110_mthgsincod:port110_mthhsincod);
++        int(*poly)(const uint16_t*,unsigned,const uint16_t*,uint16_t*)=(k==0?port110_libpolyf:k==1?port110_libpolyd:k==2?port110_libpolyg:port110_libpolyh);
++        int(*emod)(const uint16_t*,uint16_t,const uint16_t*,int32_t*,uint16_t*)=(k==0?port110_libemodf:k==1?port110_libemodd:k==2?port110_libemodg:port110_libemodh);
++        from(f,0.0L,x);assert(atanh(x,s)==PORT109_OK);check(f,s,0.0L);
++        from(f,0.5L,x);assert(ok(atanh(x,s)));check(f,s,0.549306144334054845L);
++        from(f,1.0L,x);memset(s,0x55,sizeof s);assert(atanh(x,s)==PORT109_DOMAIN);for(unsigned i=0;i<8;i++)assert(s[i]==0x5555);
++        from(f,0.0L,x);stage="sincos";assert(ok(sincos(x,s,c)));check(f,s,0.0L);check(f,c,1.0L);
++        from(f,90.0L,x);stage="sincosd";assert(ok(sincosd(x,s,c)));check(f,s,1.0L);check(f,c,0.0L);
++        uint16_t coef[24]={0};
++        from(f,3.0L,coef);from(f,4.0L,coef+n);from(f,5.0L,coef+2*n);
++        from(f,2.0L,x);assert(ok(poly(x,2u,coef,s)));check(f,s,31.0L);
++        assert(poly(x,33u,coef,s)==PORT109_BAD_ARG);
++        int32_t ip=777;
++        from(f,3.0L,x);from(f,2.0L,c);
++        assert(emod(x,1u,c,&ip,s)==PORT109_PARTIAL&&ip==777);
++        assert(ok(emod(x,0u,c,&ip,s))&&ip==6);check(f,s,0.0L);
++    }
++}
++static void conversion_tests(void){
++    uint16_t f[8]={0},d[8]={0},g[8]={0};
++    int32_t i=0;
++    assert(ok(port110_mthconver_dfloti(-23,d)));check(PORT_M107_D,d,-23.0L);
++    assert(ok(port110_mthconver_dflotj(1234567,d)));check(PORT_M107_D,d,1234567.0L);
++    assert(ok(port110_mthcvtdg_d_g(d,g)));check(PORT_M107_G,g,1234567.0L);
++    assert(ok(port110_mthcvtdg_g_d(g,d)));check(PORT_M107_D,d,1234567.0L);
++    from(PORT_M107_F,-23.0L,f);
++    assert(ok(port110_mthconver_iint(f,&i))&&i==-23);
++    assert(ok(port110_mthconver_jint(f,&i))&&i==-23);
++    assert(ok(port110_mthconver_dble(f,d)));check(PORT_M107_D,d,-23.0L);
++    assert(ok(port110_mthconver_sngl(d,f)));check(PORT_M107_F,f,-23.0L);
++    from(PORT_M107_F,33000.0L,f);
++    i=777;assert(port110_mthconver_iint(f,&i)==PORT109_RANGE&&i==777);
++}
++static void translation_tests(void){
++    uint8_t text[]={"Az9 01"},out[16]={0},back[16]={0};
++    assert(ok(port110_libtraa2e(text,6,out,sizeof out)));
++    assert(out[0]==0xc1&&out[1]==0xa9&&out[2]==0xf9&&out[3]==0x40);
++    assert(ok(port110_libtrae2a(out,6,back,sizeof back)));
++    assert(!memcmp(text,back,6));
++    text[2]='\n';memset(out,0x55,sizeof out);
++    assert(port110_libtraa2e(text,6,out,sizeof out)==PORT109_PARTIAL);
++    for(unsigned i=0;i<16;i++)assert(out[i]==0x55);
++    assert(port110_libtraa2e(text,6,out,5)==PORT109_BAD_ARG);
++}
++static void pool_tests(void){
++    struct port110_ef_pool ef;struct port110_lun_pool lun;
++    port110_ef_init(&ef);port110_lun_init(&lun);
++    unsigned f=0,n=0;
++    assert(port110_libef_get(&ef,&f)==PORT109_OK&&f==63);
++    assert(port110_libef_get(&ef,&f)==PORT109_OK&&f==62);
++    assert(port110_libef_free(&ef,24)==PORT109_BAD_ARG);
++    assert(port110_libef_free(&ef,63)==PORT109_OK);
++    assert(port110_libef_reserve(&ef,63)==PORT109_OK);
++    assert(port110_libef_reserve(&ef,63)==PORT109_PARTIAL);
++    for(unsigned i=0;i<30;i++)assert(port110_libef_get(&ef,&f)==PORT109_OK);
++    assert(port110_libef_get(&ef,&f)==PORT109_PARTIAL);
++    assert(port110_liblun_get(&lun,&n)==PORT109_OK&&n==119);
++    assert(port110_liblun_free(&lun,119)==PORT109_OK);
++    assert(port110_liblun_get(&lun,&n)==PORT109_OK&&n==119);
++    for(unsigned i=0;i<19;i++)assert(port110_liblun_get(&lun,&n)==PORT109_OK);
++    assert(port110_liblun_get(&lun,&n)==PORT109_PARTIAL);
++}
++int main(void){complex_tests();scalar_tests();conversion_tests();translation_tests();pool_tests();
++    puts("M110: 34 additional original RTL modules and 2 SYS line mappings — host checks PASS");
++    return 0;
++}
+--- a/tests/test_rtl_m110_integrity.py
++++ b/tests/test_rtl_m110_integrity.py
+@@ -0,0 +1,55 @@
++#!/usr/bin/env python3
++"""Check all 34 new source files, real ELF32 symbols and partial line ranges."""
++import json
++import re
++import subprocess
++from pathlib import Path
++root=Path(__file__).resolve().parents[1]
++mods=json.loads((root/'tools/m110_originals.json').read_text())
++assert mods['revision']=='2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752'
++assert mods['file_count']==34 and len(mods['modules'])==34
++assert len({x['source'] for x in mods['modules']})==34
++coverage=json.loads((root/'source-coverage.json').read_text())
++rows={x['original_file']:x for x in coverage['files']}
++assert len(rows)==len(coverage['files'])==310
++symbols=set()
++partial_count=0
++for mod in mods['modules']:
++    name=mod['source'].split('/')[-1].lower().replace('.mar','.c')
++    path=root/'src/native_rtl_m110'/name
++    assert path.is_file()
++    source=path.read_text()
++    assert 'DEC source' in source or 'DEC text' in source or 'restricted source' in source or 'source copied' in source
++    exported=re.findall(r'\bint\s+(port110_[a-zA-Z0-9_]+)\s*\(',source)
++    assert exported,(mod['source'],'no native callable entry')
++    assert len(set(exported))==len(exported)
++    symbols.update(exported)
++    row=rows[mod['source']]
++    assert row['original_lines']==mod['lines']
++    sections=row['sections']
++    assert sections[0]['original_lines'][0]==1 and sections[-1]['original_lines'][1]==mod['lines']
++    for idx,item in enumerate(sections):
++        assert item['status'] in ('partial','unresolved','excluded')
++        if idx: assert sections[idx-1]['original_lines'][1]+1==item['original_lines'][0]
++        if item['status']=='partial':
++            partial_count+=1
++            assert item['pc_symbol'] in exported
++            assert item['pc_line']>=1
++        elif item['status']=='unresolved':
++            assert item.get('reason')
++    assert any(item['status']=='unresolved' for item in sections),mod['source']
++
++obj=root/'build/rtl-m110-partial.o'
++elf=subprocess.check_output(['readelf','-h',str(obj)],text=True)
++assert 'ELF32' in elf and 'Intel 80386' in elf and 'REL (Relocatable file)' in elf
++undefined=subprocess.check_output(['nm','-u',str(obj)],text=True)
++assert not undefined.strip(),undefined
++visible=subprocess.check_output(['nm','-g','--defined-only',str(obj)],text=True)
++exports={line.rsplit(None,1)[-1] for line in visible.splitlines() if line.strip()}
++assert symbols<=exports,sorted(symbols-exports)
++assert len(symbols)>=60
++assert partial_count>=40
++for s in ('SYS/SRC/ASTDEL.MAR','SYS/SRC/POSTEF.MAR'):
++    assert all(x['status']!='mapped' for x in rows[s]['sections'])
++print(f'M110: 34 RTL source wrappers, {len(symbols)} native ELF32 symbols, '
++      f'{partial_count} partial entry ranges and two SYS audits PASS')
+--- a/tests/test_coverage_ranges.py
++++ b/tests/test_coverage_ranges.py
+@@ -0,0 +1,36 @@
++#!/usr/bin/env python3
++"""Structural audit quality test, including deliberately broken fixtures."""
++import importlib.util
++import json
++from pathlib import Path
++
++root=Path(__file__).resolve().parent.parent
++spec=importlib.util.spec_from_file_location('validate_source_ranges',root/'tools'/'validate_source_ranges.py')
++module=importlib.util.module_from_spec(spec)
++spec.loader.exec_module(module)
++manifest=json.loads((root/'source-coverage.json').read_text())
++report=module.validate(manifest,root)
++assert report['passed'], report['errors'][:30]
++assert report['counts'].get('unindexed_original_lines',0)==0
++by_name={f['original_file']:f for f in manifest['files']}
++for name in ('SYS/SRC/ASTDEL.MAR','SYS/SRC/POSTEF.MAR','SHRLIB/SYSDEF.MDL','SYS/SRC/INIT.MAR'):
++    item=by_name[name]
++    assert item['sections'] and item['original_lines']>0
++    assert all('original_lines' in s for s in item['sections'])
++assert any(s['status']=='unresolved' for s in by_name['SHRLIB/SYSDEF.MDL']['sections'])
++assert len(manifest['files'])>=276
++
++sample={'files':[{'original_file':'A.MAR','original_lines':4,'sections':[
++    {'original_lines':[1,2],'status':'unresolved','reason':'source not ported'},
++    {'original_lines':[3,4],'status':'excluded','reason':'comment'}]}]}
++assert module.validate(sample,root)['passed']
++for defect in ('gap','overlap','bad_status','missing_reason','missing_source'):
++    broken=json.loads(json.dumps(sample))
++    sections=broken['files'][0]['sections']
++    if defect=='gap':sections[1]['original_lines']=[4,4]
++    elif defect=='overlap':sections[1]['original_lines']=[2,4]
++    elif defect=='bad_status':sections[0]['status']='done'
++    elif defect=='missing_reason':del sections[0]['reason']
++    elif defect=='missing_source':sections[0].update(status='mapped',pc_file='not-here.c',pc_symbol='test',pc_line=1)
++    assert not module.validate(broken,root)['passed'], defect
++print('Source line-range manifest overlap/gap/status regression PASS')
+--- a/src/vms_rtl_m110.c
++++ b/src/vms_rtl_m110.c
+@@ -0,0 +1,226 @@
++#include "vms_rtl_m110.h"
++#include "vms_rtl_m109_x87.h"
++/* Numerical convenience conversions use VAX F/D/G/H *raw word* adapters.
++ * Never reinterpret VAX payloads as IEEE; do not emulate a VAX processor.
++ */
++static unsigned words(enum port_m107_fmt f){
++    if(f==PORT_M107_F)return 2;
++    if(f==PORT_M107_D||f==PORT_M107_G)return 4;
++    if(f==PORT_M107_H)return 8;
++    return 0;
++}
++static int acceptable(int st){return st==PORT109_OK;}
++static void copy(unsigned n,const uint16_t *from,uint16_t *to){
++    for(unsigned i=0;i<n;i++)to[i]=from[i];
++}
++static int bounded(long double x){return __builtin_isfinite(x) && x<1.0e6L && x> -1.0e6L;}
++static const long double pi=3.1415926535897932384626433832795L;
++static int decode2(enum port_m107_fmt f,const uint16_t *a,long double *r,long double *i){
++    int s=port109_decode(f,a,r);
++    if(s!=PORT109_OK)return s;
++    return port109_decode(f,a+words(f),i);
++}
++static int encode2(enum port_m107_fmt f,long double r,long double i,uint16_t *out){
++    uint16_t ra[8]={0},ia[8]={0};
++    if(!__builtin_isfinite(r)||!__builtin_isfinite(i))return PORT109_RANGE;
++    int s=port109_encode(f,r,ra);if(s!=PORT109_OK)return s;
++    s=port109_encode(f,i,ia);if(s!=PORT109_OK)return s;
++    unsigned n=words(f);copy(n,ra,out);copy(n,ia,out+n);
++    return PORT109_APPROX;
++}
++int port110_complex(enum port_m107_fmt f,enum port110_complex_op op,
++                    const uint16_t *a,uint16_t *out){
++    if(!words(f)||!a||!out||op>PORT110_CCOS)return PORT109_BAD_ARG;
++    long double r=0.0L,i=0.0L;
++    int st=decode2(f,a,&r,&i);if(!acceptable(st))return st;
++    long double x=0.0L,y=0.0L;
++    if((op==PORT110_CSIN||op==PORT110_CCOS) && !bounded(r))return PORT109_PARTIAL;
++    switch(op){
++    case PORT110_CEXP:{
++        if(!bounded(i))return PORT109_PARTIAL;
++        long double e=port109_x87_exp(r);
++        x=e*port109_x87_cos(i);y=e*port109_x87_sin(i);
++        break; }
++    case PORT110_CLOG:{
++        if(r==0.0L&&i==0.0L)return PORT109_DOMAIN;
++        x=port109_x87_ln(port109_x87_sqrt(r*r+i*i));
++        y=port109_x87_atan2(i,r);break; }
++    case PORT110_CSQRT:{
++        long double h=port109_x87_sqrt(r*r+i*i);
++        x=port109_x87_sqrt((h+r)*0.5L);
++        y=port109_x87_sqrt((h-r)*0.5L);
++        if(i<0.0L)y=-y;
++        break; }
++    case PORT110_CSIN:case PORT110_CCOS:{
++        long double sn=port109_x87_sin(r),co=port109_x87_cos(r);
++        long double e=port109_x87_exp(i),inv=port109_x87_exp(-i);
++        long double ch=(e+inv)*0.5L,sh=(e-inv)*0.5L;
++        if(op==PORT110_CSIN){x=sn*ch;y=co*sh;}
++        else{x=co*ch;y=-sn*sh;}
++        break; }
++    }
++    return encode2(f,x,y,out);
++}
++int port110_atanh(enum port_m107_fmt f,const uint16_t *a,uint16_t *out){
++    if(!a||!out||!words(f))return PORT109_BAD_ARG;
++    long double x;
++    int st=port109_decode(f,a,&x);if(st!=PORT109_OK)return st;
++    if(x<=-1.0L||x>=1.0L)return PORT109_DOMAIN;
++    if(x==0.0L){for(unsigned i=0;i<words(f);i++)out[i]=0;return PORT109_OK;}
++    /* Domain and zero identity exact; other results approximate x87 ln. */
++    long double v=0.5L*port109_x87_ln((1.0L+x)/(1.0L-x));
++    uint16_t temp[8]={0};st=port109_encode(f,v,temp);
++    if(st!=PORT109_OK)return st;
++    copy(words(f),temp,out);return PORT109_APPROX;
++}
++int port110_sincos(enum port_m107_fmt f,int degrees,const uint16_t *a,
++                   uint16_t *s,uint16_t *c){
++    if(!a||!s||!c||!words(f)||((degrees!=0)&&(degrees!=1))||s==c)
++        return PORT109_BAD_ARG;
++    long double x;
++    int st=port109_decode(f,a,&x);if(st!=PORT109_OK)return st;
++    if(degrees)x*=pi/180.0L;
++    if(!bounded(x))return PORT109_PARTIAL;
++    uint16_t stmp[8]={0},ctmp[8]={0};
++    st=port109_encode(f,port109_x87_sin(x),stmp);if(st!=PORT109_OK)return st;
++    st=port109_encode(f,port109_x87_cos(x),ctmp);if(st!=PORT109_OK)return st;
++    copy(words(f),stmp,s);copy(words(f),ctmp,c);
++    return PORT109_APPROX;
++}
++int port110_poly(enum port_m107_fmt f,const uint16_t *x,
++                 unsigned order,const uint16_t *coeff,uint16_t *out){
++    if(!words(f)||!x||!coeff||!out||order>32)return PORT109_BAD_ARG;
++    long double xx=0.0L,acc=0.0L;
++    int st=port109_decode(f,x,&xx);if(st!=PORT109_OK)return st;
++    unsigned n=words(f);
++    st=port109_decode(f,coeff+order*n,&acc);if(st!=PORT109_OK)return st;
++    /* VAX POLYx coefficients are ordered C0,C1,...,Cn. */
++    for(unsigned i=order;i>0;i--){
++        long double c=0.0L;
++        st=port109_decode(f,coeff+(i-1u)*n,&c);if(st!=PORT109_OK)return st;
++        acc=acc*xx+c;
++        if(!__builtin_isfinite(acc))return PORT109_RANGE;
++    }
++    uint16_t tmp[8]={0};st=port109_encode(f,acc,tmp);if(st!=PORT109_OK)return st;
++    copy(n,tmp,out);return PORT109_APPROX;
++}
++int port110_emod(enum port_m107_fmt f,const uint16_t *mulr,
++                 uint16_t extension,const uint16_t *muld,int32_t *integral,
++                 uint16_t *fraction){
++    if(!words(f)||!mulr||!muld||!integral||!fraction)return PORT109_BAD_ARG;
++    /* VAX extended multiplication includes an exponent-dependent 16-bit
++     * fraction; nonzero extension is NOT treated as an ordinary multiply. */
++    if(extension)return PORT109_PARTIAL;
++    long double a=0.0L,b=0.0L;
++    int st=port109_decode(f,mulr,&a);if(st!=PORT109_OK)return st;
++    st=port109_decode(f,muld,&b);if(st!=PORT109_OK)return st;
++    long double z=a*b;
++    if(!__builtin_isfinite(z)||z>2147483647.0L||z< -2147483648.0L)
++        return PORT109_RANGE;
++    int32_t i=(int32_t)z; /* VAX EMOD integer truncates toward zero. */
++    uint16_t tmp[8]={0};st=port109_encode(f,z-(long double)i,tmp);
++    if(st!=PORT109_OK)return st;
++    copy(words(f),tmp,fraction);*integral=i;
++    return PORT109_APPROX;
++}
++int port110_convert(enum port_m107_fmt src,enum port_m107_fmt dst,
++                    const uint16_t *a,uint16_t *out){
++    if(!words(src)||!words(dst)||!a||!out)return PORT109_BAD_ARG;
++    long double v;
++    int st=port109_decode(src,a,&v);if(st!=PORT109_OK)return st;
++    uint16_t tmp[8]={0};st=port109_encode(dst,v,tmp);if(st!=PORT109_OK)return st;
++    copy(words(dst),tmp,out);return PORT109_APPROX;
++}
++int port110_float_to_int(enum port_m107_fmt f,const uint16_t *a,
++                         unsigned bits,int32_t *result){
++    if(!words(f)||!a||!result||(bits!=16u&&bits!=32u))return PORT109_BAD_ARG;
++    long double x;
++    int st=port109_decode(f,a,&x);if(st!=PORT109_OK)return st;
++    if(bits==16u&&(x>32767.0L||x< -32768.0L))return PORT109_RANGE;
++    if(bits==32u&&(x>2147483647.0L||x< -2147483648.0L))return PORT109_RANGE;
++    *result=(int32_t)x;return PORT109_APPROX;
++}
++int port110_int_to_float(enum port_m107_fmt f,int32_t value,uint16_t *out){
++    if(!words(f)||!out)return PORT109_BAD_ARG;
++    uint16_t tmp[8]={0};int st=port109_encode(f,(long double)value,tmp);
++    if(st!=PORT109_OK)return st;
++    copy(words(f),tmp,out);return PORT109_APPROX;
++}
++/* Strict single-byte alpha/digit/space EBCDIC mappings, independent of
++ * DEC source tables; no dynamic descriptor/escape processing is claimed. */
++static int map_ascii(uint8_t a,uint8_t *b){
++    if(a>='A'&&a<='I'){*b=(uint8_t)(0xc1u+a-'A');return 1;}
++    if(a>='J'&&a<='R'){*b=(uint8_t)(0xd1u+a-'J');return 1;}
++    if(a>='S'&&a<='Z'){*b=(uint8_t)(0xe2u+a-'S');return 1;}
++    if(a>='a'&&a<='i'){*b=(uint8_t)(0x81u+a-'a');return 1;}
++    if(a>='j'&&a<='r'){*b=(uint8_t)(0x91u+a-'j');return 1;}
++    if(a>='s'&&a<='z'){*b=(uint8_t)(0xa2u+a-'s');return 1;}
++    if(a>='0'&&a<='9'){*b=(uint8_t)(0xf0u+a-'0');return 1;}
++    if(a==' '){*b=0x40u;return 1;}
++    return 0;
++}
++static int map_ebcdic(uint8_t a,uint8_t *b){
++    if(a>=0xc1u&&a<=0xc9u){*b=(uint8_t)('A'+a-0xc1u);return 1;}
++    if(a>=0xd1u&&a<=0xd9u){*b=(uint8_t)('J'+a-0xd1u);return 1;}
++    if(a>=0xe2u&&a<=0xe9u){*b=(uint8_t)('S'+a-0xe2u);return 1;}
++    if(a>=0x81u&&a<=0x89u){*b=(uint8_t)('a'+a-0x81u);return 1;}
++    if(a>=0x91u&&a<=0x99u){*b=(uint8_t)('j'+a-0x91u);return 1;}
++    if(a>=0xa2u&&a<=0xa9u){*b=(uint8_t)('s'+a-0xa2u);return 1;}
++    if(a>=0xf0u&&a<=0xf9u){*b=(uint8_t)('0'+a-0xf0u);return 1;}
++    if(a==0x40u){*b=' ';return 1;}
++    return 0;
++}
++static int translate(const uint8_t *s,unsigned n,uint8_t *d,unsigned cap,
++                     int(*mapper)(uint8_t,uint8_t *)){
++    if((!s&&n)||(!d&&n)||cap<n)return PORT109_BAD_ARG;
++    /* All-or-nothing: a rejected byte never leaves a partial string. */
++    for(unsigned i=0;i<n;i++){uint8_t temp;
++        if(!mapper(s[i],&temp))return PORT109_PARTIAL;}
++    for(unsigned i=0;i<n;i++){uint8_t temp=0;mapper(s[i],&temp);d[i]=temp;}
++    return PORT109_APPROX;
++}
++int port110_asc_to_ebc(const uint8_t *s,unsigned n,uint8_t *d,unsigned cap){
++    return translate(s,n,d,cap,map_ascii);
++}
++int port110_ebc_to_asc(const uint8_t *s,unsigned n,uint8_t *d,unsigned cap){
++    return translate(s,n,d,cap,map_ebcdic);
++}
++void port110_ef_init(struct port110_ef_pool *p){
++    if(p)p->busy=UINT64_C(0xffffffff00000000);
++}
++int port110_ef_get(struct port110_ef_pool *p,unsigned *n){
++    if(!p||!n)return PORT109_BAD_ARG;
++    for(unsigned k=63;k>=32;k--){
++        uint64_t mask=UINT64_C(1)<<(63u-k);
++        if(!(p->busy&mask)){p->busy|=mask;*n=k;return PORT109_OK;}
++    }
++    *n=~0u;return PORT109_PARTIAL;
++}
++static int ef_valid(unsigned n){return (n>=1u&&n<=23u) || (n>=32u&&n<=63u);}
++int port110_ef_free(struct port110_ef_pool *p,unsigned n){
++    if(!p||!ef_valid(n))return PORT109_BAD_ARG;
++    uint64_t mask=UINT64_C(1)<<(63u-n);
++    if(!(p->busy&mask))return PORT109_PARTIAL;
++    p->busy &= ~mask;return PORT109_OK;
++}
++int port110_ef_reserve(struct port110_ef_pool *p,unsigned n){
++    if(!p||!ef_valid(n))return PORT109_BAD_ARG;
++    uint64_t mask=UINT64_C(1)<<(63u-n);
++    if(p->busy&mask)return PORT109_PARTIAL;
++    p->busy |= mask;return PORT109_OK;
++}
++void port110_lun_init(struct port110_lun_pool *p){if(p)p->busy=UINT32_C(0xfff00000);}
++int port110_lun_get(struct port110_lun_pool *p,unsigned *n){
++    if(!p||!n)return PORT109_BAD_ARG;
++    for(unsigned k=119;k>=100;k--){
++        uint32_t mask=UINT32_C(1)<<(119u-k);
++        if(!(p->busy&mask)){p->busy|=mask;*n=k;return PORT109_OK;}
++    }
++    *n=~0u;return PORT109_PARTIAL;
++}
++int port110_lun_free(struct port110_lun_pool *p,unsigned n){
++    if(!p||n<100u||n>119u)return PORT109_BAD_ARG;
++    uint32_t mask=UINT32_C(1)<<(119u-n);
++    if(!(p->busy&mask))return PORT109_PARTIAL;
++    p->busy &= ~mask;return PORT109_OK;
++}
+--- a/src/vms_rtl_m110.h
++++ b/src/vms_rtl_m110.h
+@@ -0,0 +1,107 @@
++#ifndef PORTLAB_VMS_RTL_M110_H
++#define PORTLAB_VMS_RTL_M110_H
++#include <stdint.h>
++#include "vms_rtl_m109.h"
++/* Source-derived native numerical services. These are host-only ELF32
++ * relocatable RTL objects, with VAX register/condition semantics outstanding.
++ * Exactly one source wrapper per pinned DEC module, no DEC text reproduced.
++ */
++enum port110_complex_op {PORT110_CEXP,PORT110_CLOG,PORT110_CSQRT,
++                         PORT110_CSIN,PORT110_CCOS};
++int port110_complex(enum port_m107_fmt fmt,enum port110_complex_op op,
++                    const uint16_t *a,uint16_t *out);
++int port110_atanh(enum port_m107_fmt fmt,const uint16_t *a,uint16_t *out);
++int port110_sincos(enum port_m107_fmt fmt,int degrees,const uint16_t *a,
++                   uint16_t *s,uint16_t *c);
++int port110_poly(enum port_m107_fmt fmt,const uint16_t *x,
++                 unsigned order,const uint16_t *coeff,uint16_t *out);
++int port110_emod(enum port_m107_fmt fmt,const uint16_t *mulr,
++                 uint16_t extension,const uint16_t *muld,int32_t *integral,
++                 uint16_t *fraction);
++int port110_convert(enum port_m107_fmt src,enum port_m107_fmt dst,
++                    const uint16_t *a,uint16_t *out);
++int port110_float_to_int(enum port_m107_fmt fmt,const uint16_t *a,
++                         unsigned bits,int32_t *result);
++int port110_int_to_float(enum port_m107_fmt fmt,int32_t value,uint16_t *out);
++/* The original text-table services have special escape/signal paths.
++ * This strict alphanumeric/space subset rejects every other byte rather
++ * than silently claiming DEC's complete translation-table equivalence. */
++int port110_asc_to_ebc(const uint8_t *src,unsigned n,uint8_t *dst,unsigned cap);
++int port110_ebc_to_asc(const uint8_t *src,unsigned n,uint8_t *dst,unsigned cap);
++struct port110_ef_pool {uint64_t busy;};
++void port110_ef_init(struct port110_ef_pool *p);
++int port110_ef_get(struct port110_ef_pool *p,unsigned *number);
++int port110_ef_free(struct port110_ef_pool *p,unsigned number);
++int port110_ef_reserve(struct port110_ef_pool *p,unsigned number);
++struct port110_lun_pool {uint32_t busy;};
++void port110_lun_init(struct port110_lun_pool *p);
++int port110_lun_get(struct port110_lun_pool *p,unsigned *number);
++int port110_lun_free(struct port110_lun_pool *p,unsigned number);
++/* Source-specific entry points tested in the host RTL suite. */
++int port110_mthcexp(const uint16_t *a,uint16_t *out);
++int port110_mthclog(const uint16_t *a,uint16_t *out);
++int port110_mthcsqrt(const uint16_t *a,uint16_t *out);
++int port110_mthcsinco_sin(const uint16_t *a,uint16_t *out);
++int port110_mthcsinco_cos(const uint16_t *a,uint16_t *out);
++int port110_mthcdexp(const uint16_t *a,uint16_t *out);
++int port110_mthcdlog(const uint16_t *a,uint16_t *out);
++int port110_mthcdsqrt(const uint16_t *a,uint16_t *out);
++int port110_mthcdsinc_sin(const uint16_t *a,uint16_t *out);
++int port110_mthcdsinc_cos(const uint16_t *a,uint16_t *out);
++int port110_mthcgexp(const uint16_t *a,uint16_t *out);
++int port110_mthcglog(const uint16_t *a,uint16_t *out);
++int port110_mthcgsqrt(const uint16_t *a,uint16_t *out);
++int port110_mthcgsinc_sin(const uint16_t *a,uint16_t *out);
++int port110_mthcgsinc_cos(const uint16_t *a,uint16_t *out);
++int port110_mthatanh(const uint16_t *a,uint16_t *out);
++int port110_mthdatanh(const uint16_t *a,uint16_t *out);
++int port110_mthgatanh(const uint16_t *a,uint16_t *out);
++int port110_mthhatanh(const uint16_t *a,uint16_t *out);
++int port110_mthsincos(const uint16_t *a,uint16_t *s,uint16_t *c);
++int port110_mthsincosd(const uint16_t *a,uint16_t *s,uint16_t *c);
++int port110_mthdsinco(const uint16_t *a,uint16_t *s,uint16_t *c);
++int port110_mthdsincod(const uint16_t *a,uint16_t *s,uint16_t *c);
++int port110_mthgsinco(const uint16_t *a,uint16_t *s,uint16_t *c);
++int port110_mthgsincod(const uint16_t *a,uint16_t *s,uint16_t *c);
++int port110_mthhsinco(const uint16_t *a,uint16_t *s,uint16_t *c);
++int port110_mthhsincod(const uint16_t *a,uint16_t *s,uint16_t *c);
++int port110_libpolyf(const uint16_t *x,unsigned order,const uint16_t *coeff,uint16_t *out);
++int port110_libpolyd(const uint16_t *x,unsigned order,const uint16_t *coeff,uint16_t *out);
++int port110_libpolyg(const uint16_t *x,unsigned order,const uint16_t *coeff,uint16_t *out);
++int port110_libpolyh(const uint16_t *x,unsigned order,const uint16_t *coeff,uint16_t *out);
++int port110_libemodf(const uint16_t *r,uint16_t ext,const uint16_t *m,int32_t *ip,uint16_t *fp);
++int port110_libemodd(const uint16_t *r,uint16_t ext,const uint16_t *m,int32_t *ip,uint16_t *fp);
++int port110_libemodg(const uint16_t *r,uint16_t ext,const uint16_t *m,int32_t *ip,uint16_t *fp);
++int port110_libemodh(const uint16_t *r,uint16_t ext,const uint16_t *m,int32_t *ip,uint16_t *fp);
++int port110_mthcvtdg_d_g(const uint16_t *a,uint16_t *out);
++int port110_mthcvtdg_g_d(const uint16_t *a,uint16_t *out);
++int port110_libtraa2e(const uint8_t *in,unsigned n,uint8_t *out,unsigned max);
++int port110_libtrae2a(const uint8_t *in,unsigned n,uint8_t *out,unsigned max);
++int port110_libef_get(struct port110_ef_pool *p,unsigned *n);
++int port110_libef_free(struct port110_ef_pool *p,unsigned n);
++int port110_libef_reserve(struct port110_ef_pool *p,unsigned n);
++int port110_liblun_get(struct port110_lun_pool *p,unsigned *n);
++int port110_liblun_free(struct port110_lun_pool *p,unsigned n);
++int port110_mthsincos_sin(const uint16_t *a,uint16_t *out);
++int port110_mthsincos_cos(const uint16_t *a,uint16_t *out);
++int port110_mthsincos_sind(const uint16_t *a,uint16_t *out);
++int port110_mthsincos_cosd(const uint16_t *a,uint16_t *out);
++int port110_mthdsinco_sin(const uint16_t *a,uint16_t *out);
++int port110_mthdsinco_cos(const uint16_t *a,uint16_t *out);
++int port110_mthdsinco_sind(const uint16_t *a,uint16_t *out);
++int port110_mthdsinco_cosd(const uint16_t *a,uint16_t *out);
++int port110_mthgsinco_sin(const uint16_t *a,uint16_t *out);
++int port110_mthgsinco_cos(const uint16_t *a,uint16_t *out);
++int port110_mthgsinco_sind(const uint16_t *a,uint16_t *out);
++int port110_mthgsinco_cosd(const uint16_t *a,uint16_t *out);
++int port110_mthhsinco_sin(const uint16_t *a,uint16_t *out);
++int port110_mthhsinco_cos(const uint16_t *a,uint16_t *out);
++int port110_mthhsinco_sind(const uint16_t *a,uint16_t *out);
++int port110_mthhsinco_cosd(const uint16_t *a,uint16_t *out);
++int port110_mthconver_dfloti(int16_t value,uint16_t *out);
++int port110_mthconver_dflotj(int32_t value,uint16_t *out);
++int port110_mthconver_iint(const uint16_t *value,int32_t *out);
++int port110_mthconver_jint(const uint16_t *value,int32_t *out);
++int port110_mthconver_dble(const uint16_t *value,uint16_t *out);
++int port110_mthconver_sngl(const uint16_t *value,uint16_t *out);
++#endif
+--- a/src/native_rtl_m110/libef.c
++++ b/src/native_rtl_m110/libef.c
+@@ -0,0 +1,7 @@
++/* Original: RTL/SRC/LIBEF.MAR pinned source revision; first entry at line 145.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libef_get(struct port110_ef_pool *p,unsigned *n){return port110_ef_get(p,n);}
++int port110_libef_free(struct port110_ef_pool *p,unsigned n){return port110_ef_free(p,n);}
++int port110_libef_reserve(struct port110_ef_pool *p,unsigned n){return port110_ef_reserve(p,n);}
+--- a/src/native_rtl_m110/libemodd.c
++++ b/src/native_rtl_m110/libemodd.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBEMODD.MAR pinned source revision; first entry at line 153.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libemodd(const uint16_t *r,uint16_t ext,const uint16_t *m,int32_t *ip,uint16_t *fp){return port110_emod(PORT_M107_D,r,ext,m,ip,fp);}
+--- a/src/native_rtl_m110/libemodf.c
++++ b/src/native_rtl_m110/libemodf.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBEMODF.MAR pinned source revision; first entry at line 155.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libemodf(const uint16_t *r,uint16_t ext,const uint16_t *m,int32_t *ip,uint16_t *fp){return port110_emod(PORT_M107_F,r,ext,m,ip,fp);}
+--- a/src/native_rtl_m110/libemodg.c
++++ b/src/native_rtl_m110/libemodg.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBEMODG.MAR pinned source revision; first entry at line 152.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libemodg(const uint16_t *r,uint16_t ext,const uint16_t *m,int32_t *ip,uint16_t *fp){return port110_emod(PORT_M107_G,r,ext,m,ip,fp);}
+--- a/src/native_rtl_m110/libemodh.c
++++ b/src/native_rtl_m110/libemodh.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBEMODH.MAR pinned source revision; first entry at line 151.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libemodh(const uint16_t *r,uint16_t ext,const uint16_t *m,int32_t *ip,uint16_t *fp){return port110_emod(PORT_M107_H,r,ext,m,ip,fp);}
+--- a/src/native_rtl_m110/liblun.c
++++ b/src/native_rtl_m110/liblun.c
+@@ -0,0 +1,6 @@
++/* Original: RTL/SRC/LIBLUN.MAR pinned source revision; first entry at line 150.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_liblun_get(struct port110_lun_pool *p,unsigned *n){return port110_lun_get(p,n);}
++int port110_liblun_free(struct port110_lun_pool *p,unsigned n){return port110_lun_free(p,n);}
+--- a/src/native_rtl_m110/libpolyd.c
++++ b/src/native_rtl_m110/libpolyd.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBPOLYD.MAR pinned source revision; first entry at line 155.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libpolyd(const uint16_t *x,unsigned order,const uint16_t *coeff,uint16_t *out){return port110_poly(PORT_M107_D,x,order,coeff,out);}
+--- a/src/native_rtl_m110/libpolyf.c
++++ b/src/native_rtl_m110/libpolyf.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBPOLYF.MAR pinned source revision; first entry at line 155.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libpolyf(const uint16_t *x,unsigned order,const uint16_t *coeff,uint16_t *out){return port110_poly(PORT_M107_F,x,order,coeff,out);}
+--- a/src/native_rtl_m110/libpolyg.c
++++ b/src/native_rtl_m110/libpolyg.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBPOLYG.MAR pinned source revision; first entry at line 151.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libpolyg(const uint16_t *x,unsigned order,const uint16_t *coeff,uint16_t *out){return port110_poly(PORT_M107_G,x,order,coeff,out);}
+--- a/src/native_rtl_m110/libpolyh.c
++++ b/src/native_rtl_m110/libpolyh.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBPOLYH.MAR pinned source revision; first entry at line 152.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libpolyh(const uint16_t *x,unsigned order,const uint16_t *coeff,uint16_t *out){return port110_poly(PORT_M107_H,x,order,coeff,out);}
+--- a/src/native_rtl_m110/libtraa2e.c
++++ b/src/native_rtl_m110/libtraa2e.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBTRAA2E.MAR pinned source revision; first entry at line 167.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libtraa2e(const uint8_t *in,unsigned n,uint8_t *out,unsigned max){return port110_asc_to_ebc(in,n,out,max);}
+--- a/src/native_rtl_m110/libtrae2a.c
++++ b/src/native_rtl_m110/libtrae2a.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/LIBTRAE2A.MAR pinned source revision; first entry at line 170.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_libtrae2a(const uint8_t *in,unsigned n,uint8_t *out,unsigned max){return port110_ebc_to_asc(in,n,out,max);}
+--- a/src/native_rtl_m110/mthatanh.c
++++ b/src/native_rtl_m110/mthatanh.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHATANH.MAR pinned source revision; first entry at line 229.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthatanh(const uint16_t *a,uint16_t *out){return port110_atanh(PORT_M107_F,a,out);}
+--- a/src/native_rtl_m110/mthcdexp.c
++++ b/src/native_rtl_m110/mthcdexp.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCDEXP.MAR pinned source revision; first entry at line 122.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcdexp(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_D,PORT110_CEXP,a,out);}
+--- a/src/native_rtl_m110/mthcdlog.c
++++ b/src/native_rtl_m110/mthcdlog.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCDLOG.MAR pinned source revision; first entry at line 127.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcdlog(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_D,PORT110_CLOG,a,out);}
+--- a/src/native_rtl_m110/mthcdsinc.c
++++ b/src/native_rtl_m110/mthcdsinc.c
+@@ -0,0 +1,6 @@
++/* Original: RTL/SRC/MTHCDSINC.MAR pinned source revision; first entry at line 124.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcdsinc_sin(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_D,PORT110_CSIN,a,out);}
++int port110_mthcdsinc_cos(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_D,PORT110_CCOS,a,out);}
+--- a/src/native_rtl_m110/mthcdsqrt.c
++++ b/src/native_rtl_m110/mthcdsqrt.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCDSQRT.MAR pinned source revision; first entry at line 134.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcdsqrt(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_D,PORT110_CSQRT,a,out);}
+--- a/src/native_rtl_m110/mthcexp.c
++++ b/src/native_rtl_m110/mthcexp.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCEXP.MAR pinned source revision; first entry at line 123.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcexp(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_F,PORT110_CEXP,a,out);}
+--- a/src/native_rtl_m110/mthcgexp.c
++++ b/src/native_rtl_m110/mthcgexp.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCGEXP.MAR pinned source revision; first entry at line 122.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcgexp(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_G,PORT110_CEXP,a,out);}
+--- a/src/native_rtl_m110/mthcglog.c
++++ b/src/native_rtl_m110/mthcglog.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCGLOG.MAR pinned source revision; first entry at line 128.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcglog(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_G,PORT110_CLOG,a,out);}
+--- a/src/native_rtl_m110/mthcgsinc.c
++++ b/src/native_rtl_m110/mthcgsinc.c
+@@ -0,0 +1,6 @@
++/* Original: RTL/SRC/MTHCGSINC.MAR pinned source revision; first entry at line 124.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcgsinc_sin(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_G,PORT110_CSIN,a,out);}
++int port110_mthcgsinc_cos(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_G,PORT110_CCOS,a,out);}
+--- a/src/native_rtl_m110/mthcgsqrt.c
++++ b/src/native_rtl_m110/mthcgsqrt.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCGSQRT.MAR pinned source revision; first entry at line 133.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcgsqrt(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_G,PORT110_CSQRT,a,out);}
+--- a/src/native_rtl_m110/mthclog.c
++++ b/src/native_rtl_m110/mthclog.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCLOG.MAR pinned source revision; first entry at line 124.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthclog(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_F,PORT110_CLOG,a,out);}
+--- a/src/native_rtl_m110/mthconver.c
++++ b/src/native_rtl_m110/mthconver.c
+@@ -0,0 +1,22 @@
++/* Original RTL/SRC/MTHCONVER.MAR: selective IA-32 native conversion entries.
++ * 27 further VAX entry points, integer-overflow PSW, and original calling
++ * conventions remain incomplete. No restricted source reproduced. */
++#include "../vms_rtl_m110.h"
++int port110_mthconver_dfloti(int16_t v,uint16_t *out){
++    return port110_int_to_float(PORT_M107_D,(int32_t)v,out);
++}
++int port110_mthconver_dflotj(int32_t v,uint16_t *out){
++    return port110_int_to_float(PORT_M107_D,v,out);
++}
++int port110_mthconver_iint(const uint16_t *v,int32_t *out){
++    return port110_float_to_int(PORT_M107_F,v,16u,out);
++}
++int port110_mthconver_jint(const uint16_t *v,int32_t *out){
++    return port110_float_to_int(PORT_M107_F,v,32u,out);
++}
++int port110_mthconver_dble(const uint16_t *v,uint16_t *out){
++    return port110_convert(PORT_M107_F,PORT_M107_D,v,out);
++}
++int port110_mthconver_sngl(const uint16_t *v,uint16_t *out){
++    return port110_convert(PORT_M107_D,PORT_M107_F,v,out);
++}
+--- a/src/native_rtl_m110/mthcsinco.c
++++ b/src/native_rtl_m110/mthcsinco.c
+@@ -0,0 +1,6 @@
++/* Original: RTL/SRC/MTHCSINCO.MAR pinned source revision; first entry at line 124.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcsinco_sin(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_F,PORT110_CSIN,a,out);}
++int port110_mthcsinco_cos(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_F,PORT110_CCOS,a,out);}
+--- a/src/native_rtl_m110/mthcsqrt.c
++++ b/src/native_rtl_m110/mthcsqrt.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHCSQRT.MAR pinned source revision; first entry at line 134.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcsqrt(const uint16_t *a,uint16_t *out){return port110_complex(PORT_M107_F,PORT110_CSQRT,a,out);}
+--- a/src/native_rtl_m110/mthcvtdg.c
++++ b/src/native_rtl_m110/mthcvtdg.c
+@@ -0,0 +1,6 @@
++/* Original: RTL/SRC/MTHCVTDG.MAR pinned source revision; first entry at line 174.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthcvtdg_d_g(const uint16_t *a,uint16_t *out){return port110_convert(PORT_M107_D,PORT_M107_G,a,out);}
++int port110_mthcvtdg_g_d(const uint16_t *a,uint16_t *out){return port110_convert(PORT_M107_G,PORT_M107_D,a,out);}
+--- a/src/native_rtl_m110/mthdatanh.c
++++ b/src/native_rtl_m110/mthdatanh.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHDATANH.MAR pinned source revision; first entry at line 242.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthdatanh(const uint16_t *a,uint16_t *out){return port110_atanh(PORT_M107_D,a,out);}
+--- a/src/native_rtl_m110/mthdsinco.c
++++ b/src/native_rtl_m110/mthdsinco.c
+@@ -0,0 +1,10 @@
++/* Original: RTL/SRC/MTHDSINCO.MAR pinned source revision; first entry at line 356.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthdsinco(const uint16_t *a,uint16_t *s,uint16_t *c){return port110_sincos(PORT_M107_D,0,a,s,c);}
++int port110_mthdsincod(const uint16_t *a,uint16_t *s,uint16_t *c){return port110_sincos(PORT_M107_D,1,a,s,c);}
++int port110_mthdsinco_sin(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_D,0,a,out,spare);}
++int port110_mthdsinco_cos(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_D,0,a,spare,out);}
++int port110_mthdsinco_sind(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_D,1,a,out,spare);}
++int port110_mthdsinco_cosd(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_D,1,a,spare,out);}
+--- a/src/native_rtl_m110/mthgatanh.c
++++ b/src/native_rtl_m110/mthgatanh.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHGATANH.MAR pinned source revision; first entry at line 238.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthgatanh(const uint16_t *a,uint16_t *out){return port110_atanh(PORT_M107_G,a,out);}
+--- a/src/native_rtl_m110/mthgsinco.c
++++ b/src/native_rtl_m110/mthgsinco.c
+@@ -0,0 +1,10 @@
++/* Original: RTL/SRC/MTHGSINCO.MAR pinned source revision; first entry at line 335.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthgsinco(const uint16_t *a,uint16_t *s,uint16_t *c){return port110_sincos(PORT_M107_G,0,a,s,c);}
++int port110_mthgsincod(const uint16_t *a,uint16_t *s,uint16_t *c){return port110_sincos(PORT_M107_G,1,a,s,c);}
++int port110_mthgsinco_sin(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_G,0,a,out,spare);}
++int port110_mthgsinco_cos(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_G,0,a,spare,out);}
++int port110_mthgsinco_sind(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_G,1,a,out,spare);}
++int port110_mthgsinco_cosd(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_G,1,a,spare,out);}
+--- a/src/native_rtl_m110/mthhatanh.c
++++ b/src/native_rtl_m110/mthhatanh.c
+@@ -0,0 +1,5 @@
++/* Original: RTL/SRC/MTHHATANH.MAR pinned source revision; first entry at line 252.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthhatanh(const uint16_t *a,uint16_t *out){return port110_atanh(PORT_M107_H,a,out);}
+--- a/src/native_rtl_m110/mthhsinco.c
++++ b/src/native_rtl_m110/mthhsinco.c
+@@ -0,0 +1,10 @@
++/* Original: RTL/SRC/MTHHSINCO.MAR pinned source revision; first entry at line 425.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthhsinco(const uint16_t *a,uint16_t *s,uint16_t *c){return port110_sincos(PORT_M107_H,0,a,s,c);}
++int port110_mthhsincod(const uint16_t *a,uint16_t *s,uint16_t *c){return port110_sincos(PORT_M107_H,1,a,s,c);}
++int port110_mthhsinco_sin(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_H,0,a,out,spare);}
++int port110_mthhsinco_cos(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_H,0,a,spare,out);}
++int port110_mthhsinco_sind(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_H,1,a,out,spare);}
++int port110_mthhsinco_cosd(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_H,1,a,spare,out);}
+--- a/src/native_rtl_m110/mthsincos.c
++++ b/src/native_rtl_m110/mthsincos.c
+@@ -0,0 +1,10 @@
++/* Original: RTL/SRC/MTHSINCOS.MAR pinned source revision; first entry at line 348.
++ * Freestanding native IA-32 functional subset; VAX call frames, polynomial
++ * rounding, errors and guest link are NOT completed. No DEC source copied. */
++#include "../vms_rtl_m110.h"
++int port110_mthsincos(const uint16_t *a,uint16_t *s,uint16_t *c){return port110_sincos(PORT_M107_F,0,a,s,c);}
++int port110_mthsincosd(const uint16_t *a,uint16_t *s,uint16_t *c){return port110_sincos(PORT_M107_F,1,a,s,c);}
++int port110_mthsincos_sin(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_F,0,a,out,spare);}
++int port110_mthsincos_cos(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_F,0,a,spare,out);}
++int port110_mthsincos_sind(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_F,1,a,out,spare);}
++int port110_mthsincos_cosd(const uint16_t *a,uint16_t *out){uint16_t spare[8]={0}; return port110_sincos(PORT_M107_F,1,a,spare,out);}
