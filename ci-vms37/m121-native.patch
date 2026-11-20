@@ -1,0 +1,715 @@
+--- a/Makefile
++++ b/Makefile
+@@ -795,8 +795,8 @@
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
+ 	./build/conportcheck
+ 
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -820,7 +820,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1135,3 +1135,14 @@
+ iocphyscheck: $(M120_IOC_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M120_IOC_SRCS) $(M118_DB_SRCS) tests/test_ioc_phys_host.c -o build/iocphyscheck
+ 	./build/iocphyscheck
++
++# M121: source SYSQIOREQ.MAR EXE$FINISHIOC to IOC post queue, used
++# by NLDRIVER.MAR; this is not a user $QIO/AST delivery interface.
++M121_QIO_SRCS=$(wildcard src/vms_qio_*.c)
++M121_QIO_OBJS=$(patsubst src/%.c,build/%.o,$(M121_QIO_SRCS))
++$(M121_QIO_OBJS): build/%.o: src/%.c src/vms_qio_post.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: qiopostcheck
++qiopostcheck: $(M121_QIO_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M121_QIO_SRCS) $(M118_DB_SRCS) src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c tests/test_qio_post_host.c -o build/qiopostcheck
++	./build/qiopostcheck
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3116,6 +3116,45 @@
+     }
+     bootstrap_message("INIT: SYS.EXE read-only IOC device search resolved OPA0 MBA1 NLA0 (drivers absent).");
+ 
++    /* Source NLDRIVER.MAR through SYSQIOREQ.MAR 741-749: two original
++     * IRP$L_MEDIA statuses and an IOC$GL_PSBL append in actual loaded
++     * SYS.EXE supervisor data. IPL4 request is pending, not dispatched. */
++    static struct port_sys_exec_result post_result;
++    const struct port_sys_exec_start post_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&post_result,
++        .phase=PORT_SYS_EXEC_INIT_QIO_POST};
++    if(loaded_sys(&post_request)!=PORT_SYS_EXEC_NORMAL ||
++       post_result.signature!=PORT_SYS_EXEC_POST_RESULT_TAG ||
++       !post_result.iopost || !post_result.post_irp_bytes ||
++       !post_result.nl_post ||
++       (uintptr_t)post_result.iopost<PORT_SYS_ELF_START ||
++       (uintptr_t)post_result.iopost>
++           PORT_SYS_ELF_LIMIT-sizeof(struct port_v37_iopost_queue) ||
++       (uintptr_t)post_result.post_irp_bytes<PORT_SYS_ELF_START ||
++       (uintptr_t)post_result.post_irp_bytes>
++           PORT_SYS_ELF_LIMIT-2u*PORT_V37_IRP_SIZE ||
++       post_result.iopost->queued!=2u ||
++       post_result.iopost_softint_count!=2u ||
++       post_result.iopost_softint_level!=PORT_V37_IOPOST_IPL ||
++       post_result.iopost_ucb_ops!=2u ||
++       post_result.iopost->first!=(uint32_t)(uintptr_t)post_result.post_irp_bytes ||
++       (post_result.post_irp_bytes[PORT_V37_IRP_MEDIA]!=
++           (uint8_t)PORT_SYS85_ENDOFFILE ||
++        post_result.post_irp_bytes[PORT_V37_IRP_MEDIA+1u]!=
++           (uint8_t)(PORT_SYS85_ENDOFFILE>>8) ||
++        post_result.post_irp_bytes[PORT_V37_IRP_MEDIA+2u]!=0u ||
++        post_result.post_irp_bytes[PORT_V37_IRP_MEDIA+3u]!=0u) ||
++       (post_result.post_irp_bytes[PORT_V37_IRP_SIZE+PORT_V37_IRP_MEDIA]!=
++           PORT_SYS85_NORMAL ||
++        post_result.post_irp_bytes[PORT_V37_IRP_SIZE+PORT_V37_IRP_MEDIA+1u]!=0u ||
++        post_result.post_irp_bytes[PORT_V37_IRP_SIZE+PORT_V37_IRP_MEDIA+2u]!=0u ||
++        post_result.post_irp_bytes[PORT_V37_IRP_SIZE+PORT_V37_IRP_MEDIA+3u]!=0u)){
++        bootstrap_message("INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE NLDRIVER completed two IRPs through EXE$FINISHIOC (IPL4 dispatch pending).");
++
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+--- /dev/null
++++ b/src/vms_qio_finishio.c
+@@ -0,0 +1,41 @@
++#include "vms_qio_post.h"
++#include "vms_v37_dyn_tags.h"
++/* SYSQIOREQ.MAR 743-749 EXE$FINISHIO: increment UCB$L_OPCNT, copy
++ * R0/R1 to IRP$L_MEDIA (IOST1/IOST2), append to IOC post queue and
++ * request IPL$_IOPOST=4. The unported dispatcher has not delivered an
++ * IOSB or AST to any process at this stage. */
++uint32_t port_v37_qio_finishio(struct port_v37_qio_request *r,
++                               uint32_t status,uint32_t second){
++    if(!r||!r->post||!r->irp||!r->ucb||
++       r->irp_size<PORT_V37_IRP_SIZE||r->ucb_size<PORT_V37_UCB_SIZE||
++       !r->irp_va||!r->ucb_va || (r->irp_va&3u)||(r->ucb_va&3u)||
++       r->irp[10u]!=PORT_V37_DYN_IRP||r->ucb[10u]!=PORT_V37_DYN_UCB||
++       port_v37_read16(r->irp+8u)>r->irp_size||
++       port_v37_read16(r->irp+8u)<PORT_V37_IRP_SIZE||
++       port_v37_read16(r->ucb+8u)>r->ucb_size||
++       port_v37_read16(r->ucb+8u)<PORT_V37_UCB_SIZE||
++       port_v37_read32(r->irp+PORT_V37_IRP_UCB)!=r->ucb_va||
++       port_v37_read32(r->ucb+PORT_V37_UCB_OPCNT)==UINT32_MAX||
++       !r->softint)return PORT_V37_QIO_BAD;
++    const uint32_t valid=port_v37_post_validate(r->post);
++    if(valid!=PORT_V37_QIO_OK)return valid;
++    if(r->irp_va<r->post->first_irp||
++       (r->irp_va-r->post->first_irp)%r->post->packet_stride||
++       (r->irp_va-r->post->first_irp)/r->post->packet_stride>=r->post->packet_capacity||
++       r->irp!=r->post->bytes+(r->irp_va-r->post->first_irp))
++        return PORT_V37_QIO_BAD;
++    for(uint32_t i=0,cursor=r->post->first;i<r->post->queued;i++){
++        if(cursor==r->irp_va)return PORT_V37_QIO_DUP;
++        cursor=port_v37_read32(r->post->bytes+(cursor-r->post->first_irp));
++    }
++    if(r->post->queued==r->post->packet_capacity)return PORT_V37_QIO_FULL;
++    port_v37_write32(r->irp+PORT_V37_IRP_MEDIA,status);
++    port_v37_write32(r->irp+PORT_V37_IRP_IOST2,second);
++    port_v37_write32(r->ucb+PORT_V37_UCB_OPCNT,
++        port_v37_read32(r->ucb+PORT_V37_UCB_OPCNT)+1u);
++    /* preflight proves append cannot fail; keep a defensive check */
++    if(port_v37_post_append(r->post,r->irp_va)!=PORT_V37_QIO_OK)
++        return PORT_V37_QIO_CORRUPT;
++    r->softint(r->softint_arg,PORT_V37_IOPOST_IPL);
++    return PORT_SYS85_NORMAL; /* EXE$FINISHIOC returns service status */
++}
+--- /dev/null
++++ b/src/vms_qio_finishioc.c
+@@ -0,0 +1,6 @@
++#include "vms_qio_post.h"
++/* SYSQIOREQ.MAR 741-742: EXE$FINISHIOC clears R1 before the common
++ * FINISHIO path. R0 is the final device status, not the service status. */
++uint32_t port_v37_qio_finishioc(void *context,uint32_t status){
++    return port_v37_qio_finishio(context,status,0u);
++}
+--- /dev/null
++++ b/src/vms_qio_irp_prepare.c
+@@ -0,0 +1,16 @@
++#include "vms_qio_post.h"
++#include "vms_v37_dyn_tags.h"
++/* SYSDEF.MDL 2827-2880 IRP fields; the caller owns the packet and must
++ * remove it from its free queue before building a request. */
++uint32_t port_v37_irp_prepare(uint8_t *irp,size_t bytes,uint32_t va,
++                             uint32_t ucb,uint16_t func){
++    if(!irp||bytes<PORT_V37_IRP_SIZE||bytes>UINT16_MAX||
++       !va||(va&3u)||!ucb||(ucb&3u))return PORT_V37_QIO_BAD;
++    /* A prepared packet has no source VAX AST, UIC, CCB or IOSB yet. */
++    for(size_t i=0;i<PORT_V37_IRP_SIZE;i++)irp[i]=0u;
++    port_v37_write16(irp+8u,(uint16_t)bytes);
++    irp[10u]=PORT_V37_DYN_IRP;
++    port_v37_write32(irp+PORT_V37_IRP_UCB,ucb);
++    port_v37_write16(irp+PORT_V37_IRP_FUNC,func);
++    return PORT_V37_QIO_OK;
++}
+--- /dev/null
++++ b/src/vms_qio_null.c
+@@ -0,0 +1,15 @@
++#include "vms_qio_post.h"
++/* NLDRIVER.MAR READ/WRITE to SYSQIOREQ.MAR EXE$FINISHIOC: a real
++ * source-driver completion through the original-layout IRP and queue.
++ * No $QIO channel assignment or IOPOST AST dispatch is implied. */
++uint32_t port_v37_nl_fdt_post(struct port_v37_qio_request *request){
++    if(!request||!request->irp||request->irp_size<PORT_V37_IRP_SIZE||
++       !request->ucb||request->ucb_size<PORT_V37_UCB_SIZE||
++       !request->nl_ddb_va || (request->nl_ddb_va&3u) ||
++       port_v37_read32(request->ucb+36u)!=request->nl_ddb_va ||
++       port_v37_read16(request->ucb+72u)!=0u ||
++       !(port_v37_read16(request->ucb+88u)&PORT_V37_UCB_ONLINE))
++        return PORT_V37_QIO_BAD;
++    const uint16_t function=port_v37_read16(request->irp+PORT_V37_IRP_FUNC);
++    return port_nl_driver_io(function,request,port_v37_qio_finishioc);
++}
+--- /dev/null
++++ b/src/vms_qio_post.h
+@@ -0,0 +1,38 @@
++#ifndef VMS37_QIO_POST_H
++#define VMS37_QIO_POST_H
++#include <stdint.h>
++#include <stddef.h>
++#include "vms_ini_devicedb.h"
++#include "vms_sys85.h"
++/* SHRLIB/SYSDEF.MDL IRP and UCB, SYS/SRC/SYSQIOREQ.MAR 735-749.
++ * The original 32-bit IRP has status longwords at +56 and +60. The
++ * IOC$GL_PSFL/PSBL doubly-linked queue follows VAX INSQUE semantics.
++ * This is *not* a public $QIO service or an I/O postprocess AST. */
++enum { PORT_V37_IRP_SIZE=64u, PORT_V37_IRP_FUNC=32u,
++       PORT_V37_IRP_UCB=28u, PORT_V37_IRP_MEDIA=56u,
++       PORT_V37_IRP_IOST2=60u, PORT_V37_UCB_OPCNT=96u,
++       PORT_V37_IOPOST_IPL=4u, PORT_V37_QIO_OK=1u,
++       PORT_V37_QIO_BAD=2u, PORT_V37_QIO_FULL=4u,
++       PORT_V37_QIO_DUP=6u, PORT_V37_QIO_CORRUPT=8u };
++struct port_v37_iopost_queue {
++    uint32_t first,last; /* same shape as IOC$GL_PSFL/IOC$GL_PSBL */
++    uint32_t sentinel,first_irp,packet_stride,packet_capacity,queued;
++    uint8_t *bytes;
++};
++struct port_v37_qio_request {
++    struct port_v37_iopost_queue *post;
++    uint8_t *irp,*ucb;
++    uint32_t irp_va,ucb_va,nl_ddb_va;
++    size_t irp_size,ucb_size;
++    void (*softint)(void *,uint8_t);
++    void *softint_arg;
++};
++uint32_t port_v37_post_init(struct port_v37_iopost_queue *,
++    uint8_t *,size_t,uint32_t,uint32_t,uint32_t);
++uint32_t port_v37_post_validate(const struct port_v37_iopost_queue *);
++uint32_t port_v37_post_append(struct port_v37_iopost_queue *,uint32_t);
++uint32_t port_v37_irp_prepare(uint8_t *,size_t,uint32_t,uint32_t,uint16_t);
++uint32_t port_v37_qio_finishio(struct port_v37_qio_request *,uint32_t,uint32_t);
++uint32_t port_v37_qio_finishioc(void *,uint32_t);
++uint32_t port_v37_nl_fdt_post(struct port_v37_qio_request *);
++#endif
+--- /dev/null
++++ b/src/vms_qio_post_append.c
+@@ -0,0 +1,24 @@
++#include "vms_qio_post.h"
++/* INSQUE IRP,@IOC$GL_PSBL appends after current tail. A corrupted
++ * queue never receives an extra link and a packet cannot be posted twice. */
++uint32_t port_v37_post_append(struct port_v37_iopost_queue *q,uint32_t address){
++    uint32_t valid=port_v37_post_validate(q);
++    if(valid!=PORT_V37_QIO_OK)return valid;
++    if(address<q->first_irp || (address-q->first_irp)%q->packet_stride ||
++       (address-q->first_irp)/q->packet_stride>=q->packet_capacity)
++        return PORT_V37_QIO_BAD;
++    if(q->queued==q->packet_capacity)return PORT_V37_QIO_FULL;
++    for(uint32_t i=0,cursor=q->first;i<q->queued;i++){
++        if(cursor==address)return PORT_V37_QIO_DUP;
++        cursor=port_v37_read32(q->bytes+(cursor-q->first_irp));
++    }
++    uint8_t *packet=q->bytes+(address-q->first_irp);
++    port_v37_write32(packet,q->sentinel);
++    port_v37_write32(packet+4u,q->last);
++    if(q->queued){
++        uint8_t *tail=q->bytes+(q->last-q->first_irp);
++        port_v37_write32(tail,address);
++    }else q->first=address;
++    q->last=address;++q->queued;
++    return PORT_V37_QIO_OK;
++}
+--- /dev/null
++++ b/src/vms_qio_post_init.c
+@@ -0,0 +1,20 @@
++#include "vms_qio_post.h"
++/* Initialize the concrete IOC$GL_PSFL/PSBL sentinel without accepting
++ * a host pointer as a VAX/IA32 guest address. */
++uint32_t port_v37_post_init(struct port_v37_iopost_queue *q,
++    uint8_t *pool,size_t pool_size,uint32_t base,uint32_t stride,
++    uint32_t sentinel){
++    if(!q || !pool || !base || !sentinel || (base&3u) || (sentinel&3u) ||
++       stride<PORT_V37_IRP_SIZE || stride>UINT16_MAX || (stride&3u) ||
++       pool_size<stride || pool_size/stride>UINT32_MAX ||
++       (uint64_t)base+pool_size>UINT32_MAX ||
++       ((uint64_t)sentinel>=base && (uint64_t)sentinel<base+pool_size))
++        return PORT_V37_QIO_BAD;
++    const uint32_t count=(uint32_t)(pool_size/stride);
++    struct port_v37_iopost_queue next={0};
++    next.first=sentinel;next.last=sentinel;next.sentinel=sentinel;
++    next.first_irp=base;next.packet_stride=stride;
++    next.packet_capacity=count;next.bytes=pool;
++    *q=next;
++    return PORT_V37_QIO_OK;
++}
+--- /dev/null
++++ b/src/vms_qio_post_validate.c
+@@ -0,0 +1,27 @@
++#include "vms_qio_post.h"
++static uint32_t read32(const uint8_t *b){return port_v37_read32(b);}
++uint32_t port_v37_post_validate(const struct port_v37_iopost_queue *q){
++    if(!q||!q->bytes||!q->first_irp||!q->sentinel ||
++       (q->first_irp&3u)||(q->sentinel&3u)||q->packet_stride<PORT_V37_IRP_SIZE||
++       (q->packet_stride&3u)||!q->packet_capacity||
++       q->queued>q->packet_capacity ||
++       (uint64_t)q->first_irp+(uint64_t)q->packet_capacity*q->packet_stride>UINT32_MAX ||
++       ((uint64_t)q->sentinel>=q->first_irp&&
++        (uint64_t)q->sentinel<q->first_irp+(uint64_t)q->packet_capacity*q->packet_stride))
++        return PORT_V37_QIO_CORRUPT;
++    uint32_t cursor=q->first,previous=q->sentinel;
++    for(uint32_t i=0;i<q->queued;i++){
++        if(cursor==q->sentinel || cursor<q->first_irp ||
++           ((cursor-q->first_irp)%q->packet_stride)!=0u ||
++           (cursor-q->first_irp)/q->packet_stride>=q->packet_capacity)
++            return PORT_V37_QIO_CORRUPT;
++        const uint8_t *packet=q->bytes+(cursor-q->first_irp);
++        if(read32(packet+4u)!=previous || !read32(packet))
++            return PORT_V37_QIO_CORRUPT;
++        previous=cursor;cursor=read32(packet);
++    }
++    if(cursor!=q->sentinel || q->last!=previous ||
++       (!q->queued && q->first!=q->sentinel))
++        return PORT_V37_QIO_CORRUPT;
++    return PORT_V37_QIO_OK;
++}
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -9,6 +9,7 @@
+ #include "vms_ini_devicedb.h"
+ #include "vms_con_port.h"
+ #include "vms_ioc_phys.h"
++#include "vms_qio_post.h"
+ #include <stdint.h>
+ /* All state belongs to SYS.EXE's separately loaded resident supervisor
+  * segment, not to the SYSBOOT monitor or a pretend VAX processor. */
+@@ -74,6 +75,19 @@
+ static uint32_t executive_conport_ready;
+ static struct port_v37_ioc_result executive_ioc_samples[3];
+ static uint32_t executive_ioc_ready;
++/* Actual SYSDEF.MDL source IRP packet bytes in resident SYS.EXE. The
++ * disabled lookaside allocator cannot yet supply IOC packets safely, so
++ * these are two reserved bootstrap IRPs, never user-visible channels. */
++static union {uint32_t align;uint8_t bytes[2u*PORT_V37_IRP_SIZE];} executive_post_irps;
++static struct port_v37_iopost_queue executive_post_queue;
++static uint32_t executive_post_ready;
++static uint32_t executive_post_soft_count,executive_post_soft_level;
++static void executive_post_mark_softint(void *unused,uint8_t ipl){
++    (void)unused;
++    executive_post_soft_count++;
++    executive_post_soft_level=ipl;
++}
++
+ /* Original SYSTEM and NULL PCB slots have distinct persistent resident
+  * storage. Creating these source-derived scheduler descriptors is not a
+  * substitute for actually scheduling SYSTEM or running LOGINOUT. */
+@@ -462,6 +476,62 @@
+         p->result->signature=PORT_SYS_EXEC_SYSLOG_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_QIO_POST){
++        /* NLDRIVER.MAR READ/WRITE -> SYSQIOREQ.MAR 741-749 EXE$FINISHIOC:
++         * two correctly linked IRP status packets in resident SYS.EXE,
++         * queue insertion and pending IPL$_IOPOST=4. No post-processing
++         * interrupt dispatch, channel allocation or login exists yet. */
++        if(!executive_ioc_ready || !executive_devicedb_ready ||
++           executive_post_ready || executive_devicedb_result.incomplete_driver_mask!=15u ||
++           (uintptr_t)executive_post_irps.bytes>UINT32_MAX ||
++           (uintptr_t)&executive_post_queue.first>UINT32_MAX)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        uint8_t *const u=executive_devicedb_bytes.data+PORT_V37_UCB_NL_OFF;
++        const uint32_t base=(uint32_t)(uintptr_t)executive_post_irps.bytes;
++        const uint32_t ucb=executive_devicedb_result.ucb[4];
++        if(port_v37_post_init(&executive_post_queue,executive_post_irps.bytes,
++              sizeof executive_post_irps.bytes,base,PORT_V37_IRP_SIZE,
++              (uint32_t)(uintptr_t)&executive_post_queue.first)!=PORT_V37_QIO_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        const uint16_t functions[2]={PORT_SYS85_READVBLK,PORT_SYS85_WRITELBLK};
++        const uint32_t outcomes[2]={PORT_SYS85_ENDOFFILE,PORT_SYS85_NORMAL};
++        for(unsigned i=0;i<2u;i++){
++            uint8_t *irp=executive_post_irps.bytes+i*PORT_V37_IRP_SIZE;
++            if(port_v37_irp_prepare(irp,PORT_V37_IRP_SIZE,
++                    base+i*PORT_V37_IRP_SIZE,ucb,functions[i])!=PORT_V37_QIO_OK)
++                return PORT_SYS_EXEC_BAD_PARAMETERS;
++            struct port_v37_qio_request req={
++                .post=&executive_post_queue,.irp=irp,.ucb=u,
++                .irp_va=base+i*PORT_V37_IRP_SIZE,.ucb_va=ucb,
++                .nl_ddb_va=executive_devicedb_result.ddb[3],
++                .irp_size=PORT_V37_IRP_SIZE,.ucb_size=PORT_V37_UCB_SIZE,
++                .softint=executive_post_mark_softint};
++            if(port_v37_nl_fdt_post(&req)!=PORT_SYS85_NORMAL ||
++               port_v37_read32(irp+PORT_V37_IRP_MEDIA)!=outcomes[i] ||
++               port_v37_read32(irp+PORT_V37_IRP_IOST2)!=0u ||
++               executive_post_soft_count!=i+1u)
++                return PORT_SYS_EXEC_BAD_PARAMETERS;
++        }
++        if(port_v37_post_validate(&executive_post_queue)!=PORT_V37_QIO_OK ||
++           executive_post_queue.first!=base ||
++           executive_post_queue.last!=base+PORT_V37_IRP_SIZE ||
++           executive_post_queue.queued!=2u ||
++           port_v37_read32(executive_post_irps.bytes)!=base+PORT_V37_IRP_SIZE ||
++           port_v37_read32(executive_post_irps.bytes+PORT_V37_IRP_SIZE)!=
++                 executive_post_queue.sentinel ||
++           port_v37_read32(u+PORT_V37_UCB_OPCNT)!=2u ||
++           executive_post_soft_level!=PORT_V37_IOPOST_IPL)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_post_ready=1u;
++        p->result->iopost=&executive_post_queue;
++        p->result->post_irp_bytes=executive_post_irps.bytes;
++        p->result->iopost_softint_count=executive_post_soft_count;
++        p->result->iopost_softint_level=executive_post_soft_level;
++        p->result->iopost_ucb_ops=port_v37_read32(u+PORT_V37_UCB_OPCNT);
++        p->result->nl_post=port_v37_nl_fdt_post;
++        p->result->signature=PORT_SYS_EXEC_POST_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_IOC_LOOKUP){
+         /* Source IOSUBPAGD physical IOC$SEARCHDEV on actual resident
+          * DEVICEDAT pointer records. No $ASSIGN, LOG$TRANSLATE, DDT or IOC
+@@ -588,7 +658,8 @@
+        !executive_phvswap_ready || !executive_mpw_ready ||
+        !executive_pflvec_ready || !executive_interrupt_stack_ready ||
+        !executive_system_wcb_ready || !executive_dpt_stages_ready ||
+-       !executive_null_fdt_ready || !executive_bootdev_scan_ready || !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
++       !executive_null_fdt_ready || !executive_bootdev_scan_ready ||
++       !executive_ioc_ready || !executive_post_ready || !p->cpu_ops || !p->boot_ops)return PORT_SYS_EXEC_BAD_PARAMETERS;
+ 
+     /* Hardware-dependent EXE$INIBOOTADP/EXE$INIPROCREG are called through
+      * the self-relative vectors that were linked into SYS.EXE. */
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -18,10 +18,11 @@
+ #include "vms_ini_devicedb.h"
+ #include "vms_con_port.h"
+ #include "vms_ioc_phys.h"
++#include "vms_qio_post.h"
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=18u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=19u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -40,7 +41,8 @@
+        PORT_SYS_EXEC_INIT_DPT_STAGES=14u, PORT_SYS_EXEC_DPT_RESULT_TAG=0x54504453u,
+        PORT_SYS_EXEC_INIT_DEVICE_DB=15u,PORT_SYS_EXEC_DEVICE_RESULT_TAG=0x42444456u,
+        PORT_SYS_EXEC_INIT_CONPORT=16u,PORT_SYS_EXEC_CON_RESULT_TAG=0x4e4f4350u,
+-       PORT_SYS_EXEC_INIT_IOC_LOOKUP=17u,PORT_SYS_EXEC_IOC_RESULT_TAG=0x434f4950u };
++       PORT_SYS_EXEC_INIT_IOC_LOOKUP=17u,PORT_SYS_EXEC_IOC_RESULT_TAG=0x434f4950u,
++       PORT_SYS_EXEC_INIT_QIO_POST=18u,PORT_SYS_EXEC_POST_RESULT_TAG=0x54534f50u };
+ /* The IA-32 privilege-transition stack is the first live counterpart of
+  * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
+ /* SYSBOOT passes the genuine Files-11 SYS.EXE extent map through the
+@@ -102,6 +104,12 @@
+     uint32_t (*ioc_search)(const uint8_t *,size_t,uint32_t,
+        const struct port_v37_device_result *,const char *,size_t,
+        struct port_v37_ioc_result *);
++    /* Source NLDRIVER -> SYSQIOREQ EXE$FINISHIOC completed IRP -> IOC post
++     * queue; IRQ dispatch, CCB, IOSB and AST delivery remain unavailable. */
++    const struct port_v37_iopost_queue *iopost;
++    const uint8_t *post_irp_bytes;
++    uint32_t iopost_softint_count,iopost_softint_level,iopost_ucb_ops;
++    uint32_t (*nl_post)(struct port_v37_qio_request *);
+     uint32_t logical_table[2];
+     uint8_t lock_max_resource_depth;
+     const struct port_ini_procvec *process_vector;
+--- /dev/null
++++ b/tests/test_qio_post_host.c
+@@ -0,0 +1,72 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_qio_post.h"
++#define REQUIRE(x) do{if(!(x)){fprintf(stderr,"qio-post FAIL line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++struct irq_counter {unsigned events;uint8_t last;};
++static void softint(void *arg,uint8_t level){
++    struct irq_counter *irq=arg;irq->events++;irq->last=level;
++}
++int main(void){
++    enum {BASE=0x00342000u,PKT=0x00343000u,HEAD=0x00343100u};
++    uint32_t storage[PORT_V37_DEVICE_BYTES/4]={0};
++    struct port_v37_device_result d={0};
++    REQUIRE(port_v37_devices_prelink((uint8_t*)storage,sizeof storage,BASE,&d)==PORT_V37_DEV_OK);
++    uint8_t *nl=((uint8_t*)storage)+PORT_V37_UCB_NL_OFF;
++    uint32_t irpwords[2][PORT_V37_IRP_SIZE/4u]={{0}};
++    uint8_t *irp=(uint8_t *)irpwords;
++    struct port_v37_iopost_queue queue={0};
++    struct irq_counter irq={0};
++    REQUIRE(port_v37_post_init(&queue,irp,sizeof irpwords,PKT,PORT_V37_IRP_SIZE,HEAD)==PORT_V37_QIO_OK);
++    REQUIRE(port_v37_post_validate(&queue)==PORT_V37_QIO_OK);
++    struct port_v37_qio_request r={.post=&queue,.irp=irp,
++        .ucb=nl,.irp_va=PKT,.ucb_va=d.ucb[4],.nl_ddb_va=d.ddb[3],
++        .irp_size=PORT_V37_IRP_SIZE,.ucb_size=PORT_V37_UCB_SIZE,
++        .softint=softint,.softint_arg=&irq};
++    REQUIRE(port_v37_irp_prepare(irp,64,PKT,d.ucb[4],PORT_SYS85_READVBLK)==PORT_V37_QIO_OK);
++    REQUIRE(port_v37_nl_fdt_post(&r)==PORT_SYS85_NORMAL);
++    REQUIRE(port_v37_read32(irp+PORT_V37_IRP_MEDIA)==PORT_SYS85_ENDOFFILE);
++    REQUIRE(port_v37_read32(irp+PORT_V37_IRP_IOST2)==0);
++    REQUIRE(port_v37_read32(nl+PORT_V37_UCB_OPCNT)==1);
++    REQUIRE(queue.first==PKT&&queue.last==PKT&&queue.queued==1);
++    REQUIRE(port_v37_read32(irp)==HEAD&&port_v37_read32(irp+4)==HEAD);
++    REQUIRE(irq.events==1&&irq.last==4);
++    REQUIRE(port_v37_post_validate(&queue)==PORT_V37_QIO_OK);
++    /* The second request uses EXE$FINISHIO, preserving R1's bytes count. */
++    uint8_t *irp2=irp+64;
++    REQUIRE(port_v37_irp_prepare(irp2,64,PKT+64,d.ucb[4],PORT_SYS85_WRITELBLK)==PORT_V37_QIO_OK);
++    struct port_v37_qio_request r2=r;r2.irp=irp2;r2.irp_va=PKT+64;
++    REQUIRE(port_v37_qio_finishio(&r2,PORT_SYS85_NORMAL,512u)==PORT_SYS85_NORMAL);
++    REQUIRE(port_v37_read32(irp2+PORT_V37_IRP_MEDIA)==1u);
++    REQUIRE(port_v37_read32(irp2+PORT_V37_IRP_IOST2)==512u);
++    REQUIRE(port_v37_read32(irp)==PKT+64&&port_v37_read32(irp2+4)==PKT);
++    REQUIRE(port_v37_read32(irp2)==HEAD&&queue.first==PKT&&queue.last==PKT+64&&queue.queued==2);
++    REQUIRE(port_v37_read32(nl+PORT_V37_UCB_OPCNT)==2&&irq.events==2);
++    REQUIRE(port_v37_post_validate(&queue)==PORT_V37_QIO_OK);
++    const struct port_v37_iopost_queue snapshot=queue;
++    const uint32_t operations=port_v37_read32(nl+PORT_V37_UCB_OPCNT);
++    REQUIRE(port_v37_qio_finishioc(&r,PORT_SYS85_ENDOFFILE)==PORT_V37_QIO_DUP);
++    REQUIRE(queue.queued==snapshot.queued&&irq.events==2);
++    REQUIRE(port_v37_read32(nl+PORT_V37_UCB_OPCNT)==operations);
++    uint32_t old=port_v37_read32(irp+4);
++    port_v37_write32(irp+4,0xdead0000u);
++    REQUIRE(port_v37_post_validate(&queue)==PORT_V37_QIO_CORRUPT);
++    REQUIRE(port_v37_qio_finishio(&r2,1u,2u)==PORT_V37_QIO_CORRUPT);
++    port_v37_write32(irp+4,old);
++    REQUIRE(port_v37_post_validate(&queue)==PORT_V37_QIO_OK);
++    r2.ucb_va^=4u;
++    REQUIRE(port_v37_qio_finishio(&r2,1u,0u)==PORT_V37_QIO_BAD);
++    r2.ucb_va^=4u;
++    r2.nl_ddb_va=d.ddb[1];
++    REQUIRE(port_v37_nl_fdt_post(&r2)==PORT_V37_QIO_BAD);
++    r2.nl_ddb_va=d.ddb[3];
++    REQUIRE(port_v37_post_init(0,irp,sizeof irpwords,PKT,64,HEAD)==PORT_V37_QIO_BAD);
++    REQUIRE(port_v37_post_init(&queue,irp,sizeof irpwords,PKT,32,HEAD)==PORT_V37_QIO_BAD);
++    REQUIRE(port_v37_post_init(&queue,irp,sizeof irpwords,PKT,64,PKT+4)==PORT_V37_QIO_BAD);
++    REQUIRE(port_v37_post_validate(&queue)==PORT_V37_QIO_OK);
++    REQUIRE(port_v37_irp_prepare(irp2,64,PKT+64,d.ucb[4],0u)==PORT_V37_QIO_OK);
++    REQUIRE(port_v37_nl_fdt_post(&r2)==PORT_SYS85_BADFUNC);
++    REQUIRE(irq.events==2&&queue.queued==2);
++    puts("NLDRIVER.MAR to EXE$FINISHIOC real IRP status, IOC post FIFO and IPL4 PASS");
++    return 0;
++}
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -326,8 +326,14 @@
+        'pc_file':'src/vms_v37_dyn_tags.h','pc_symbol':'PORT_V37_DYN_LOG',
+        'pc_line':line_for_symbol('src/vms_v37_dyn_tags.h','PORT_V37_DYN_LOG'),
+        'function':'Source-ordered 63 original DYN structure type identifiers; DPT ABI and structures are incomplete'},
+-      {'original_lines':[1446,6142], 'status':'unresolved',
+-       'reason':'Other original system-wide definitions before UAF layout are unfinished'},
++      {'original_lines':[1446,2826], 'status':'unresolved',
++       'reason':'Other original system-wide definitions before the IRP header are unfinished'},
++      {'original_lines':[2827,2890], 'status':'partial',
++       'pc_file':'src/vms_qio_irp_prepare.c','pc_symbol':'port_v37_irp_prepare',
++       'pc_line':line_for_symbol('src/vms_qio_irp_prepare.c','port_v37_irp_prepare'),
++       'function':'Source IRP ABI type, UCB pointer, function and media status words; other IRP fields and actual $QIO unported'},
++      {'original_lines':[2891,6142], 'status':'unresolved',
++       'reason':'Rest of original system-wide definitions before UAF are unfinished'},
+       {'original_lines':[6143,6146], 'status':'excluded',
+        'reason':'structure introduction and source headings'},
+       {'original_lines':[6147,6232], 'status':'mapped',
+@@ -1546,10 +1552,10 @@
+       {'original_lines':[59,133],'status':'partial',
+        'pc_file':'src/vms_sys85.c','pc_symbol':'port_nl_driver_io',
+        'pc_line':line_for_symbol('src/vms_sys85.c','port_nl_driver_io'),
+-       'function':'Guest null FDT read/write status paths; original FINISHIOC and genuine QIO missing'},
++       'function':'Guest null FDT read/write plus partial FINISHIOC linked status packet and queue; public $QIO missing'},
+       {'original_lines':[134,136],'status':'excluded',
+        'reason':'Final source label and assembler END directives'}],
+-    'unresolved_integration':'Native NL status paths run, but no actual native IOC driver activation.'})
++    'unresolved_integration':'Resident source NL read/write result reaches source-format IRP post queue; public IOC driver activation, IRQ4 postprocessing and user $QIO are still absent.'})
+ 
+ exe_mapped_source('SYS/SRC/SVAPTE.MAR' ,247,[
+     (1,122,None,None,'DEC license, page-table layout and interface text'),
+@@ -2214,6 +2220,28 @@
+     'sections':rows,'unresolved_integration':'Read-only source DDB/UCB physical lookup is callable from actual resident SYS.EXE, guest-tested. Logical translation, IOC mutex, $ASSIGN/$QIO, true drivers/privileges are not implemented.'})
+ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ 
++# M121: original SYSQIOREQ.MAR EXE$FINISHIOC only. The pending
++# IOC$GL_PSBL append is real source-format resident IRP data, but public
++# $QIO setup, IOC driver dispatch and IOPOST delivery have not been ported.
++qio_rows=[
++ (1,735,None,None,'Original QIO entry, channel authorization, dispatch and VAX declarations unresolved','unresolved'),
++ (736,740,None,None,'EXE$ABORTIO AST quota adjustments and IOSB clearing unported','unresolved'),
++ (741,742,'src/vms_qio_finishioc.c','port_v37_qio_finishioc','EXE$FINISHIOC clears R1 before common finish path','partial'),
++ (743,749,'src/vms_qio_finishio.c','port_v37_qio_finishio','UCB OPCNT, IRP media status, append IOC post FIFO and defer IPL4','partial'),
++ (750,908,None,None,'Original queued device/ACP I/O, postprocessing, return and insertion routines unresolved','unresolved')]
++qio_sec=[]
++for lo,hi,pc,sym,description,status in qio_rows:
++    if pc:
++        lineno=line_for_symbol(pc,sym)
++        if lineno is None:missing+=1
++        qio_sec.append({'original_lines':[lo,hi],'status':status if lineno else 'missing',
++                        'pc_file':pc,'pc_symbol':sym,'pc_line':lineno,'function':description})
++    else:qio_sec.append({'original_lines':[lo,hi],'status':status,'reason':description})
++result['files'].append({'original_file':'SYS/SRC/SYSQIOREQ.MAR',
++    'original_lines':908,'sections':qio_sec,
++    'unresolved_integration':'Only FINISHIOC, FINISHIO and IPL4 post request on reserved native IRPs; driver IOC queues, user $QIO, postprocessing, IOSB and AST completion absent.'})
++assert len({f['original_file'] for f in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- a/tools/install_sys_image.c
++++ b/tools/install_sys_image.c
+@@ -122,7 +122,9 @@
+     do{
+         if(fseek(src,0,SEEK_END))break;
+         long len=ftell(src);
+-        if(len<512||len>128L*512L)break;
++        /* Files-11 type-1 retrieval pointer holds up to 256 blocks.
++         * Do not impose the old 128-block cap as native SYS.EXE grows. */
++        if(len<512L||len>256L*BLOCK)break;
+         uint32_t bytes=(uint32_t)len,blocks=(bytes+511u)/512u;
+         const struct boo_io_driver io={driver_read,&d,0u};
+         struct port_f11_volume vol;struct port_f11_fid existing;
+--- /dev/null
++++ b/tools/qemu_sysboot_m121.py
+@@ -0,0 +1,126 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; check source-ordered real SYS.EXE retrieval map and INIT.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M121: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE prelinked BOOT/OPA/MBA/NLA DDB/UCB records (DDTs pending).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE read-only IOC device search resolved OPA0 MBA1 NLA0 (drivers absent).',
++        b'INIT: SYS.EXE NLDRIVER completed two IRPs through EXE$FINISHIOC (IPL4 dispatch pending).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m121-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,121,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M121: guest NLDRIVER to EXE$FINISHIOC IPL4 queue and previous INIT verified PASS')
++        return 0
++    print('QEMU M121: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
