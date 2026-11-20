@@ -1,0 +1,677 @@
+--- a/Makefile
++++ b/Makefile
+@@ -772,8 +772,19 @@
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_mpw.o: src/vms_ini_mpw.c src/vms_ini_mpw.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o build/executive-partial.o
++
++# M118: original DEVICEDAT.MAR DDB/UCB pointer graph in real SYS.EXE.
++M118_DB_SRCS=src/vms_ini_devicedb.c src/vms_ini_ddb_boot.c src/vms_ini_ddb_opa.c src/vms_ini_ddb_mb.c src/vms_ini_ddb_nl.c src/vms_ini_ucb_boot.c src/vms_ini_ucb_opa.c src/vms_ini_ucb_mb1.c src/vms_ini_ucb_mb2.c src/vms_ini_ucb_nl.c
++M118_DB_OBJS=$(patsubst src/%.c,build/%.o,$(M118_DB_SRCS))
++$(M118_DB_OBJS): build/%.o: src/%.c src/vms_ini_devicedb.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: inidevicedbcheck
++inidevicedbcheck: $(M118_DB_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M118_DB_SRCS) tests/test_ini_devicedb_host.c -o build/inidevicedbcheck
++	./build/inidevicedbcheck
++
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -797,7 +808,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1093,7 +1104,7 @@
+ M117_DPT_SRCS=src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c
+ build/vms_ini_dpt_templates.o: src/vms_ini_dpt_templates.c src/vms_ini_dpt_templates.h src/vms_v37_dyn_tags.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/vms_ini_dpt_mb.o: src/vms_ini_dpt_mb.c src/vms_ini_dpt_templates.h | build
++build/vms_ini_dpt_mb.o: src/vms_ini_dpt_mb.c src/vms_ini_dpt_templates.h src/vms_ini_devicedb.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_dpt_nl.o: src/vms_ini_dpt_nl.c src/vms_ini_dpt_templates.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3037,6 +3037,38 @@
+     }
+     bootstrap_message("INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).");
+ 
++    /* Original prelinked DEVICEDAT.MAR DDB/UCB pointers now occupy the
++     * real loaded SYS.EXE. Class/port driver DDTs and CRBs are not yet
++     * linked; this is a source-format prelink, NOT online VMS I/O. */
++    static struct port_sys_exec_result devicedb_result;
++    const struct port_sys_exec_start devicedb_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&devicedb_result,
++        .phase=PORT_SYS_EXEC_INIT_DEVICE_DB};
++    if(loaded_sys(&devicedb_request)!=PORT_SYS_EXEC_NORMAL ||
++       devicedb_result.signature!=PORT_SYS_EXEC_DEVICE_RESULT_TAG ||
++       !devicedb_result.device_db || !devicedb_result.device_db_bytes ||
++       !devicedb_result.device_db_check ||
++       (uintptr_t)devicedb_result.device_db_check<PORT_SYS_ELF_START ||
++       (uintptr_t)devicedb_result.device_db_check>=PORT_SYS_ELF_LIMIT ||
++       (uintptr_t)devicedb_result.device_db<PORT_SYS_ELF_START ||
++       (uintptr_t)devicedb_result.device_db>
++           PORT_SYS_ELF_LIMIT-sizeof(struct port_v37_device_result) ||
++       (uintptr_t)devicedb_result.device_db_bytes<PORT_SYS_ELF_START ||
++       (uintptr_t)devicedb_result.device_db_bytes>
++           PORT_SYS_ELF_LIMIT-PORT_V37_DEVICE_BYTES ||
++       devicedb_result.device_db->list_head!=
++           (uint32_t)(uintptr_t)devicedb_result.device_db_bytes ||
++       devicedb_result.device_db->incomplete_driver_mask!=15u ||
++       devicedb_result.device_db_check(devicedb_result.device_db_bytes,
++           PORT_V37_DEVICE_BYTES,
++           (uint32_t)(uintptr_t)devicedb_result.device_db_bytes,
++           devicedb_result.device_db)!=PORT_V37_DEV_OK){
++        bootstrap_message("INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE prelinked BOOT/OPA/MBA/NLA DDB/UCB records (DDTs pending).");
++
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -6,6 +6,7 @@
+ #include "vms_ini_log_templates.h"
+ #include "vms_ini_dpt_templates.h"
+ #include "vms_ini_syslog.h"
++#include "vms_ini_devicedb.h"
+ #include <stdint.h>
+ /* All state belongs to SYS.EXE's separately loaded resident supervisor
+  * segment, not to the SYSBOOT monitor or a pretend VAX processor. */
+@@ -63,6 +64,10 @@
+ static uint32_t executive_null_fdt_ready;
+ static struct port_ini_bootdev_result executive_bootdev_scan;
+ static uint32_t executive_bootdev_scan_ready;
++/* DEVICEDAT.MAR prelinked BOOT/OPA/MBA/NLA DDB and UCB backing. */
++static union { uint32_t align; uint8_t data[PORT_V37_DEVICE_BYTES]; } executive_devicedb_bytes;
++static struct port_v37_device_result executive_devicedb_result;
++static uint32_t executive_devicedb_ready;
+ /* Original SYSTEM and NULL PCB slots have distinct persistent resident
+  * storage. Creating these source-derived scheduler descriptors is not a
+  * substitute for actually scheduling SYSTEM or running LOGINOUT. */
+@@ -451,6 +456,25 @@
+         p->result->signature=PORT_SYS_EXEC_SYSLOG_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_DEVICE_DB){
++        /* DEVICEDAT.MAR IOC$GL_DEVLIST: copy real pointer-linked
++         * BOOT->OPA->MBA->NLA DDB/UCB templates into resident SYS.EXE.
++         * No DDT pointer is fabricated, so this cannot accept live QIO. */
++        if(!executive_bootdev_scan_ready || !executive_dpt_stages_ready ||
++           !executive_syslog_ready || executive_devicedb_ready ||
++           (uintptr_t)executive_devicedb_bytes.data>UINT32_MAX ||
++           port_v37_devices_prelink(executive_devicedb_bytes.data,
++               sizeof executive_devicedb_bytes.data,
++               (uint32_t)(uintptr_t)executive_devicedb_bytes.data,
++               &executive_devicedb_result)!=PORT_V37_DEV_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_devicedb_ready=1u;
++        p->result->device_db=&executive_devicedb_result;
++        p->result->device_db_bytes=executive_devicedb_bytes.data;
++        p->result->device_db_check=port_v37_devices_check;
++        p->result->signature=PORT_SYS_EXEC_DEVICE_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_BOOTDEV_SCAN){
+         /* INIT.MAR INI_BOOTDEVIC adapter traversal. Its input is the
+          * genuine INILOA registered I/O-port table from this boot.
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -15,10 +15,11 @@
+ #include "vms_ini_syslog.h"
+ #include "vms_ini_dpt_templates.h"
+ #include "vms_ini_bootdev_scan.h"
++#include "vms_ini_devicedb.h"
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=15u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=16u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -34,7 +35,8 @@
+        PORT_SYS_EXEC_INIT_SYSLOG=11u,PORT_SYS_EXEC_SYSLOG_RESULT_TAG=0x474f4c53u,
+        PORT_SYS_EXEC_INIT_NL_FDT=12u, PORT_SYS_EXEC_NL_RESULT_TAG=0x4c554e4cu,
+        PORT_SYS_EXEC_INIT_BOOTDEV_SCAN=13u, PORT_SYS_EXEC_BOOTDEV_RESULT_TAG=0x56444249u,
+-       PORT_SYS_EXEC_INIT_DPT_STAGES=14u, PORT_SYS_EXEC_DPT_RESULT_TAG=0x54504453u };
++       PORT_SYS_EXEC_INIT_DPT_STAGES=14u, PORT_SYS_EXEC_DPT_RESULT_TAG=0x54504453u,
++       PORT_SYS_EXEC_INIT_DEVICE_DB=15u,PORT_SYS_EXEC_DEVICE_RESULT_TAG=0x42444456u };
+ /* The IA-32 privilege-transition stack is the first live counterpart of
+  * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
+ /* SYSBOOT passes the genuine Files-11 SYS.EXE extent map through the
+@@ -82,6 +84,11 @@
+     uint32_t (*null_driver_io)(uint16_t,void *,port_sys85_finish_io_fn);
+     /* Source-first adapter selection only; DDB/UCB allocation is pending. */
+     const struct port_ini_bootdev_result *bootdev_scan;
++    /* Prelinked DEVICEDAT DDB/UCB pointer graph; no live driver DDT. */
++    const struct port_v37_device_result *device_db;
++    const uint8_t *device_db_bytes;
++    uint32_t (*device_db_check)(const uint8_t *,size_t,uint32_t,
++         const struct port_v37_device_result *);
+     uint32_t logical_table[2];
+     uint8_t lock_max_resource_depth;
+     const struct port_ini_procvec *process_vector;
+--- /dev/null
++++ b/src/vms_ini_devicedb.c
+@@ -0,0 +1,123 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT UCB macro and DDB macro expanded to fixed IA-32 bytes.
++ * All pointer values are actual absolute resident 32-bit addresses; neither
++ * VAX instructions nor fictitious device handler addresses are emulated. */
++void port_v37_write16(uint8_t *p,uint16_t v){p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);}
++void port_v37_write32(uint8_t *p,uint32_t v){
++    p[0]=(uint8_t)v;p[1]=(uint8_t)(v>>8);p[2]=(uint8_t)(v>>16);p[3]=(uint8_t)(v>>24);
++}
++uint16_t port_v37_read16(const uint8_t *p){return (uint16_t)((uint16_t)p[0]|((uint16_t)p[1]<<8));}
++uint32_t port_v37_read32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8)|((uint32_t)p[2]<<16)|((uint32_t)p[3]<<24);
++}
++void port_v37_ddb_base(uint8_t *d,uint32_t next,uint32_t first,
++    const char *name,unsigned name_len,const char *driver,unsigned driver_len){
++    port_v37_write32(d+0u,next);port_v37_write32(d+4u,first);
++    port_v37_write16(d+8u,PORT_V37_DDB_SIZE);d[10]=PORT_V37_DYN_DDB;
++    d[20]=(uint8_t)name_len;
++    for(unsigned i=0;i<name_len;i++)d[21u+i]=(uint8_t)name[i];
++    d[36]=(uint8_t)driver_len;
++    for(unsigned i=0;i<driver_len;i++)d[37u+i]=(uint8_t)driver[i];
++}
++void port_v37_ucb_base(uint8_t *u,uint32_t address,uint32_t ddb,uint32_t bytes){
++    port_v37_write16(u+8u,(uint16_t)bytes);
++    u[10u]=PORT_V37_DYN_UCB;
++    port_v37_write32(u+28u,0x00010001u); /* standard [1,1] ownership */
++    port_v37_write32(u+36u,ddb);
++    port_v37_write32(u+64u,address+64u); /* source UCB macro IOQFL/IOQBL */
++    port_v37_write32(u+68u,address+64u);
++}
++static int range32(uint32_t base,size_t n){
++    return base && !(base&3u) && n>=PORT_V37_DEVICE_BYTES &&
++        (uint64_t)base+PORT_V37_DEVICE_BYTES<=UINT64_C(0x100000000);
++}
++uint32_t port_v37_devices_prelink(uint8_t *memory,size_t cap,uint32_t base,
++                                  struct port_v37_device_result *out){
++    if(!memory || !out || ((uintptr_t)memory&3u) ||
++       !range32(base,cap))return PORT_V37_DEV_BAD;
++    /* Transactional preflight: valid callers see zeroed source-style
++     * records; invalid calls cannot modify the supplied byte span. */
++    for(unsigned i=0;i<PORT_V37_DEVICE_BYTES;i++)memory[i]=0u;
++    const uint32_t ddb[4]={base+PORT_V37_DDB_BOOT_OFF,base+PORT_V37_DDB_OPA_OFF,
++                          base+PORT_V37_DDB_MB_OFF,base+PORT_V37_DDB_NL_OFF};
++    const uint32_t ucb[5]={base+PORT_V37_UCB_BOOT_OFF,base+PORT_V37_UCB_OPA_OFF,
++                          base+PORT_V37_UCB_MB1_OFF,base+PORT_V37_UCB_MB2_OFF,
++                          base+PORT_V37_UCB_NL_OFF};
++    port_v37_ddb_boot(memory+PORT_V37_DDB_BOOT_OFF,ddb[1],ucb[0]);
++    port_v37_ddb_opa(memory+PORT_V37_DDB_OPA_OFF,ddb[2],ucb[1]);
++    port_v37_ddb_mb(memory+PORT_V37_DDB_MB_OFF,ddb[3],ucb[2]);
++    port_v37_ddb_nl(memory+PORT_V37_DDB_NL_OFF,ucb[4]);
++    port_v37_ucb_boot(memory+PORT_V37_UCB_BOOT_OFF,ucb[0],ddb[0]);
++    port_v37_ucb_opa(memory+PORT_V37_UCB_OPA_OFF,ucb[1],ddb[1]);
++    port_v37_ucb_mb1(memory+PORT_V37_UCB_MB1_OFF,ucb[2],ddb[2],ucb[3]);
++    port_v37_ucb_mb2(memory+PORT_V37_UCB_MB2_OFF,ucb[3],ddb[2]);
++    port_v37_ucb_nl(memory+PORT_V37_UCB_NL_OFF,ucb[4],ddb[3]);
++    struct port_v37_device_result candidate={0};
++    candidate.list_head=ddb[0];
++    for(unsigned i=0;i<4;i++)candidate.ddb[i]=ddb[i];
++    for(unsigned i=0;i<5;i++)candidate.ucb[i]=ucb[i];
++    candidate.bytes=PORT_V37_DEVICE_BYTES;
++    candidate.incomplete_driver_mask=0x0fu; /* NO DDT/CRB binding allowed */
++    if(port_v37_devices_check(memory,cap,base,&candidate)!=PORT_V37_DEV_OK)
++        return PORT_V37_DEV_BAD;
++    *out=candidate;
++    return PORT_V37_DEV_OK;
++}
++uint32_t port_v37_devices_check(const uint8_t *m,size_t cap,uint32_t base,
++                                 const struct port_v37_device_result *r){
++    if(!m || !r || ((uintptr_t)m&3u) || !range32(base,cap) ||
++       r->list_head!=base || r->bytes!=PORT_V37_DEVICE_BYTES ||
++       r->incomplete_driver_mask!=15u)return PORT_V37_DEV_BAD;
++    const unsigned ddb_offset[4]={0u,52u,104u,156u};
++    const unsigned ucb_offset[5]={208u,460u,780u,912u,1044u};
++    const unsigned sz[5]={252u,320u,132u,132u,132u};
++    const unsigned owner[5]={0x10001u,0x10001u,0x10004u,0x10004u,0x10001u};
++    const unsigned backlink[5]={0u,1u,2u,2u,3u};
++    const unsigned bufsize[5]={512u,132u,1024u,256u,132u};
++    const char *names[4]={"","OPA","MBA","NLA"};
++    const char *drivers[4]={"","OPERATOR","MBDRIVER","NLDRIVER"};
++    const unsigned nlen[4]={0u,3u,3u,3u};
++    const unsigned dlen[4]={0u,8u,8u,8u};
++    for(unsigned i=0;i<4;i++){
++        const uint8_t *d=m+ddb_offset[i];
++        if(r->ddb[i]!=base+ddb_offset[i] ||
++           port_v37_read32(d)!=(i<3u?r->ddb[i+1u]:0u) ||
++           port_v37_read32(d+4u)!=r->ucb[i==3u?4u:i] ||
++           port_v37_read16(d+8u)!=PORT_V37_DDB_SIZE ||
++           d[10u]!=PORT_V37_DYN_DDB || d[11u]!=0u ||
++           port_v37_read32(d+12u)!=0u || d[20u]!=nlen[i] ||
++           d[36u]!=dlen[i])return PORT_V37_DEV_BAD;
++        for(unsigned j=0;j<nlen[i];j++)if(d[21u+j]!=(uint8_t)names[i][j])return PORT_V37_DEV_BAD;
++        for(unsigned j=0;j<dlen[i];j++)if(d[37u+j]!=(uint8_t)drivers[i][j])return PORT_V37_DEV_BAD;
++    }
++    if(port_v37_read32(m+16u)!=((uint32_t)'F'|((uint32_t)'1'<<8)|
++                                  ((uint32_t)'1'<<16)|(1u<<24)))return PORT_V37_DEV_BAD;
++    for(unsigned i=0;i<5;i++){
++        const uint8_t *u=m+ucb_offset[i];
++        if(r->ucb[i]!=base+ucb_offset[i] ||
++           port_v37_read16(u+8u)!=sz[i] || u[10u]!=PORT_V37_DYN_UCB ||
++           port_v37_read32(u+28u)!=owner[i] ||
++           port_v37_read32(u+36u)!=r->ddb[backlink[i]] ||
++           port_v37_read32(u+64u)!=r->ucb[i]+64u ||
++           port_v37_read32(u+68u)!=r->ucb[i]+64u ||
++           port_v37_read16(u+58u)!=bufsize[i] ||
++           port_v37_read32(u+120u)!=0u)return PORT_V37_DEV_BAD;
++    }
++    if(m[PORT_V37_UCB_BOOT_OFF+11u]!=8u ||
++       m[PORT_V37_UCB_BOOT_OFF+82u]!=21u ||
++       m[PORT_V37_UCB_OPA_OFF+11u]!=8u ||
++       m[PORT_V37_UCB_OPA_OFF+82u]!=20u ||
++       m[PORT_V37_UCB_NL_OFF+82u]!=8u ||
++       port_v37_read16(m+PORT_V37_UCB_OPA_OFF+88u)!=PORT_V37_UCB_ONLINE ||
++       port_v37_read16(m+PORT_V37_UCB_NL_OFF+88u)!=PORT_V37_UCB_ONLINE ||
++       port_v37_read16(m+PORT_V37_UCB_MB1_OFF+88u)!=PORT_V37_UCB_ONLINE ||
++       port_v37_read16(m+PORT_V37_UCB_MB2_OFF+88u)!=PORT_V37_UCB_ONLINE ||
++       port_v37_read32(m+PORT_V37_UCB_MB1_OFF+44u)!=r->ucb[3] ||
++       port_v37_read32(m+PORT_V37_UCB_MB2_OFF+44u)!=0u ||
++       port_v37_read16(m+PORT_V37_UCB_MB1_OFF+20u)!=60u ||
++       port_v37_read16(m+PORT_V37_UCB_MB2_OFF+20u)!=20u ||
++       port_v37_read16(m+PORT_V37_UCB_OPA_OFF+240u)!=132u ||
++       m[PORT_V37_UCB_BOOT_OFF+112u]!=8u ||
++       m[PORT_V37_UCB_BOOT_OFF+113u]!=8u)return PORT_V37_DEV_BAD;
++    return PORT_V37_DEV_OK;
++}
+--- /dev/null
++++ b/src/vms_ini_devicedb.h
+@@ -0,0 +1,52 @@
++#ifndef PORT_V37_INIT_DEVICEDB_H
++#define PORT_V37_INIT_DEVICEDB_H
++#include <stddef.h>
++#include <stdint.h>
++#include "vms_v37_dyn_tags.h"
++/* The prelinked DEVICEDAT.MAR device database, in native IA-32 memory.
++ * Source DEVICEDAT.MAR 129-254, 354-475; SYSDEF.MDL DDB/UCB layouts.
++ * DDT/CRB/DEVCHAR/device-class fields that require absent driver code or
++ * unverified STARLET constants are kept zero. No I/O or IOC publication. */
++enum {
++    PORT_V37_DDB_SIZE=52u, PORT_V37_UCB_SIZE=132u,
++    PORT_V37_BOOT_UCB_SIZE=252u, PORT_V37_OPA_UCB_SIZE=320u,
++    PORT_V37_DEVICE_DDB_COUNT=4u, PORT_V37_DEVICE_UCB_COUNT=5u,
++    PORT_V37_DDB_BOOT_OFF=0u,
++    PORT_V37_DDB_OPA_OFF=52u,
++    PORT_V37_DDB_MB_OFF=104u,
++    PORT_V37_DDB_NL_OFF=156u,
++    PORT_V37_UCB_BOOT_OFF=208u,
++    PORT_V37_UCB_OPA_OFF=460u,
++    PORT_V37_UCB_MB1_OFF=780u,
++    PORT_V37_UCB_MB2_OFF=912u,
++    PORT_V37_UCB_NL_OFF=1044u,
++    PORT_V37_DEVICE_BYTES=1176u,
++    PORT_V37_DEV_OK=1u, PORT_V37_DEV_BAD=2u,
++    PORT_V37_UCB_ONLINE=16u
++};
++struct port_v37_device_result {
++    uint32_t list_head;
++    uint32_t ddb[PORT_V37_DEVICE_DDB_COUNT];
++    uint32_t ucb[PORT_V37_DEVICE_UCB_COUNT];
++    uint32_t bytes;
++    uint32_t incomplete_driver_mask;
++};
++void port_v37_write16(uint8_t *,uint16_t);
++void port_v37_write32(uint8_t *,uint32_t);
++uint16_t port_v37_read16(const uint8_t *);
++uint32_t port_v37_read32(const uint8_t *);
++void port_v37_ddb_base(uint8_t *,uint32_t,uint32_t,const char *,unsigned,const char *,unsigned);
++void port_v37_ucb_base(uint8_t *,uint32_t,uint32_t,uint32_t);
++void port_v37_ddb_boot(uint8_t *,uint32_t,uint32_t);
++void port_v37_ddb_opa(uint8_t *,uint32_t,uint32_t);
++void port_v37_ddb_mb(uint8_t *,uint32_t,uint32_t);
++void port_v37_ddb_nl(uint8_t *,uint32_t);
++void port_v37_ucb_boot(uint8_t *,uint32_t,uint32_t);
++void port_v37_ucb_opa(uint8_t *,uint32_t,uint32_t);
++void port_v37_ucb_mb1(uint8_t *,uint32_t,uint32_t,uint32_t);
++void port_v37_ucb_mb2(uint8_t *,uint32_t,uint32_t);
++void port_v37_ucb_nl(uint8_t *,uint32_t,uint32_t);
++uint32_t port_v37_devices_prelink(uint8_t *,size_t,uint32_t,struct port_v37_device_result *);
++uint32_t port_v37_devices_check(const uint8_t *,size_t,uint32_t,
++                                const struct port_v37_device_result *);
++#endif
+--- /dev/null
++++ b/src/vms_ini_ddb_boot.c
+@@ -0,0 +1,8 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 206-207 SYS$GL_BOOTDDB: first IOC$GL_DEVLIST node. */
++void port_v37_ddb_boot(uint8_t *d,uint32_t next,uint32_t ucb){
++    port_v37_ddb_base(d,next,ucb,"",0u,"",0u);
++    /* ^A/F11/ plus ACP device class 1 in top byte. Source boot DDT=0. */
++    port_v37_write32(d+16u,((uint32_t)'F')|((uint32_t)'1'<<8)|
++                       ((uint32_t)'1'<<16)|(1u<<24));
++}
+--- /dev/null
++++ b/src/vms_ini_ddb_opa.c
+@@ -0,0 +1,5 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 233-234: console OPA generic DDB; class DDT not loaded. */
++void port_v37_ddb_opa(uint8_t *d,uint32_t next,uint32_t ucb){
++    port_v37_ddb_base(d,next,ucb,"OPA",3u,"OPERATOR",8u);
++}
+--- /dev/null
++++ b/src/vms_ini_ddb_mb.c
+@@ -0,0 +1,6 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 353-355: mailbox DDB with the real prelinked UCB1 head.
++ * Source MB$DDT is not linked; keep DDB$L_DDT zero and fail closed. */
++void port_v37_ddb_mb(uint8_t *d,uint32_t next,uint32_t ucb){
++    port_v37_ddb_base(d,next,ucb,"MBA",3u,"MBDRIVER",8u);
++}
+--- /dev/null
++++ b/src/vms_ini_ddb_nl.c
+@@ -0,0 +1,5 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 457-459: NLA generic DDB terminates IOC$GL_DEVLIST. */
++void port_v37_ddb_nl(uint8_t *d,uint32_t ucb){
++    port_v37_ddb_base(d,0u,ucb,"NLA",3u,"NLDRIVER",8u);
++}
+--- /dev/null
++++ b/src/vms_ini_ucb_boot.c
+@@ -0,0 +1,9 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 209-227: 132-byte UCB plus 30 longwords of boot
++ * disk extension. Nonportable CSR/CRB/DDT/device class await live driver. */
++void port_v37_ucb_boot(uint8_t *u,uint32_t addr,uint32_t ddb){
++    port_v37_ucb_base(u,addr,ddb,PORT_V37_BOOT_UCB_SIZE);
++    u[11u]=8u;u[82u]=21u;
++    port_v37_write16(u+58u,512u);
++    u[112u]=8u;u[113u]=8u;
++}
+--- /dev/null
++++ b/src/vms_ini_ucb_opa.c
+@@ -0,0 +1,13 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 237-263; TTYDEF.MAR 245-449.
++ * UCB$C_TT_LENGTH=256, EXPAND=(256-132+3+64)/4=47 longwords,
++ * hence 132+188=320. Actual class/port vectors are not bound yet. */
++void port_v37_ucb_opa(uint8_t *u,uint32_t addr,uint32_t ddb){
++    port_v37_ucb_base(u,addr,ddb,PORT_V37_OPA_UCB_SIZE);
++    u[11u]=8u;u[82u]=20u;
++    port_v37_write16(u+58u,132u);
++    port_v37_write16(u+88u,PORT_V37_UCB_ONLINE);
++    port_v37_write16(u+240u,132u); /* UCB$W_TT_DESIZE */
++    /* CRB, DDT, port vectors and character flags must be source-verified
++     * and connected before an active terminal $QIO may be accepted. */
++}
+--- /dev/null
++++ b/src/vms_ini_ucb_mb1.c
+@@ -0,0 +1,15 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 396-420: permanent SYS$GL_JOBCTLMB, MBA1. */
++void port_v37_ucb_mb1(uint8_t *u,uint32_t addr,uint32_t ddb,uint32_t next){
++    port_v37_ucb_base(u,addr,ddb,PORT_V37_UCB_SIZE);
++    port_v37_write32(u+0u,addr);port_v37_write32(u+4u,addr);
++    port_v37_write16(u+20u,60u);
++    port_v37_write16(u+24u,0xffffu);port_v37_write16(u+26u,0xff0fu);
++    port_v37_write32(u+28u,0x00010004u);
++    port_v37_write32(u+44u,next);
++    port_v37_write16(u+58u,1024u);
++    port_v37_write16(u+72u,1u);port_v37_write16(u+80u,1u);
++    port_v37_write16(u+88u,PORT_V37_UCB_ONLINE);
++    port_v37_write16(u+90u,0x8001u);
++    /* original IPL$_MAILBOX, class code, CRB and DDT unresolved */
++}
+--- /dev/null
++++ b/src/vms_ini_ucb_mb2.c
+@@ -0,0 +1,13 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 423-449: permanent SYS$GL_OPRMBX, MBA2. */
++void port_v37_ucb_mb2(uint8_t *u,uint32_t addr,uint32_t ddb){
++    port_v37_ucb_base(u,addr,ddb,PORT_V37_UCB_SIZE);
++    port_v37_write32(u+0u,addr);port_v37_write32(u+4u,addr);
++    port_v37_write16(u+20u,20u);
++    port_v37_write16(u+24u,0xffffu);port_v37_write16(u+26u,0xff0fu);
++    port_v37_write32(u+28u,0x00010004u);
++    port_v37_write16(u+58u,256u);
++    port_v37_write16(u+72u,2u);port_v37_write16(u+80u,1u);
++    port_v37_write16(u+88u,PORT_V37_UCB_ONLINE);
++    port_v37_write16(u+90u,1u);
++}
+--- /dev/null
++++ b/src/vms_ini_ucb_nl.c
+@@ -0,0 +1,10 @@
++#include "vms_ini_devicedb.h"
++/* DEVICEDAT.MAR 460-478: NULL NLA0 unit and source-sized UCB. */
++void port_v37_ucb_nl(uint8_t *u,uint32_t addr,uint32_t ddb){
++    port_v37_ucb_base(u,addr,ddb,PORT_V37_UCB_SIZE);
++    u[11u]=8u;u[82u]=8u;
++    port_v37_write16(u+58u,132u);
++    port_v37_write16(u+80u,1u);
++    port_v37_write16(u+88u,PORT_V37_UCB_ONLINE);
++    /* Original SYS_CRB and NL$DDT not yet usable; keep zero. */
++}
+--- /dev/null
++++ b/tests/test_ini_devicedb_host.c
+@@ -0,0 +1,49 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_ini_devicedb.h"
++#define CHECK(x) do {if(!(x)){fprintf(stderr,"FAIL %s:%d: %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++int main(void){
++    uint32_t words[PORT_V37_DEVICE_BYTES/4u+4u];
++    uint8_t *const m=(uint8_t *)words;
++    const uint32_t b=0x00270000u;
++    struct port_v37_device_result r={0};
++    memset(words,0xa5,sizeof words);
++    CHECK(port_v37_devices_prelink(m,PORT_V37_DEVICE_BYTES-1u,b,&r)==PORT_V37_DEV_BAD);
++    for(unsigned i=0;i<sizeof words;i++)CHECK(m[i]==0xa5u);
++    CHECK(port_v37_devices_prelink(m,sizeof words,b+1u,&r)==PORT_V37_DEV_BAD);
++    for(unsigned i=0;i<sizeof words;i++)CHECK(m[i]==0xa5u);
++    CHECK(port_v37_devices_prelink(m,sizeof words,0xfffffd00u,&r)==PORT_V37_DEV_BAD);
++    CHECK(port_v37_devices_prelink(m+1u,sizeof words-1u,b,&r)==PORT_V37_DEV_BAD);
++    CHECK(port_v37_devices_prelink(m,sizeof words,b,&r)==PORT_V37_DEV_OK);
++    CHECK(port_v37_devices_check(m,sizeof words,b,&r)==PORT_V37_DEV_OK);
++    CHECK(r.list_head==r.ddb[0] && r.ddb[3]==b+156u);
++    CHECK(r.ucb[0]==b+208u && r.ucb[1]==b+460u && r.ucb[4]==b+1044u);
++    CHECK(r.incomplete_driver_mask==15u);
++    for(unsigned i=PORT_V37_DEVICE_BYTES;i<sizeof words;i++)CHECK(m[i]==0xa5u);
++    CHECK(port_v37_read16(m+PORT_V37_UCB_OPA_OFF+8u)==320u);
++    CHECK(port_v37_read16(m+PORT_V37_UCB_BOOT_OFF+8u)==252u);
++    CHECK(port_v37_read16(m+PORT_V37_UCB_MB1_OFF+8u)==132u);
++    CHECK(port_v37_read16(m+PORT_V37_UCB_MB1_OFF+72u)==1u);
++    CHECK(port_v37_read16(m+PORT_V37_UCB_MB2_OFF+72u)==2u);
++    CHECK(port_v37_read16(m+PORT_V37_UCB_MB1_OFF+90u)==0x8001u);
++    CHECK(port_v37_read16(m+PORT_V37_UCB_MB2_OFF+90u)==1u);
++    CHECK(port_v37_read16(m+PORT_V37_UCB_OPA_OFF+240u)==132u);
++    CHECK(port_v37_read32(m+PORT_V37_DDB_BOOT_OFF+12u)==0u);
++    CHECK(port_v37_read32(m+PORT_V37_DDB_OPA_OFF+12u)==0u);
++    CHECK(port_v37_read32(m+PORT_V37_DDB_MB_OFF+12u)==0u);
++    CHECK(port_v37_read32(m+PORT_V37_DDB_NL_OFF+12u)==0u);
++    for(unsigned i=0;i<5u;i++)CHECK(port_v37_read32(m+(r.ucb[i]-b)+120u)==0u);
++    CHECK(port_v37_devices_check(m,sizeof words,b,&r)==PORT_V37_DEV_OK);
++    const uint32_t old=port_v37_read32(m+PORT_V37_UCB_MB1_OFF+44u);
++    port_v37_write32(m+PORT_V37_UCB_MB1_OFF+44u,0u);
++    CHECK(port_v37_devices_check(m,sizeof words,b,&r)==PORT_V37_DEV_BAD);
++    port_v37_write32(m+PORT_V37_UCB_MB1_OFF+44u,old);
++    CHECK(port_v37_devices_check(m,sizeof words,b,&r)==PORT_V37_DEV_OK);
++    m[PORT_V37_DDB_OPA_OFF+10u]=PORT_V37_DYN_UCB;
++    CHECK(port_v37_devices_check(m,sizeof words,b,&r)==PORT_V37_DEV_BAD);
++    m[PORT_V37_DDB_OPA_OFF+10u]=PORT_V37_DYN_DDB;
++    CHECK(port_v37_devices_check(m,sizeof words,b,&r)==PORT_V37_DEV_OK);
++    puts("DEVICEDAT.MAR original DDB/UCB nonpublished prelink bytes and pointer chains PASS");
++    return 0;
++}
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2099,6 +2099,40 @@
+ assert len(m113_seen)==40
+ assert len({x['original_file'] for x in result['files']})==len(result['files'])
+ 
++
++# M118: DEVICEDAT.MAR source-built record topology. Structural validation
++# is guest executed, but fields requiring CRB, DDT, class/port vector and
++# live I/O remain expressly unresolved. Do not call this a live device DB.
++devicedat_ranges=[
++ (1,128,None,None,'Copyright, history, declarations and unported symbol values','unresolved'),
++ (129,154,'src/vms_ini_devicedb.c','port_v37_ucb_base','Original fixed UCB header and self-referential I/O queue; other UCB flags depend on original macros','partial'),
++ (155,175,'src/vms_ini_devicedb.c','port_v37_ddb_base','Original counted DDB name, linked-list fields and DYN type; no live DDT','partial'),
++ (176,205,'src/vms_ini_devicedb.c','port_v37_devices_prelink','IOC$GL_DEVLIST head and DDB source order; ADP and DPT lists not yet registered','partial'),
++ (206,208,'src/vms_ini_ddb_boot.c','port_v37_ddb_boot','Boot DDB with F11 ACP identifier and NULL DDT before device driver link','partial'),
++ (209,230,'src/vms_ini_ucb_boot.c','port_v37_ucb_boot','Boot disk UCB fields, 30 original extension longwords; real disk DDT and CRB unresolved','partial'),
++ (231,234,'src/vms_ini_ddb_opa.c','port_v37_ddb_opa','OPA generic DDB, source counted OPERATOR name; no class DDT','partial'),
++ (235,263,'src/vms_ini_ucb_opa.c','port_v37_ucb_opa','OPA0 UCB layout, 320-byte source size, online template and line size; class and port vectors missing','partial'),
++ (264,353,None,None,'Original console CRB, IDB, VAX interrupts and PC UART adaptation still need original-value derivation','unresolved'),
++ (354,356,'src/vms_ini_ddb_mb.c','port_v37_ddb_mb','MBA DDB name and next link; MB driver dispatch not linked','partial'),
++ (357,391,None,None,'Mailbox clone template and all original mailbox characteristics unresolved','unresolved'),
++ (392,423,'src/vms_ini_ucb_mb1.c','port_v37_ucb_mb1','Source job-controller MBA1 template fields and next unit pointer; no mailbox service','partial'),
++ (424,453,'src/vms_ini_ucb_mb2.c','port_v37_ucb_mb2','Source operator MBA2 template fields; no mailbox service','partial'),
++ (454,460,'src/vms_ini_ddb_nl.c','port_v37_ddb_nl','NLA DDB tail node, no DDT until IOC live','partial'),
++ (461,478,'src/vms_ini_ucb_nl.c','port_v37_ucb_nl','NLA0 template, I/O queue, source status and owner; not connected to $QIO','partial'),
++ (479,572,None,None,'Network WCB and later source tables unresolved','unresolved')]
++rows=[]
++for lo,hi,pc,sym,why,status in devicedat_ranges:
++    if pc:
++        line=line_for_symbol(pc,sym)
++        if line is None:missing+=1
++        rows.append({'original_lines':[lo,hi], 'status':status if line else 'missing',
++                     'pc_file':pc,'pc_symbol':sym,'pc_line':line,
++                     'function':why})
++    else: rows.append({'original_lines':[lo,hi],'status':status,'reason':why})
++result['files'].append({'original_file':'SYS/SRC/DEVICEDAT.MAR','original_lines':572,
++    'sections':rows,'unresolved_integration':'Original DEC source prelinked DDB/UCB layout staged at resident native SYS.EXE addresses; actual class/port/MB/NL driver DDT, CRB, IOC queue and native SYS$QIO still absent.'})
++assert len({f['original_file'] for f in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- /dev/null
++++ b/tools/qemu_sysboot_m118.py
+@@ -0,0 +1,120 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; check source-ordered real SYS.EXE retrieval map and INIT.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M118: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE prelinked BOOT/OPA/MBA/NLA DDB/UCB records (DDTs pending).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m118-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,118,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M118: guest source DPT headers, FDT, ATA boot scan, typed LOG and early INIT verified PASS')
++        return 0
++    print('QEMU M118: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
