@@ -1,0 +1,1680 @@
+--- a/Makefile
++++ b/Makefile
+@@ -1043,3 +1043,23 @@
+ 	python3 tools/gen_source_coverage.py
+ 	python3 tests/test_rtl_m112_integrity.py
+ all: build/rtl-m112-partial.o
++
++# M113: 40 original source-specific COBOL/BASIC/LIB RTL slices; host-only.
++M113_MODULE_SRCS=$(wildcard src/native_rtl_m113/*.c)
++M113_MODULE_OBJS=$(patsubst src/native_rtl_m113/%.c,build/m113/%.o,$(M113_MODULE_SRCS))
++build/vms_rtl_m113.o: src/vms_rtl_m113.c src/vms_rtl_m113.h src/vms_rtl_m109.h | build
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/vms_rtl_m113_tables.o: src/vms_rtl_m113_tables.c src/vms_rtl_m113.h | build
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/m113/%.o: src/native_rtl_m113/%.c src/vms_rtl_m113.h | build
++	mkdir -p build/m113
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/rtl-m113-partial.o: build/vms_rtl_m113.o build/vms_rtl_m113_tables.o build/vms_rtl_m109.o build/vms_rtl_m109_x87.o $(M113_MODULE_OBJS)
++	$(LD) -m elf_i386 -r -o $@ $^
++.PHONY: rtl113check
++rtl113check: build/rtl-m113-partial.o
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc src/vms_rtl_m109.c src/vms_rtl_m109_x87.c src/vms_rtl_m113.c src/vms_rtl_m113_tables.c $(M113_MODULE_SRCS) tests/test_rtl_m113.c -o build/rtl113check
++	./build/rtl113check
++	python3 tools/gen_source_coverage.py
++	python3 tests/test_rtl_m113_integrity.py
++all: build/rtl-m113-partial.o
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2015,6 +2015,49 @@
+ assert len(m112_seen)==40
+ assert len({x['original_file'] for x in result['files']})==len(result['files'])
+ 
++# M113: 40 further pinned original RTL/COBOL/BASIC sources; explicitly
++# track full source line extent, with partial native IA-32 subsets only.
++# A callable symbol does not equal a complete/booted VAX service.
++m113=json.loads((ROOT/'tools/m113_originals.json').read_text())
++assert m113['revision']==REVISION and m113['file_count']==40
++assert len(m113['modules'])==40
++m113_seen=set()
++for item in m113['modules']:
++    original=item['source'];total=item['lines'];name=item['name']
++    assert original.startswith('RTL/SRC/') and original not in m113_seen
++    m113_seen.add(original)
++    native='src/native_rtl_m113/'+name.lower()+'.c'
++    assert (ROOT/native).is_file()
++    entries=item['entries']
++    assert entries and [e['line'] for e in entries]==sorted(e['line'] for e in entries)
++    sections=[]
++    if entries[0]['line']>1:
++        sections.append({'original_lines':[1,entries[0]['line']-1],
++            'status':'unresolved',
++            'reason':'Original declarations, VAX calling conventions, condition frames, coefficients or static data not independently line-mapped'})
++    for i,e in enumerate(entries):
++        first=e['line']
++        last=entries[i+1]['line']-1 if i+1<len(entries) else total-1
++        assert 1<=first<=last<total,(original,first,last,total)
++        sym=e['symbol'];lineno=line_for_symbol(native,sym)
++        if lineno is None:missing+=1
++        status='missing' if lineno is None else e['status']
++        assert status in ('partial','unresolved','missing')
++        sections.append({'original_lines':[first,last],
++          'status':status,'pc_file':native,'pc_symbol':sym,'pc_line':lineno,
++          **({'reason':'Original VAX handler stack/register scan and condition delivery not translated; source-specific IA-32 entry explicitly returns UNSUPPORTED'} if status=='unresolved' else {}),
++          'function':'Source-specific bounded native IA-32 subset for VMS RTL source '+name,
++          'unresolved':'Exact VAX ABI, condition signals, object formatting, RMS/VMS guest integration or rounding still missing'})
++    sections.append({'original_lines':[total,total],'status':'excluded',
++                     'reason':'Non-executable VAX MACRO-32 final END directive or terminal blank line'})
++    result['files'].append({'original_file':original,'original_lines':total,
++        'sections':sections,'unresolved_integration':
++        'Source-derived partial RTL functionality compiled as standalone IA-32 objects. '
++        'Some entries deliberately return PORT113_UNSUPPORTED. Original VAX ABI, exact DEC '
++        'error/condition and rounding semantics and real SYS.EXE/DCL guest linkage absent.'})
++assert len(m113_seen)==40
++assert len({x['original_file'] for x in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- /dev/null
++++ b/tools/m113_modules.py
+@@ -0,0 +1,115 @@
++#!/usr/bin/env python3
++"""Generate independently compilable, source-specific *partial* IA-32 RTL slices.
++Original revision: 2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752.
++Never embeds or redistributes original copyrighted MACRO-32 sources.
++Exact table values were transcribed by inspection from pinned .MAR byte data.
++"""
++from pathlib import Path
++import json
++
++ROOT=Path(__file__).resolve().parents[1]
++REV='2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752'
++# Name -> (physical source lines, original public entry lines); includes .END.
++data={
++'LIBA2EREV':(147,[112]),'LIBE2AREV':(150,[115]),'LIBASCEBC':(152,[116]),'LIBEBCASC':(161,[125]),
++'LIBASTINP':(177,[125]),'LIBADDX':(334,[163,281]),'LIBSIGNAL':(518,[187,242]),
++'LIBINITIA':(247,[180]),'LIBTEMPLA':(126,[113]),'LIBCVTDF':(146,[135]),
++'COBSPANC2':(109,[99]),'COBSPANC':(142,[107]),'COBDEEDIT':(107,[94]),'COBDHANDL':(142,[138]),
++'LIBDAY':(206,[155]),'COBCVTPD':(171,[140]),'COBCVTPF':(171,[139]),
++'COBCVTFP':(183,[141]),'COBCVTDP':(184,[142]),'COBCVTRQP':(174,[142]),
++'COBCVTRFP':(184,[142]),'COBCVTRDP':(184,[142]),'COBCVTQP':(180,[148]),
++'COBCVTPQ':(177,[146]),'COBCVTRPQ':(180,[148]),'COBCVTQD':(195,[146]),
++'COBCVTQF':(195,[145]),'COBCVTFQ':(213,[154]),'COBCVTDQ':(213,[154]),
++'COBCVTRFQ':(213,[154]),'COBCVTRDQ':(213,[154]),'COBINVUSE':(219,[140]),
++'COBCNVOUT':(285,[163]),'COBDIVQ':(359,[154]),'COBEXPI':(876,[397,400]),
++'BASMATNUL':(248,[148]),'BASMATRED':(359,[153]),'BASMATIDN':(364,[319]),
++'BASMATINI':(399,[358]),'BASEDIT':(440,[168])
++}
++assert len(data)==40
++TABLES={name:i for i,name in enumerate(('LIBA2EREV','LIBE2AREV','LIBASCEBC','LIBEBCASC','COBSPANC2','COBSPANC','COBDEEDIT'))}
++CONVS={
++'COBCVTPD':('PORT113_PACK_D',0),'COBCVTPF':('PORT113_PACK_F',0),
++'COBCVTFP':('PORT113_F_PACK',0),'COBCVTDP':('PORT113_D_PACK',0),
++'COBCVTRFP':('PORT113_F_PACK',1),'COBCVTRDP':('PORT113_D_PACK',1),
++'COBCVTRQP':('PORT113_QUAD_PACK',1),'COBCVTQP':('PORT113_QUAD_PACK',0),
++'COBCVTPQ':('PORT113_PACK_QUAD',0),'COBCVTRPQ':('PORT113_PACK_QUAD',1),
++'COBCVTQD':('PORT113_QUAD_D',0),'COBCVTQF':('PORT113_QUAD_F',0),
++'COBCVTFQ':('PORT113_F_QUAD',0),'COBCVTDQ':('PORT113_D_QUAD',0),
++'COBCVTRFQ':('PORT113_F_QUAD',1),'COBCVTRDQ':('PORT113_D_QUAD',1)
++}
++assert len(CONVS)==16
++special={
++'LIBADDX': [('addx','int %s(const uint32_t *a,const uint32_t *b,uint32_t *out,size_t n){return port113_addx(a,b,out,n,0);}',163),
++             ('subx','int %s(const uint32_t *a,const uint32_t *b,uint32_t *out,size_t n){return port113_addx(a,b,out,n,1);}',281)],
++'LIBSIGNAL':[('stop','int %s(const uint32_t *raw_vax_frame,size_t words){(void)raw_vax_frame;(void)words;return PORT113_UNSUPPORTED;}',187),
++             ('signal','int %s(const uint32_t *raw_vax_frame,size_t words){(void)raw_vax_frame;(void)words;return PORT113_UNSUPPORTED;}',242)],
++'COBEXPI':[('expi_ose','int %s(int64_t base,int32_t exponent,int64_t *out){return port113_cobexpi(base,exponent,out);}',397),
++           ('expi','int %s(int64_t base,int32_t exponent,int64_t *out){return port113_cobexpi(base,exponent,out);}',400)]
++}
++BODY={
++'LIBASTINP':'int %s(uint32_t mode,unsigned in_ast,int *out){return port113_libastinp(mode,in_ast,out);}',
++'LIBINITIA':'int %s(const struct port113_init_call *callbacks,size_t count,int *result){return port113_libinitia(callbacks,count,result);}',
++'LIBTEMPLA':'int %s(const uint32_t *argument){return port113_libtempla(argument);}',
++'LIBCVTDF':'int %s(const uint16_t *d,uint16_t *f){long double x; if(!d||!f)return PORT113_BAD_ARG; if(port109_decode(PORT_M107_D,d,&x)!=PORT109_OK)return PORT113_BAD_ARG; return port109_encode(PORT_M107_F,x,f)==PORT109_OK?PORT113_APPROX:PORT113_OVERFLOW;}',
++'LIBDAY':'int %s(uint64_t vax_quadword_time,int32_t *day,uint32_t *centis){return port113_libday(vax_quadword_time,day,centis);}',
++'COBDHANDL':'int %s(int (*use_proc)(void *,uint32_t),void *context,uint32_t arg,int *result){return port113_cobinvoke(use_proc,context,arg,result);}',
++'COBINVUSE':'int %s(int (*use_proc)(void *,uint32_t),void *context,uint32_t arg,int *result){return port113_cobinvoke(use_proc,context,arg,result);}',
++'COBCNVOUT':'int %s(int64_t value,char *dst,size_t length){return port113_cobcnvout(value,dst,length,1);}',
++'COBDIVQ':'int %s(int64_t numerator,int64_t denominator,int64_t *quotient,int64_t *remainder){return port113_cobdivq(numerator,denominator,quotient,remainder);}',
++'BASMATNUL':'int %s(struct port113_matrix *m){return port113_matrix_null(m);}',
++'BASMATIDN':'int %s(struct port113_matrix *m){return port113_matrix_fill(m,1);}',
++'BASMATRED':'int %s(struct port113_matrix *m,uint32_t rows,uint32_t cols){return port113_matrix_redim(m,rows,cols);}',
++'BASMATINI':'int %s(struct port113_matrix *m,const uint16_t *value){return port113_matrix_initial(m,value);}',
++'BASEDIT':'int %s(uint8_t *chars,size_t length,int upcase,int brackets){return port113_basedit(chars,length,upcase,brackets);}'
++}
++modules=[]
++root=ROOT/'src/native_rtl_m113';root.mkdir(exist_ok=True)
++for name,(nlines,entrylines) in data.items():
++    stem=name.lower();stemc='port113_src_'+stem
++    sections=[]
++    if name in TABLES:
++        sections=[(stemc,'int %s(uint8_t c,uint8_t *out){return port113_table('+str(TABLES[name])+',c,out);}',entrylines[0])]
++        kind='exact-table'
++    elif name in CONVS:
++        typ,rounded=CONVS[name]
++        sections=[(stemc,'int %s(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert('+typ+',src,digits,scale,dst,cap,'+str(rounded)+');}',entrylines[0])]
++        kind='bounded-conversion'
++    elif name in special:
++        sections=[('port113_src_'+suffix,code,line) for suffix,code,line in special[name]]
++        kind='unresolved-frame' if name=='LIBSIGNAL' else 'bounded-arithmetic'
++    else:
++        assert name in BODY,name
++        sections=[(stemc,BODY[name],entrylines[0])]
++        kind='bounded-service'
++    assert [line for sym,code,line in sections]==entrylines
++    source='/* Native IA-32 source-specific partial entry; original: RTL/SRC/'+name+'.MAR, '+'; '.join('line '+str(q) for q in entrylines)+'.\n'
++    source+=' * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */\n'
++    source+='#include "../vms_rtl_m113.h"\n'
++    for sym,fn,line in sections:
++        assert '%s' in fn
++        source+=fn%sym+'\n'
++    (root/(stem+'.c')).write_text(source)
++    modules.append({'name':name,'source':'RTL/SRC/'+name+'.MAR','lines':nlines,'kind':kind,
++        'entries':[{'line':line,'symbol':sym,'status':'unresolved' if name=='LIBSIGNAL' else 'partial'} for sym,fn,line in sections]})
++assert len(modules)==40
++out={'revision':REV,'file_count':40,'modules':modules}
++(ROOT/'tools/m113_originals.json').write_text(json.dumps(out,indent=2)+'\n')
++# Publish exact IA-32 native C entry prototypes, not VAX ABI aliases.
++header=ROOT/'src/vms_rtl_m113.h'
++source=header.read_text()
++start='/* Source-specific C declarations generated by tools/m113_modules.py */'
++if start in source:source=source[:source.index(start)].rstrip()+'\n#endif\n'
++assert source.endswith('#endif\n')
++import re
++protos=[]
++for path in sorted(root.glob('*.c')):
++    code=path.read_text()
++    matches=re.findall(r'^int\s+(port113_src_\w+)\s*\([^\n]*?\)\s*\{',code,re.M)
++    for sym in matches:
++        sig=next(line.split('{',1)[0] for line in code.splitlines() if line.startswith('int '+sym+'('))
++        protos.append(sig+';')
++assert len(protos)==43,(len(protos),protos)
++source=source[:-len('#endif\n')]+start+'\n'+'\n'.join(protos)+'\n#endif\n'
++header.write_text(source)
++
++print('M113 source-specific modules written:',len(modules),'exports:',sum(len(x['entries']) for x in modules))
+--- /dev/null
++++ b/tools/m113_originals.json
+@@ -0,0 +1,541 @@
++{
++  "revision": "2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752",
++  "file_count": 40,
++  "modules": [
++    {
++      "name": "LIBA2EREV",
++      "source": "RTL/SRC/LIBA2EREV.MAR",
++      "lines": 147,
++      "kind": "exact-table",
++      "entries": [
++        {
++          "line": 112,
++          "symbol": "port113_src_liba2erev",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBE2AREV",
++      "source": "RTL/SRC/LIBE2AREV.MAR",
++      "lines": 150,
++      "kind": "exact-table",
++      "entries": [
++        {
++          "line": 115,
++          "symbol": "port113_src_libe2arev",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBASCEBC",
++      "source": "RTL/SRC/LIBASCEBC.MAR",
++      "lines": 152,
++      "kind": "exact-table",
++      "entries": [
++        {
++          "line": 116,
++          "symbol": "port113_src_libascebc",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBEBCASC",
++      "source": "RTL/SRC/LIBEBCASC.MAR",
++      "lines": 161,
++      "kind": "exact-table",
++      "entries": [
++        {
++          "line": 125,
++          "symbol": "port113_src_libebcasc",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBASTINP",
++      "source": "RTL/SRC/LIBASTINP.MAR",
++      "lines": 177,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 125,
++          "symbol": "port113_src_libastinp",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBADDX",
++      "source": "RTL/SRC/LIBADDX.MAR",
++      "lines": 334,
++      "kind": "bounded-arithmetic",
++      "entries": [
++        {
++          "line": 163,
++          "symbol": "port113_src_addx",
++          "status": "partial"
++        },
++        {
++          "line": 281,
++          "symbol": "port113_src_subx",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBSIGNAL",
++      "source": "RTL/SRC/LIBSIGNAL.MAR",
++      "lines": 518,
++      "kind": "unresolved-frame",
++      "entries": [
++        {
++          "line": 187,
++          "symbol": "port113_src_stop",
++          "status": "unresolved"
++        },
++        {
++          "line": 242,
++          "symbol": "port113_src_signal",
++          "status": "unresolved"
++        }
++      ]
++    },
++    {
++      "name": "LIBINITIA",
++      "source": "RTL/SRC/LIBINITIA.MAR",
++      "lines": 247,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 180,
++          "symbol": "port113_src_libinitia",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBTEMPLA",
++      "source": "RTL/SRC/LIBTEMPLA.MAR",
++      "lines": 126,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 113,
++          "symbol": "port113_src_libtempla",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBCVTDF",
++      "source": "RTL/SRC/LIBCVTDF.MAR",
++      "lines": 146,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 135,
++          "symbol": "port113_src_libcvtdf",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBSPANC2",
++      "source": "RTL/SRC/COBSPANC2.MAR",
++      "lines": 109,
++      "kind": "exact-table",
++      "entries": [
++        {
++          "line": 99,
++          "symbol": "port113_src_cobspanc2",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBSPANC",
++      "source": "RTL/SRC/COBSPANC.MAR",
++      "lines": 142,
++      "kind": "exact-table",
++      "entries": [
++        {
++          "line": 107,
++          "symbol": "port113_src_cobspanc",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBDEEDIT",
++      "source": "RTL/SRC/COBDEEDIT.MAR",
++      "lines": 107,
++      "kind": "exact-table",
++      "entries": [
++        {
++          "line": 94,
++          "symbol": "port113_src_cobdeedit",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBDHANDL",
++      "source": "RTL/SRC/COBDHANDL.MAR",
++      "lines": 142,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 138,
++          "symbol": "port113_src_cobdhandl",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "LIBDAY",
++      "source": "RTL/SRC/LIBDAY.MAR",
++      "lines": 206,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 155,
++          "symbol": "port113_src_libday",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTPD",
++      "source": "RTL/SRC/COBCVTPD.MAR",
++      "lines": 171,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 140,
++          "symbol": "port113_src_cobcvtpd",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTPF",
++      "source": "RTL/SRC/COBCVTPF.MAR",
++      "lines": 171,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 139,
++          "symbol": "port113_src_cobcvtpf",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTFP",
++      "source": "RTL/SRC/COBCVTFP.MAR",
++      "lines": 183,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 141,
++          "symbol": "port113_src_cobcvtfp",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTDP",
++      "source": "RTL/SRC/COBCVTDP.MAR",
++      "lines": 184,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 142,
++          "symbol": "port113_src_cobcvtdp",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTRQP",
++      "source": "RTL/SRC/COBCVTRQP.MAR",
++      "lines": 174,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 142,
++          "symbol": "port113_src_cobcvtrqp",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTRFP",
++      "source": "RTL/SRC/COBCVTRFP.MAR",
++      "lines": 184,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 142,
++          "symbol": "port113_src_cobcvtrfp",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTRDP",
++      "source": "RTL/SRC/COBCVTRDP.MAR",
++      "lines": 184,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 142,
++          "symbol": "port113_src_cobcvtrdp",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTQP",
++      "source": "RTL/SRC/COBCVTQP.MAR",
++      "lines": 180,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 148,
++          "symbol": "port113_src_cobcvtqp",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTPQ",
++      "source": "RTL/SRC/COBCVTPQ.MAR",
++      "lines": 177,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 146,
++          "symbol": "port113_src_cobcvtpq",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTRPQ",
++      "source": "RTL/SRC/COBCVTRPQ.MAR",
++      "lines": 180,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 148,
++          "symbol": "port113_src_cobcvtrpq",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTQD",
++      "source": "RTL/SRC/COBCVTQD.MAR",
++      "lines": 195,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 146,
++          "symbol": "port113_src_cobcvtqd",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTQF",
++      "source": "RTL/SRC/COBCVTQF.MAR",
++      "lines": 195,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 145,
++          "symbol": "port113_src_cobcvtqf",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTFQ",
++      "source": "RTL/SRC/COBCVTFQ.MAR",
++      "lines": 213,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 154,
++          "symbol": "port113_src_cobcvtfq",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTDQ",
++      "source": "RTL/SRC/COBCVTDQ.MAR",
++      "lines": 213,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 154,
++          "symbol": "port113_src_cobcvtdq",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTRFQ",
++      "source": "RTL/SRC/COBCVTRFQ.MAR",
++      "lines": 213,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 154,
++          "symbol": "port113_src_cobcvtrfq",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCVTRDQ",
++      "source": "RTL/SRC/COBCVTRDQ.MAR",
++      "lines": 213,
++      "kind": "bounded-conversion",
++      "entries": [
++        {
++          "line": 154,
++          "symbol": "port113_src_cobcvtrdq",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBINVUSE",
++      "source": "RTL/SRC/COBINVUSE.MAR",
++      "lines": 219,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 140,
++          "symbol": "port113_src_cobinvuse",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBCNVOUT",
++      "source": "RTL/SRC/COBCNVOUT.MAR",
++      "lines": 285,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 163,
++          "symbol": "port113_src_cobcnvout",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBDIVQ",
++      "source": "RTL/SRC/COBDIVQ.MAR",
++      "lines": 359,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 154,
++          "symbol": "port113_src_cobdivq",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "COBEXPI",
++      "source": "RTL/SRC/COBEXPI.MAR",
++      "lines": 876,
++      "kind": "bounded-arithmetic",
++      "entries": [
++        {
++          "line": 397,
++          "symbol": "port113_src_expi_ose",
++          "status": "partial"
++        },
++        {
++          "line": 400,
++          "symbol": "port113_src_expi",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "BASMATNUL",
++      "source": "RTL/SRC/BASMATNUL.MAR",
++      "lines": 248,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 148,
++          "symbol": "port113_src_basmatnul",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "BASMATRED",
++      "source": "RTL/SRC/BASMATRED.MAR",
++      "lines": 359,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 153,
++          "symbol": "port113_src_basmatred",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "BASMATIDN",
++      "source": "RTL/SRC/BASMATIDN.MAR",
++      "lines": 364,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 319,
++          "symbol": "port113_src_basmatidn",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "BASMATINI",
++      "source": "RTL/SRC/BASMATINI.MAR",
++      "lines": 399,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 358,
++          "symbol": "port113_src_basmatini",
++          "status": "partial"
++        }
++      ]
++    },
++    {
++      "name": "BASEDIT",
++      "source": "RTL/SRC/BASEDIT.MAR",
++      "lines": 440,
++      "kind": "bounded-service",
++      "entries": [
++        {
++          "line": 168,
++          "symbol": "port113_src_basedit",
++          "status": "partial"
++        }
++      ]
++    }
++  ]
++}
+--- /dev/null
++++ b/src/vms_rtl_m113.h
+@@ -0,0 +1,83 @@
++#ifndef PORT_VMS_RTL_M113_H
++#define PORT_VMS_RTL_M113_H
++#include <stdint.h>
++#include <stddef.h>
++#include "vms_rtl_m109.h"
++/* Partial native IA-32 translations of original VMS 3.7 COBOL/BASIC/LIB RTL.
++ * RETURN VALUES ARE NATIVE PORT STATUS, NOT VMS CONDITION CODES.
++ * VAX calling frames, exact packed decimal/IEEE rounding and condition
++ * unwinding are NOT ported. These entrypoints are not live guest services. */
++enum { PORT113_OK=1,PORT113_APPROX=3,PORT113_BAD_ARG=2,
++       PORT113_OVERFLOW=4,PORT113_UNSUPPORTED=6,PORT113_SIGNAL=8 };
++enum port113_conv_kind { PORT113_PACK_F,PORT113_PACK_D,PORT113_F_PACK,
++ PORT113_D_PACK,PORT113_QUAD_PACK,PORT113_PACK_QUAD,PORT113_QUAD_F,
++ PORT113_QUAD_D,PORT113_F_QUAD,PORT113_D_QUAD };
++struct port113_matrix {uint16_t *words;size_t words_capacity;uint32_t rows,cols;enum port_m107_fmt fmt;};
++struct port113_init_call {int (*call)(void *);void *context;};
++int port113_table(unsigned table,uint8_t ch,uint8_t *out);
++int port113_addx(const uint32_t *,const uint32_t *,uint32_t *,size_t,int);
++int port113_packed_decode(const uint8_t *,size_t,int64_t *);
++int port113_packed_encode(int64_t,size_t,uint8_t *,size_t);
++int port113_convert(enum port113_conv_kind,const void *,size_t,int32_t,void *,size_t,int);
++int port113_matrix_fill(struct port113_matrix *,int);
++int port113_matrix_redim(struct port113_matrix *,uint32_t,uint32_t);
++int port113_matrix_set(struct port113_matrix *,uint32_t,uint32_t,const uint16_t *);
++int port113_matrix_null(struct port113_matrix *);
++int port113_matrix_initial(struct port113_matrix *,const uint16_t *);
++int port113_libday(uint64_t,int32_t *,uint32_t *);
++int port113_libinitia(const struct port113_init_call *,size_t,int *);
++int port113_libtempla(const uint32_t *);
++int port113_libastinp(uint32_t,unsigned,int *);
++int port113_cobinvoke(int (*)(void *,uint32_t),void *,uint32_t,int *);
++int port113_cobcnvout(int64_t,char *,size_t,int);
++int port113_cobdivq(int64_t,int64_t,int64_t *,int64_t *);
++int port113_cobexpi(int64_t,int32_t,int64_t *);
++int port113_basedit(uint8_t *,size_t,int,int);
++/* Source-specific exports from src/native_rtl_m113; each has exactly one
++ * original .MAR source file and a distinct IA-32 object. */
++
++/* Source-specific C declarations generated by tools/m113_modules.py */
++int port113_src_basedit(uint8_t *chars,size_t length,int upcase,int brackets);
++int port113_src_basmatidn(struct port113_matrix *m);
++int port113_src_basmatini(struct port113_matrix *m,const uint16_t *value);
++int port113_src_basmatnul(struct port113_matrix *m);
++int port113_src_basmatred(struct port113_matrix *m,uint32_t rows,uint32_t cols);
++int port113_src_cobcnvout(int64_t value,char *dst,size_t length);
++int port113_src_cobcvtdp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtdq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtfp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtfq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtpd(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtpf(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtpq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtqd(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtqf(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtqp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtrdp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtrdq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtrfp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtrfq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtrpq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobcvtrqp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap);
++int port113_src_cobdeedit(uint8_t c,uint8_t *out);
++int port113_src_cobdhandl(int (*use_proc)(void *,uint32_t),void *context,uint32_t arg,int *result);
++int port113_src_cobdivq(int64_t numerator,int64_t denominator,int64_t *quotient,int64_t *remainder);
++int port113_src_expi_ose(int64_t base,int32_t exponent,int64_t *out);
++int port113_src_expi(int64_t base,int32_t exponent,int64_t *out);
++int port113_src_cobinvuse(int (*use_proc)(void *,uint32_t),void *context,uint32_t arg,int *result);
++int port113_src_cobspanc(uint8_t c,uint8_t *out);
++int port113_src_cobspanc2(uint8_t c,uint8_t *out);
++int port113_src_liba2erev(uint8_t c,uint8_t *out);
++int port113_src_addx(const uint32_t *a,const uint32_t *b,uint32_t *out,size_t n);
++int port113_src_subx(const uint32_t *a,const uint32_t *b,uint32_t *out,size_t n);
++int port113_src_libascebc(uint8_t c,uint8_t *out);
++int port113_src_libastinp(uint32_t mode,unsigned in_ast,int *out);
++int port113_src_libcvtdf(const uint16_t *d,uint16_t *f);
++int port113_src_libday(uint64_t vax_quadword_time,int32_t *day,uint32_t *centis);
++int port113_src_libe2arev(uint8_t c,uint8_t *out);
++int port113_src_libebcasc(uint8_t c,uint8_t *out);
++int port113_src_libinitia(const struct port113_init_call *callbacks,size_t count,int *result);
++int port113_src_stop(const uint32_t *raw_vax_frame,size_t words);
++int port113_src_signal(const uint32_t *raw_vax_frame,size_t words);
++int port113_src_libtempla(const uint32_t *argument);
++#endif
+--- /dev/null
++++ b/src/vms_rtl_m113.c
+@@ -0,0 +1,279 @@
++#include "vms_rtl_m113.h"
++/* Bounded native subsets from VMS 3.7 RTL/SRC: independently word-decoded
++ * VAX F/D values and packed-decimal/quadword operations, never VAX CPU ISA
++ * execution. Every helper preflights its destination before writing. */
++static int fmt_words(enum port_m107_fmt f){
++    return f==PORT_M107_F?2:f==PORT_M107_D||f==PORT_M107_G?4:f==PORT_M107_H?8:0;
++}
++static uint64_t magnitude(int64_t n){
++    uint64_t x=(uint64_t)n;return n<0?~x+1u:x;
++}
++static uint64_t div10(uint64_t n,unsigned *remainder){
++    uint64_t q=0;unsigned r=0;
++    for(int i=63;i>=0;i--){
++        r=(r<<1)|(unsigned)((n>>(unsigned)i)&1u);
++        if(r>=10u){r-=10u;q|=UINT64_C(1)<<(unsigned)i;}
++    }
++    if(remainder)*remainder=r;
++    return q;
++}
++int port113_packed_decode(const uint8_t *in,size_t digits,int64_t *out){
++    if(!in||!out||digits==0||digits>18u)return PORT113_BAD_ARG;
++    /* Packed sign is the final low nibble, with a leading high pad nibble
++     * for even decimal digit counts. VAX/Cobol signs A,C,E,F positive,
++     * B,D negative. Reject non-BCD nibbles and nonzero leading pad. */
++    size_t bytes=(digits+2u)/2u;
++    unsigned sign=in[bytes-1u]&15u;
++    if(sign<10u)return PORT113_BAD_ARG;
++    unsigned neg=(sign==11u||sign==13u);
++    uint64_t acc=0u;
++    for(size_t i=0;i<digits;i++){
++        size_t nibble=i+((digits&1u)==0u?1u:0u);
++        unsigned d=(nibble&1u)?in[nibble/2u]&15u:in[nibble/2u]>>4;
++        if(d>9u)return PORT113_BAD_ARG;
++        acc=acc*10u+d;
++    }
++    if((digits&1u)==0u && (in[0]>>4)!=0u)return PORT113_BAD_ARG;
++    *out=neg?-(int64_t)acc:(int64_t)acc;
++    return PORT113_OK;
++}
++int port113_packed_encode(int64_t value,size_t digits,uint8_t *out,size_t cap){
++    if(!out||!digits||digits>18u||cap<(digits+2u)/2u)return PORT113_BAD_ARG;
++    uint8_t tmp[10]={0};
++    uint64_t n=magnitude(value);
++    for(size_t j=digits;j>0;j--){
++        unsigned d=0;n=div10(n,&d);
++        size_t nibble=(j-1u)+((digits&1u)==0u?1u:0u);
++        if(nibble&1u)tmp[nibble/2u]|=(uint8_t)d;
++        else tmp[nibble/2u]|=(uint8_t)(d<<4u);
++    }
++    if(n!=0u)return PORT113_OVERFLOW;
++    size_t bytes=(digits+2u)/2u;
++    tmp[bytes-1u]=(uint8_t)((tmp[bytes-1u]&0xf0u)|(value<0?0x0du:0x0cu));
++    for(size_t i=0;i<bytes;i++)out[i]=tmp[i];
++    return PORT113_OK;
++}
++static int mulscale(long double *v,int32_t scale){
++    if(!v||scale<-30||scale>30)return PORT113_BAD_ARG;
++    if(scale>=0){for(int i=0;i<scale;i++)*v*=10.0L;}
++    else{for(int i=0;i>scale;i--)*v/=10.0L;}
++    return __builtin_isfinite(*v)?PORT113_OK:PORT113_OVERFLOW;
++}
++static int to_i64(long double n,int round,int64_t *out){
++    if(!out||!__builtin_isfinite(n))return PORT113_BAD_ARG;
++    if(round)n+=n<0.0L?-0.5L:0.5L;
++    if(n<(-9223372036854775808.0L)||n>=9223372036854775808.0L)
++        return PORT113_OVERFLOW;
++    *out=(int64_t)n;return PORT113_APPROX;
++}
++int port113_convert(enum port113_conv_kind kind,const void *src,size_t digits,
++                    int32_t scale,void *dst,size_t cap,int rounded){
++    if(!src||!dst||scale<-30||scale>30)return PORT113_BAD_ARG;
++    if(digits>18u || (digits==0u&&(kind<=PORT113_PACK_QUAD)))return PORT113_BAD_ARG;
++    long double v=0.0L;int64_t number=0;int status=PORT113_OK;
++    enum port_m107_fmt fmt=PORT_M107_F;
++    if(kind==PORT113_PACK_D||kind==PORT113_D_PACK||kind==PORT113_QUAD_D||kind==PORT113_D_QUAD)fmt=PORT_M107_D;
++    if(kind==PORT113_PACK_F||kind==PORT113_PACK_D||kind==PORT113_PACK_QUAD){
++        status=port113_packed_decode((const uint8_t *)src,digits,&number);
++        if(status!=PORT113_OK)return status;
++        v=(long double)number;
++    }else if(kind==PORT113_QUAD_PACK||kind==PORT113_QUAD_F||kind==PORT113_QUAD_D){
++        const uint32_t *w=(const uint32_t *)src;
++        uint64_t q=((uint64_t)w[1]<<32)|w[0];
++        number=(int64_t)q;v=(long double)number;
++    }else if(kind==PORT113_F_PACK||kind==PORT113_D_PACK||kind==PORT113_F_QUAD||kind==PORT113_D_QUAD){
++        status=port109_decode(fmt,(const uint16_t *)src,&v);
++        if(status!=PORT109_OK)return PORT113_BAD_ARG;
++    }else return PORT113_BAD_ARG;
++    if(kind==PORT113_PACK_F||kind==PORT113_PACK_D){
++        if(cap<(size_t)(fmt_words(fmt)*2))return PORT113_BAD_ARG;
++        if(mulscale(&v,-scale)!=PORT113_OK)return PORT113_OVERFLOW;
++        status=port109_encode(fmt,v,(uint16_t *)dst);
++        return status==PORT109_OK?PORT113_APPROX:PORT113_OVERFLOW;
++    }
++    if(kind==PORT113_QUAD_F||kind==PORT113_QUAD_D){
++        if(cap<(size_t)(fmt_words(fmt)*2))return PORT113_BAD_ARG;
++        status=port109_encode(fmt,v,(uint16_t *)dst);
++        return status==PORT109_OK?PORT113_APPROX:PORT113_OVERFLOW;
++    }
++    if(kind==PORT113_PACK_QUAD){
++        if(cap<8u)return PORT113_BAD_ARG;
++        if(mulscale(&v,-scale)!=PORT113_OK)return PORT113_OVERFLOW;
++        status=to_i64(v,rounded,&number);if(status!=PORT113_APPROX)return status;
++        uint64_t q=(uint64_t)number;
++        uint32_t *out=dst;out[0]=(uint32_t)q;out[1]=(uint32_t)(q>>32);
++        return PORT113_APPROX;
++    }
++    if(kind==PORT113_F_QUAD||kind==PORT113_D_QUAD){
++        if(cap<8u)return PORT113_BAD_ARG;
++        if(mulscale(&v,scale)!=PORT113_OK)return PORT113_OVERFLOW;
++        status=to_i64(v,rounded,&number);if(status!=PORT113_APPROX)return status;
++        uint64_t q=(uint64_t)number;
++        uint32_t *out=dst;out[0]=(uint32_t)q;out[1]=(uint32_t)(q>>32);
++        return PORT113_APPROX;
++    }
++    if(kind==PORT113_QUAD_PACK||kind==PORT113_F_PACK||kind==PORT113_D_PACK){
++        if(mulscale(&v,scale)!=PORT113_OK)return PORT113_OVERFLOW;
++        status=to_i64(v,rounded,&number);if(status!=PORT113_APPROX)return status;
++        status=port113_packed_encode(number,digits,(uint8_t *)dst,cap);
++        return status==PORT113_OK?PORT113_APPROX:status;
++    }
++    return PORT113_BAD_ARG;
++}
++int port113_addx(const uint32_t *a,const uint32_t *b,uint32_t *out,size_t n,int subtract){
++    if(!a||!b||!out||!n||n>65535u||(subtract!=0&&subtract!=1))return PORT113_BAD_ARG;
++    /* VAX ADDWC/SBWC carry or borrow, least-significant word first.
++     * Native output may alias an input: every lane is read before write. */
++    uint64_t carry=0u;
++    for(size_t i=0;i<n;i++){
++        uint32_t av=a[i],bv=b[i];
++        if(subtract){uint64_t t=(uint64_t)av-(uint64_t)bv-carry;out[i]=(uint32_t)t;carry=(t>>63)&1u;}
++        else{uint64_t t=(uint64_t)av+(uint64_t)bv+carry;out[i]=(uint32_t)t;carry=t>>32;}
++    }
++    return PORT113_OK;
++}
++static int matrix_shape(const struct port113_matrix *m,size_t *used,unsigned *words){
++    if(!m||!m->words||!m->rows||!m->cols||!used||!words)return PORT113_BAD_ARG;
++    int n=fmt_words(m->fmt);if(!n)return PORT113_BAD_ARG;
++    size_t rows=m->rows,cols=m->cols;
++    if(cols>SIZE_MAX/rows || rows*cols>SIZE_MAX/(unsigned)n ||
++       rows*cols*(unsigned)n>m->words_capacity)return PORT113_BAD_ARG;
++    *used=rows*cols*(unsigned)n;*words=(unsigned)n;return PORT113_OK;
++}
++int port113_matrix_fill(struct port113_matrix *m,int identity){
++    size_t total=0;unsigned words=0;
++    if(matrix_shape(m,&total,&words)!=PORT113_OK || (identity!=0&&identity!=1))return PORT113_BAD_ARG;
++    uint16_t one[8]={0};
++    if(identity && port109_encode(m->fmt,1.0L,one)!=PORT109_OK)return PORT113_UNSUPPORTED;
++    for(size_t i=0;i<total;i++)m->words[i]=0u;
++    if(identity){
++        uint32_t k=m->rows<m->cols?m->rows:m->cols;
++        for(uint32_t i=0;i<k;i++){
++            size_t offset=((size_t)i*m->cols+i)*words;
++            for(unsigned j=0;j<words;j++)m->words[offset+j]=one[j];
++        }
++    }
++    return PORT113_OK;
++}
++int port113_matrix_redim(struct port113_matrix *m,uint32_t rows,uint32_t cols){
++    if(!m||!rows||!cols)return PORT113_BAD_ARG;
++    struct port113_matrix next=*m;next.rows=rows;next.cols=cols;
++    size_t total=0;unsigned words=0;
++    if(matrix_shape(&next,&total,&words)!=PORT113_OK)return PORT113_BAD_ARG;
++    m->rows=rows;m->cols=cols;return PORT113_OK;
++}
++int port113_matrix_set(struct port113_matrix *m,uint32_t row,uint32_t col,const uint16_t *src){
++    size_t total=0;unsigned words=0;
++    if(!src||matrix_shape(m,&total,&words)!=PORT113_OK||row>=m->rows||col>=m->cols)
++        return PORT113_BAD_ARG;
++    size_t index=((size_t)row*m->cols+col)*words;
++    for(unsigned j=0;j<words;j++)m->words[index+j]=src[j];
++    return PORT113_OK;
++}
++int port113_matrix_null(struct port113_matrix *m){return port113_matrix_fill(m,0);}
++int port113_matrix_initial(struct port113_matrix *m,const uint16_t *v){
++    size_t total=0; unsigned words=0;
++    if(!v || matrix_shape(m,&total,&words)!=PORT113_OK)return PORT113_BAD_ARG;
++    for(size_t i=0;i<total;i++)m->words[i]=v[i%words];
++    return PORT113_OK;
++}
++
++static int unsigned_div(uint64_t n,uint64_t d,uint64_t *q,uint64_t *r);
++int port113_libday(uint64_t ticks,int32_t *days,uint32_t *centis){
++    if(!days)return PORT113_BAD_ARG;
++    /* Source epoch 17-NOV-1858; 10 million 100 ns ticks / second. */
++    uint64_t day=0,within=0; if(unsigned_div(ticks,UINT64_C(864000000000),&day,&within)!=PORT113_OK)return PORT113_BAD_ARG;
++    if(day>INT32_MAX)return PORT113_OVERFLOW;
++    uint64_t cent=0,rem=0;
++    if(centis && unsigned_div(within,UINT64_C(100000),&cent,&rem)!=PORT113_OK)return PORT113_BAD_ARG;
++    *days=(int32_t)day;
++    if(centis)*centis=(uint32_t)cent;
++    return PORT113_OK;
++}
++int port113_libinitia(const struct port113_init_call *table,size_t n,int *out){
++    if(!out||!table||n>1024u)return PORT113_BAD_ARG;
++    for(size_t i=0;i<n;i++){
++        if(!table[i].call)return PORT113_BAD_ARG;
++    }
++    for(size_t i=0;i<n;i++){
++        int result=table[i].call(table[i].context);
++        if(result!=PORT113_OK){*out=result;return PORT113_APPROX;}
++    }
++    *out=PORT113_OK;return PORT113_APPROX;
++}
++int port113_libtempla(const uint32_t *arg){return arg?PORT113_OK:PORT113_BAD_ARG;}
++int port113_libastinp(uint32_t mode,unsigned ast_in_progress,int *out){
++    if(!out||mode>3u||ast_in_progress>1u)return PORT113_BAD_ARG;
++    *out=ast_in_progress!=0u;return PORT113_APPROX;
++}
++int port113_cobinvoke(int (*call)(void *,uint32_t),void *context,uint32_t arg,int *result){
++    if(!call||!result)return PORT113_BAD_ARG;
++    *result=call(context,arg);return PORT113_APPROX;
++}
++int port113_cobcnvout(int64_t v,char *out,size_t n,int asterisk_overflow){
++    if(!out||!n||n>65535u)return PORT113_BAD_ARG;
++    char tmp[22];size_t digits=0;uint64_t a=magnitude(v);
++    do{unsigned d=0u;a=div10(a,&d);tmp[digits++]=(char)('0'+d);}while(a);
++    if(v<0)tmp[digits++]='-';
++    if(digits>n){for(size_t i=0;i<n;i++)out[i]=asterisk_overflow?'*':' ';
++        return PORT113_OVERFLOW;}
++    size_t i=0;while(i<n-digits)out[i++]=' ';
++    while(digits)out[i++]=tmp[--digits];
++    return PORT113_OK;
++}
++static int unsigned_div(uint64_t n,uint64_t d,uint64_t *q,uint64_t *r){
++    if(!d||!q||!r)return PORT113_BAD_ARG;
++    uint64_t quotient=0u,remainder=0u;
++    for(int i=63;i>=0;i--){
++        unsigned incoming=(unsigned)((n>>(unsigned)i)&1u);
++        unsigned carry=(unsigned)(remainder>>63u);
++        remainder=(remainder<<1u)|incoming;
++        if(carry || remainder>=d){remainder-=d;quotient|=UINT64_C(1)<<(unsigned)i;}
++    }
++    *q=quotient;*r=remainder;return PORT113_OK;
++}
++int port113_cobdivq(int64_t n,int64_t d,int64_t *q,int64_t *r){
++    if(!q||!r||d==0||(n==INT64_MIN&&d==-1))return PORT113_BAD_ARG;
++    uint64_t uq=0u,ur=0u;
++    if(unsigned_div(magnitude(n),magnitude(d),&uq,&ur)!=PORT113_OK)return PORT113_BAD_ARG;
++    if((n<0)!=(d<0))*q=(uq==UINT64_C(0x8000000000000000))?INT64_MIN:-(int64_t)uq;
++    else *q=(int64_t)uq;
++    *r=n<0?-(int64_t)ur:(int64_t)ur;
++    return PORT113_OK;
++}
++static int mul_checked(uint64_t a,uint64_t b,uint64_t lim,uint64_t *out){
++    uint64_t value=0;
++    while(b){
++        if(b&1u){if(a>lim-value)return PORT113_OVERFLOW;value+=a;}
++        b>>=1u;
++        if(b){if(a>lim/2u)return PORT113_OVERFLOW;a<<=1u;}
++    }
++    *out=value;return PORT113_OK;
++}
++int port113_cobexpi(int64_t base,int32_t exponent,int64_t *out){
++    if(!out)return PORT113_BAD_ARG;
++    if(exponent<0)return PORT113_UNSUPPORTED; /* COB floating exponent cases pending */
++    if(!base && !exponent)return PORT113_UNSUPPORTED;
++    uint64_t b=magnitude(base),a=1u;
++    uint64_t limit=(base<0&&(exponent&1u))?UINT64_C(0x8000000000000000):INT64_MAX;
++    uint32_t e=(uint32_t)exponent;
++    while(e){
++        if(e&1u){uint64_t t=0;if(mul_checked(a,b,limit,&t)!=PORT113_OK)return PORT113_OVERFLOW;a=t;}
++        e>>=1u;
++        if(e){uint64_t t=0;if(mul_checked(b,b,limit,&t)!=PORT113_OK)return PORT113_OVERFLOW;b=t;}
++    }
++    *out=(base<0&&(exponent&1u))?((a==UINT64_C(0x8000000000000000))?INT64_MIN:-(int64_t)a):(int64_t)a;
++    return PORT113_APPROX;
++}
++int port113_basedit(uint8_t *buffer,size_t n,int upcase,int brackets){
++    if(!buffer||n>UINT16_MAX||(upcase!=0&&upcase!=1)||(brackets!=0&&brackets!=1))
++        return PORT113_BAD_ARG;
++    for(size_t i=0;i<n;i++){
++        uint8_t x=buffer[i];
++        if(upcase&&x>='a'&&x<='z')x=(uint8_t)(x-('a'-'A'));
++        if(brackets&&x=='[')x='(';
++        else if(brackets&&x==']')x=')';
++        buffer[i]=x;
++    }
++    return PORT113_APPROX;
++}
+--- /dev/null
++++ b/src/vms_rtl_m113_tables.c
+@@ -0,0 +1,142 @@
++#include "vms_rtl_m113.h"
++/* Byte-for-byte transcriptions of VMS 3.7 RTL ANSI X3.26 and COBOL
++ * translation tables; no original DEC source code is redistributed. */
++static const uint8_t t_asc_ebc_rev[256]={
++    0x00,0x01,0x02,0x03,0x37,0x2d,0x2e,0x2f,0x16,0x05,0x25,0x0b,0x0c,0x0d,0x0e,0x0f,
++    0x10,0x11,0x12,0x13,0x3c,0x3d,0x32,0x26,0x18,0x19,0x3f,0x27,0x1c,0x1d,0x1e,0x1f,
++    0x40,0x4f,0x7f,0x7b,0x5b,0x6c,0x50,0x7d,0x4d,0x5d,0x5c,0x4e,0x6b,0x60,0x4b,0x61,
++    0xf0,0xf1,0xf2,0xf3,0xf4,0xf5,0xf6,0xf7,0xf8,0xf9,0x7a,0x5e,0x4c,0x7e,0x6e,0x6f,
++    0x7c,0xc1,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7,0xc8,0xc9,0xd1,0xd2,0xd3,0xd4,0xd5,0xd6,
++    0xd7,0xd8,0xd9,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7,0xe8,0xe9,0x4a,0xe0,0x5a,0x5f,0x6d,
++    0x79,0x81,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x91,0x92,0x93,0x94,0x95,0x96,
++    0x97,0x98,0x99,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xc0,0x6a,0xd0,0xa1,0x07,
++    0x20,0x21,0x22,0x23,0x24,0x15,0x06,0x17,0x28,0x29,0x2a,0x2b,0x2c,0x09,0x0a,0x1b,
++    0x30,0x31,0x1a,0x33,0x34,0x35,0x36,0x08,0x38,0x39,0x3a,0x3b,0x04,0x14,0x3e,0xe1,
++    0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x51,0x52,0x53,0x54,0x55,0x56,0x57,
++    0x58,0x59,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x70,0x71,0x72,0x73,0x74,0x75,
++    0x76,0x77,0x78,0x80,0x8a,0x8b,0x8c,0x8d,0x8e,0x8f,0x90,0x9a,0x9b,0x9c,0x9d,0x9e,
++    0x9f,0xa0,0xaa,0xab,0xac,0xad,0xae,0xaf,0xb0,0xb1,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,
++    0xb8,0xb9,0xba,0xbb,0xbc,0xbd,0xbe,0xbf,0xca,0xcb,0xcc,0xcd,0xce,0xcf,0xda,0xdb,
++    0xdc,0xdd,0xde,0xdf,0xea,0xeb,0xec,0xed,0xee,0xef,0xfa,0xfb,0xfc,0xfd,0xfe,0xff,
++};
++static const uint8_t t_ebc_asc_rev[256]={
++    0x00,0x01,0x02,0x03,0x9c,0x09,0x86,0x7f,0x97,0x8d,0x8e,0x0b,0x0c,0x0d,0x0e,0x0f,
++    0x10,0x11,0x12,0x13,0x9d,0x85,0x08,0x87,0x18,0x19,0x92,0x8f,0x1c,0x1d,0x1e,0x1f,
++    0x80,0x81,0x82,0x83,0x84,0x0a,0x17,0x1b,0x88,0x89,0x8a,0x8b,0x8c,0x05,0x06,0x07,
++    0x90,0x91,0x16,0x93,0x94,0x95,0x96,0x04,0x98,0x99,0x9a,0x9b,0x14,0x15,0x9e,0x1a,
++    0x20,0xa0,0xa1,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0x5b,0x2e,0x3c,0x28,0x2b,0x21,
++    0x26,0xa9,0xaa,0xab,0xac,0xad,0xae,0xaf,0xb0,0xb1,0x5d,0x24,0x2a,0x29,0x3b,0x5e,
++    0x2d,0x2f,0xb2,0xb3,0xb4,0xb5,0xb6,0xb7,0xb8,0xb9,0x7c,0x2c,0x25,0x5f,0x3e,0x3f,
++    0xba,0xbb,0xbc,0xbd,0xbe,0xbf,0xc0,0xc1,0xc2,0x60,0x3a,0x23,0x40,0x27,0x3d,0x22,
++    0xc3,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0xc4,0xc5,0xc6,0xc7,0xc8,0xc9,
++    0xca,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,0x70,0x71,0x72,0xcb,0xcc,0xcd,0xce,0xcf,0xd0,
++    0xd1,0x7e,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0xd2,0xd3,0xd4,0xd5,0xd6,0xd7,
++    0xd8,0xd9,0xda,0xdb,0xdc,0xdd,0xde,0xdf,0xe0,0xe1,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7,
++    0x7b,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0xe8,0xe9,0xea,0xeb,0xec,0xed,
++    0x7d,0x4a,0x4b,0x4c,0x4d,0x4e,0x4f,0x50,0x51,0x52,0xee,0xef,0xf0,0xf1,0xf2,0xf3,
++    0x5c,0x9f,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0xf4,0xf5,0xf6,0xf7,0xf8,0xf9,
++    0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0xfa,0xfb,0xfc,0xfd,0xfe,0xff,
++};
++static const uint8_t t_asc_ebc[256]={
++    0x00,0x01,0x02,0x03,0x37,0x2d,0x2e,0x2f,0x16,0x05,0x25,0x0b,0x0c,0x0d,0x0e,0x0f,
++    0x10,0x11,0x12,0x13,0x3c,0x3d,0x32,0x26,0x18,0x19,0x3f,0x27,0x1c,0x1d,0x1e,0x1f,
++    0x40,0x4f,0x7f,0x7b,0x5b,0x6c,0x50,0x7d,0x4d,0x5d,0x5c,0x4e,0x6b,0x60,0x4b,0x61,
++    0xf0,0xf1,0xf2,0xf3,0xf4,0xf5,0xf6,0xf7,0xf8,0xf9,0x7a,0x5e,0x4c,0x7e,0x6e,0x6f,
++    0x7c,0xc1,0xc2,0xc3,0xc4,0xc5,0xc6,0xc7,0xc8,0xc9,0xd1,0xd2,0xd3,0xd4,0xd5,0xd6,
++    0xd7,0xd8,0xd9,0xe2,0xe3,0xe4,0xe5,0xe6,0xe7,0xe8,0xe9,0x4a,0xe0,0x5a,0x5f,0x6d,
++    0x79,0x81,0x82,0x83,0x84,0x85,0x86,0x87,0x88,0x89,0x91,0x92,0x93,0x94,0x95,0x96,
++    0x97,0x98,0x99,0xa2,0xa3,0xa4,0xa5,0xa6,0xa7,0xa8,0xa9,0xc0,0x6a,0xd0,0xa1,0x07,
++    0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,
++    0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,
++    0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,
++    0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,
++    0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,
++    0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,
++    0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,
++    0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0x3f,0xff,
++};
++static const uint8_t t_ebc_asc[256]={
++    0x00,0x01,0x02,0x03,0x5c,0x09,0x5c,0x7f,0x5c,0x5c,0x5c,0x0b,0x0c,0x0d,0x0e,0x0f,
++    0x10,0x11,0x12,0x13,0x5c,0x5c,0x08,0x5c,0x18,0x19,0x5c,0x5c,0x1c,0x1d,0x1e,0x1f,
++    0x5c,0x5c,0x5c,0x5c,0x5c,0x0a,0x17,0x1b,0x5c,0x5c,0x5c,0x5c,0x5c,0x05,0x06,0x07,
++    0x5c,0x5c,0x16,0x5c,0x5c,0x5c,0x5c,0x04,0x5c,0x5c,0x5c,0x5c,0x14,0x15,0x5c,0x1a,
++    0x20,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5b,0x2e,0x3c,0x28,0x2b,0x21,
++    0x26,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5d,0x24,0x2a,0x29,0x3b,0x5e,
++    0x2d,0x2f,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x7c,0x2c,0x25,0x5f,0x3e,0x3f,
++    0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x60,0x3a,0x23,0x40,0x27,0x3d,0x22,
++    0x5c,0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,
++    0x5c,0x6a,0x6b,0x6c,0x6d,0x6e,0x6f,0x70,0x71,0x72,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,
++    0x5c,0x7e,0x73,0x74,0x75,0x76,0x77,0x78,0x79,0x7a,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,
++    0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,
++    0x7b,0x41,0x42,0x43,0x44,0x45,0x46,0x47,0x48,0x49,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,
++    0x7d,0x4a,0x4b,0x4c,0x4d,0x4e,0x4f,0x50,0x51,0x52,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,
++    0x5c,0x5c,0x53,0x54,0x55,0x56,0x57,0x58,0x59,0x5a,0x5c,0x5c,0x5c,0x5c,0x5c,0x5c,
++    0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x5c,0x5c,0x5c,0x5c,0x5c,0xff,
++};
++static const uint8_t t_cob_spanc[256]={
++    0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x40,0x40,0x40,0x40,0x40,0x40,
++    0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x40,0x40,0x40,0x40,0x40,0x40,
++    0x21,0x34,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x40,0x48,0x40,0x48,0x40,0x40,
++    0x36,0x26,0x26,0x26,0x26,0x26,0x26,0x26,0x26,0x26,0x54,0x40,0x40,0x40,0x40,0x54,
++    0x20,0x25,0x25,0x25,0x25,0x25,0x25,0x25,0x25,0x25,0x45,0x45,0x45,0x45,0x45,0x45,
++    0x25,0x25,0x25,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x41,0x54,0x40,0x54,0x40,0x40,
++    0x20,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x41,0x41,0x41,0x41,0x41,0x41,
++    0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x21,0x41,0x54,0x40,0x54,0x40,0x40,
++    0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x40,0x40,0x40,0x40,0x40,0x40,
++    0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x20,0x40,0x40,0x40,0x40,0x40,0x40,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++};
++static const uint8_t t_cob_spanc2[256]={
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x03,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,
++    0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x01,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,
++    0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x02,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++    0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
++};
++static const uint8_t t_cob_deedit[256]={
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x31,0x32,0x33,0x34,0x35,0x36,0x37,0x38,0x39,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++    0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,0x30,
++};
++int port113_table(unsigned table,uint8_t c,uint8_t *out){
++    if(!out)return PORT113_BAD_ARG;
++    const uint8_t *t=0;
++    if(table==0u)t=t_asc_ebc_rev;
++    if(table==1u)t=t_ebc_asc_rev;
++    if(table==2u)t=t_asc_ebc;
++    if(table==3u)t=t_ebc_asc;
++    if(table==4u)t=t_cob_spanc2;
++    if(table==5u)t=t_cob_spanc;
++    if(table==6u)t=t_cob_deedit;
++    if(!t)return PORT113_BAD_ARG;
++    *out=t[c];return PORT113_OK;
++}
+--- /dev/null
++++ b/tests/test_rtl_m113.c
+@@ -0,0 +1,98 @@
++#include "vms_rtl_m113.h"
++#include <stdint.h>
++#include <stddef.h>
++#include <limits.h>
++#include <stdio.h>
++#include <string.h>
++
++static int fails;
++#define CHECK(e) do {if(!(e)){fprintf(stderr,"M113 test at %d failed: %s\n",__LINE__,#e);fails++;}} while(0)
++static int run_init(void *p){unsigned *x=(unsigned *)p;(*x)++;return PORT113_OK;}
++static int run_handler(void *p,uint32_t n){int *x=(int *)p;*x+=(int)n;return *x;}
++int main(void){
++    uint8_t v=0xff;
++    /* All exact original 256-byte reversible ASCII/EBCDIC values and the
++     * non-reversible ASCII/EBCDIC and COBOL tables are self-contained. */
++    for(int i=0;i<256;i++){
++        uint8_t eb=0,ascii=0;
++        CHECK(port113_src_liba2erev((uint8_t)i,&eb)==PORT113_OK);
++        CHECK(port113_src_libe2arev(eb,&ascii)==PORT113_OK);
++        CHECK(ascii==(uint8_t)i);
++        CHECK(port113_src_libascebc((uint8_t)i,&eb)==PORT113_OK);
++        CHECK(port113_src_libebcasc((uint8_t)i,&v)==PORT113_OK);
++        CHECK(port113_src_cobspanc((uint8_t)i,&v)==PORT113_OK);
++        CHECK(port113_src_cobspanc2((uint8_t)i,&v)==PORT113_OK);
++        CHECK(port113_src_cobdeedit((uint8_t)i,&v)==PORT113_OK);
++    }
++    CHECK(port113_src_libascebc(0x80,&v)==PORT113_OK&&v==0x3f);
++    CHECK(port113_src_libascebc(0xff,&v)==PORT113_OK&&v==0xff);
++    CHECK(port113_src_cobspanc2('A',&v)==PORT113_OK&&v==1);
++    CHECK(port113_src_cobspanc2('a',&v)==PORT113_OK&&v==2);
++    CHECK(port113_src_cobspanc2(' ',&v)==PORT113_OK&&v==3);
++    CHECK(port113_src_cobdeedit('9',&v)==PORT113_OK&&v=='9');
++    CHECK(port113_src_cobdeedit('x',&v)==PORT113_OK&&v=='0');
++    uint32_t a[3]={UINT32_MAX,UINT32_MAX,0},b[3]={1,0,0},res[3]={0};
++    CHECK(port113_src_addx(a,b,res,3)==PORT113_OK&&res[0]==0&&res[1]==0&&res[2]==1);
++    CHECK(port113_src_subx(res,b,res,3)==PORT113_OK&&res[0]==UINT32_MAX&&res[1]==UINT32_MAX&&res[2]==0);
++    CHECK(port113_src_libtempla(0)==PORT113_BAD_ARG);
++    CHECK(port113_src_libtempla(a)==PORT113_OK);
++    int ast=0;CHECK(port113_src_libastinp(0,1,&ast)==PORT113_APPROX&&ast==1);
++    CHECK(port113_src_libastinp(4,1,&ast)==PORT113_BAD_ARG);
++    uint16_t out[8]={0};
++    uint8_t pack[12]={0};
++    int64_t recovered=0;
++    for(int64_t n=-123456789;n<=123456789;n+=17343877){
++        CHECK(port113_packed_encode(n,11,pack,sizeof pack)==PORT113_OK);
++        CHECK(port113_packed_decode(pack,11,&recovered)==PORT113_OK&&recovered==n);
++    }
++    CHECK(port113_packed_encode(-1234,4,pack,sizeof pack)==PORT113_OK);
++    CHECK(port113_packed_decode(pack,4,&recovered)==PORT113_OK&&recovered==-1234);
++    pack[0]|=0x10;CHECK(port113_packed_decode(pack,4,&recovered)==PORT113_BAD_ARG);
++    uint8_t little[2]={0};CHECK(port113_packed_encode(12345,3,little,sizeof little)==PORT113_OVERFLOW);
++    uint8_t fpack[4]={0};CHECK(port113_packed_encode(12345,5,fpack,sizeof fpack)==PORT113_OK);
++    CHECK(port113_src_cobcvtpf(fpack,5,0,out,sizeof out)==PORT113_APPROX);
++    long double flt=0;CHECK(port109_decode(PORT_M107_F,out,&flt)==PORT109_OK&&flt==12345.0L);
++    CHECK(port113_src_cobcvtfp(out,5,0,pack,sizeof pack)==PORT113_APPROX);
++    CHECK(port113_packed_decode(pack,5,&recovered)==PORT113_OK&&recovered==12345);
++    CHECK(port113_src_cobcvtpd(fpack,5,0,out,sizeof out)==PORT113_APPROX);
++    CHECK(port109_decode(PORT_M107_D,out,&flt)==PORT109_OK&&flt==12345.0L);
++    uint16_t single[2]={0};CHECK(port113_src_libcvtdf(out,single)==PORT113_APPROX);
++    CHECK(port109_decode(PORT_M107_F,single,&flt)==PORT109_OK&&flt==12345.0L);
++    int64_t q=0,r=0;
++    CHECK(port113_src_cobdivq(-100,7,&q,&r)==PORT113_OK&&q==-14&&r==-2);
++    CHECK(port113_src_cobdivq(INT64_MIN,1,&q,&r)==PORT113_OK&&q==INT64_MIN&&r==0);
++    CHECK(port113_src_cobdivq(INT64_MIN,-1,&q,&r)==PORT113_BAD_ARG);
++    CHECK(port113_src_cobdivq(100,0,&q,&r)==PORT113_BAD_ARG);
++    CHECK(port113_src_expi(-2,63,&q)==PORT113_APPROX&&q==INT64_MIN);
++    CHECK(port113_src_expi(2,63,&q)==PORT113_OVERFLOW);
++    CHECK(port113_src_expi(2,-1,&q)==PORT113_UNSUPPORTED);
++    int32_t days=-1;uint32_t cs=0;
++    CHECK(port113_src_libday(864000000000ULL*13+1234500000ULL,&days,&cs)==PORT113_OK && days==13 && cs==12345);
++    CHECK(port113_src_libday(UINT64_MAX,&days,&cs)==PORT113_OK);
++    uint16_t mat_words[32]={0};struct port113_matrix mat={mat_words,32,2,2,PORT_M107_F};
++    CHECK(port113_src_basmatidn(&mat)==PORT113_OK);
++    CHECK(port109_decode(PORT_M107_F,mat_words,&flt)==PORT109_OK&&flt==1.0L);
++    CHECK(port109_decode(PORT_M107_F,mat_words+2,&flt)==PORT109_OK&&flt==0.0L);
++    CHECK(port109_decode(PORT_M107_F,mat_words+6,&flt)==PORT109_OK&&flt==1.0L);
++    CHECK(port113_src_basmatnul(&mat)==PORT113_OK&&mat_words[0]==0&&mat_words[6]==0);
++    const uint16_t val[2]={0x4080,0};
++    CHECK(port113_src_basmatini(&mat,val)==PORT113_OK&&mat_words[0]==val[0]&&mat_words[6]==val[0]);
++    CHECK(port113_src_basmatred(&mat,3,2)==PORT113_OK&&mat.rows==3);
++    CHECK(port113_src_basmatred(&mat,10000,10000)==PORT113_BAD_ARG&&mat.rows==3);
++    char numeric[8]={0};CHECK(port113_src_cobcnvout(-123,numeric,sizeof numeric)==PORT113_OK);
++    CHECK(memcmp(numeric,"    -123",8)==0);
++    char tiny[2]={0};CHECK(port113_src_cobcnvout(10000,tiny,sizeof tiny)==PORT113_OVERFLOW);
++    CHECK(tiny[0]=='*'&&tiny[1]=='*');
++    uint8_t edited[]={'a','[','b',']'};
++    CHECK(port113_src_basedit(edited,sizeof edited,1,1)==PORT113_APPROX);
++    CHECK(memcmp(edited,"A(B)",4)==0);
++    unsigned init_count=0;struct port113_init_call calls[2]={{run_init,&init_count},{run_init,&init_count}};
++    int result=0;CHECK(port113_src_libinitia(calls,2,&result)==PORT113_APPROX&&init_count==2);
++    int value=3;CHECK(port113_src_cobinvuse(run_handler,&value,2,&result)==PORT113_APPROX && value==5 && result==5);
++    CHECK(port113_src_cobdhandl(run_handler,&value,3,&result)==PORT113_APPROX&&value==8);
++    CHECK(port113_src_stop(0,0)==PORT113_UNSUPPORTED);
++    CHECK(port113_src_signal(0,0)==PORT113_UNSUPPORTED);
++    if(fails){fprintf(stderr,"M113: %d failed assertions\n",fails);return 1;}
++    puts("M113: 40 original RTL sources, exact 7 translation tables and bounded native ops PASS (host only)");
++    return 0;
++}
+--- /dev/null
++++ b/tests/test_rtl_m113_integrity.py
+@@ -0,0 +1,40 @@
++#!/usr/bin/env python3
++"""M113 original-source provenance, contiguous partial audit and freestanding IA-32."""
++import json
++from pathlib import Path
++import subprocess
++ROOT=Path(__file__).resolve().parents[1]
++manifest=json.loads((ROOT/'tools/m113_originals.json').read_text())
++coverage=json.loads((ROOT/'source-coverage.json').read_text())
++assert manifest['revision']=='2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752'
++assert manifest['file_count']==len(manifest['modules'])==40
++files={x['original_file']:x for x in coverage['files']}
++assert len(files)==len(coverage['files'])==430,(len(files),len(coverage['files']))
++assert len(list((ROOT/'src/native_rtl_m113').glob('*.c')))==40
++syms=[]
++for mod in manifest['modules']:
++    name=mod['name'];source=mod['source'];original=files[source]
++    native=ROOT/'src/native_rtl_m113'/f'{name.lower()}.c'
++    assert native.is_file()
++    assert original['original_lines']==mod['lines']
++    ranges=original['sections']
++    assert ranges[0]['original_lines'][0]==1
++    assert ranges[-1]['original_lines'][1]==mod['lines']
++    assert ranges[-1]['status']=='excluded'
++    assert all(a['original_lines'][1]+1==b['original_lines'][0] for a,b in zip(ranges,ranges[1:])),name
++    for e in mod['entries']:
++        symbol=e['symbol'];syms.append(symbol)
++        assert symbol in native.read_text()
++        sections=[s for s in ranges if s.get('pc_symbol')==symbol]
++        assert len(sections)==1 and sections[0]['status']==e['status'],(name,symbol)
++        assert sections[0]['pc_line'] and sections[0]['pc_line']>0
++assert len(syms)==len(set(syms))==43
++out=subprocess.check_output(['nm','-g','--defined-only',str(ROOT/'build/rtl-m113-partial.o')],text=True)
++for symbol in syms:
++    assert (' '+symbol+'\n') in out,symbol
++u=subprocess.check_output(['nm','-u',str(ROOT/'build/rtl-m113-partial.o')],text=True)
++assert not any(t in u for t in ('__divdi3','__udivdi3','__moddi3','__umoddi3','memcpy','strlen','malloc','printf')),u
++hdr=subprocess.check_output(['readelf','-h',str(ROOT/'build/rtl-m113-partial.o')],text=True)
++assert 'ELF32' in hdr and '80386' in hdr
++assert sum(len(v['sections']) for v in coverage['files']) >= 1800
++print('M113: 40 pinned source files, 43 source-specific ELF32 symbols, explicitly PARTIAL/unresolved contiguous audit PASS')
+--- /dev/null
++++ b/src/native_rtl_m113/basedit.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/BASEDIT.MAR, line 168.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_basedit(uint8_t *chars,size_t length,int upcase,int brackets){return port113_basedit(chars,length,upcase,brackets);}
+--- /dev/null
++++ b/src/native_rtl_m113/basmatidn.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/BASMATIDN.MAR, line 319.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_basmatidn(struct port113_matrix *m){return port113_matrix_fill(m,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/basmatini.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/BASMATINI.MAR, line 358.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_basmatini(struct port113_matrix *m,const uint16_t *value){return port113_matrix_initial(m,value);}
+--- /dev/null
++++ b/src/native_rtl_m113/basmatnul.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/BASMATNUL.MAR, line 148.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_basmatnul(struct port113_matrix *m){return port113_matrix_null(m);}
+--- /dev/null
++++ b/src/native_rtl_m113/basmatred.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/BASMATRED.MAR, line 153.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_basmatred(struct port113_matrix *m,uint32_t rows,uint32_t cols){return port113_matrix_redim(m,rows,cols);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcnvout.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCNVOUT.MAR, line 163.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcnvout(int64_t value,char *dst,size_t length){return port113_cobcnvout(value,dst,length,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtdp.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTDP.MAR, line 142.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtdp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_D_PACK,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtdq.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTDQ.MAR, line 154.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtdq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_D_QUAD,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtfp.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTFP.MAR, line 141.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtfp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_F_PACK,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtfq.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTFQ.MAR, line 154.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtfq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_F_QUAD,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtpd.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTPD.MAR, line 140.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtpd(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_PACK_D,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtpf.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTPF.MAR, line 139.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtpf(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_PACK_F,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtpq.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTPQ.MAR, line 146.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtpq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_PACK_QUAD,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtqd.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTQD.MAR, line 146.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtqd(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_QUAD_D,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtqf.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTQF.MAR, line 145.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtqf(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_QUAD_F,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtqp.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTQP.MAR, line 148.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtqp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_QUAD_PACK,src,digits,scale,dst,cap,0);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtrdp.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTRDP.MAR, line 142.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtrdp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_D_PACK,src,digits,scale,dst,cap,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtrdq.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTRDQ.MAR, line 154.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtrdq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_D_QUAD,src,digits,scale,dst,cap,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtrfp.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTRFP.MAR, line 142.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtrfp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_F_PACK,src,digits,scale,dst,cap,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtrfq.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTRFQ.MAR, line 154.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtrfq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_F_QUAD,src,digits,scale,dst,cap,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtrpq.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTRPQ.MAR, line 148.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtrpq(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_PACK_QUAD,src,digits,scale,dst,cap,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobcvtrqp.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBCVTRQP.MAR, line 142.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobcvtrqp(const void *src,size_t digits,int32_t scale,void *dst,size_t cap){return port113_convert(PORT113_QUAD_PACK,src,digits,scale,dst,cap,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobdeedit.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBDEEDIT.MAR, line 94.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobdeedit(uint8_t c,uint8_t *out){return port113_table(6,c,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobdhandl.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBDHANDL.MAR, line 138.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobdhandl(int (*use_proc)(void *,uint32_t),void *context,uint32_t arg,int *result){return port113_cobinvoke(use_proc,context,arg,result);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobdivq.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBDIVQ.MAR, line 154.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobdivq(int64_t numerator,int64_t denominator,int64_t *quotient,int64_t *remainder){return port113_cobdivq(numerator,denominator,quotient,remainder);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobexpi.c
+@@ -0,0 +1,5 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBEXPI.MAR, line 397; line 400.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_expi_ose(int64_t base,int32_t exponent,int64_t *out){return port113_cobexpi(base,exponent,out);}
++int port113_src_expi(int64_t base,int32_t exponent,int64_t *out){return port113_cobexpi(base,exponent,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobinvuse.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBINVUSE.MAR, line 140.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobinvuse(int (*use_proc)(void *,uint32_t),void *context,uint32_t arg,int *result){return port113_cobinvoke(use_proc,context,arg,result);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobspanc.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBSPANC.MAR, line 107.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobspanc(uint8_t c,uint8_t *out){return port113_table(5,c,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/cobspanc2.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/COBSPANC2.MAR, line 99.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_cobspanc2(uint8_t c,uint8_t *out){return port113_table(4,c,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/liba2erev.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBA2EREV.MAR, line 112.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_liba2erev(uint8_t c,uint8_t *out){return port113_table(0,c,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/libaddx.c
+@@ -0,0 +1,5 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBADDX.MAR, line 163; line 281.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_addx(const uint32_t *a,const uint32_t *b,uint32_t *out,size_t n){return port113_addx(a,b,out,n,0);}
++int port113_src_subx(const uint32_t *a,const uint32_t *b,uint32_t *out,size_t n){return port113_addx(a,b,out,n,1);}
+--- /dev/null
++++ b/src/native_rtl_m113/libascebc.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBASCEBC.MAR, line 116.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_libascebc(uint8_t c,uint8_t *out){return port113_table(2,c,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/libastinp.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBASTINP.MAR, line 125.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_libastinp(uint32_t mode,unsigned in_ast,int *out){return port113_libastinp(mode,in_ast,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/libcvtdf.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBCVTDF.MAR, line 135.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_libcvtdf(const uint16_t *d,uint16_t *f){long double x; if(!d||!f)return PORT113_BAD_ARG; if(port109_decode(PORT_M107_D,d,&x)!=PORT109_OK)return PORT113_BAD_ARG; return port109_encode(PORT_M107_F,x,f)==PORT109_OK?PORT113_APPROX:PORT113_OVERFLOW;}
+--- /dev/null
++++ b/src/native_rtl_m113/libday.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBDAY.MAR, line 155.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_libday(uint64_t vax_quadword_time,int32_t *day,uint32_t *centis){return port113_libday(vax_quadword_time,day,centis);}
+--- /dev/null
++++ b/src/native_rtl_m113/libe2arev.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBE2AREV.MAR, line 115.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_libe2arev(uint8_t c,uint8_t *out){return port113_table(1,c,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/libebcasc.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBEBCASC.MAR, line 125.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_libebcasc(uint8_t c,uint8_t *out){return port113_table(3,c,out);}
+--- /dev/null
++++ b/src/native_rtl_m113/libinitia.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBINITIA.MAR, line 180.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_libinitia(const struct port113_init_call *callbacks,size_t count,int *result){return port113_libinitia(callbacks,count,result);}
+--- /dev/null
++++ b/src/native_rtl_m113/libsignal.c
+@@ -0,0 +1,5 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBSIGNAL.MAR, line 187; line 242.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_stop(const uint32_t *raw_vax_frame,size_t words){(void)raw_vax_frame;(void)words;return PORT113_UNSUPPORTED;}
++int port113_src_signal(const uint32_t *raw_vax_frame,size_t words){(void)raw_vax_frame;(void)words;return PORT113_UNSUPPORTED;}
+--- /dev/null
++++ b/src/native_rtl_m113/libtempla.c
+@@ -0,0 +1,4 @@
++/* Native IA-32 source-specific partial entry; original: RTL/SRC/LIBTEMPLA.MAR, line 113.
++ * No DEC source is bundled. VAX calling mask, raised conditions, RTL integration not yet reproduced. */
++#include "../vms_rtl_m113.h"
++int port113_src_libtempla(const uint32_t *argument){return port113_libtempla(argument);}
