@@ -1,0 +1,573 @@
+--- a/Makefile
++++ b/Makefile
+@@ -783,8 +783,18 @@
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M118_DB_SRCS) tests/test_ini_devicedb_host.c -o build/inidevicedbcheck
+ 	./build/inidevicedbcheck
+ 
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) build/executive-partial.o
++# M119: original CONINTDSP source-defined port control on real UCB bytes.
++M119_CON_SRCS=src/vms_con_port.c src/vms_con_xoff.c src/vms_con_xon.c src/vms_con_stop.c src/vms_con_stop2.c src/vms_con_abort.c src/vms_con_resume.c
++M119_CON_OBJS=$(patsubst src/%.c,build/%.o,$(M119_CON_SRCS))
++$(M119_CON_OBJS): build/%.o: src/%.c src/vms_con_port.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: conportcheck
++conportcheck: $(M119_CON_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
++	./build/conportcheck
++
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -808,7 +818,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1104,7 +1114,7 @@
+ M117_DPT_SRCS=src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c
+ build/vms_ini_dpt_templates.o: src/vms_ini_dpt_templates.c src/vms_ini_dpt_templates.h src/vms_v37_dyn_tags.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/vms_ini_dpt_mb.o: src/vms_ini_dpt_mb.c src/vms_ini_dpt_templates.h src/vms_ini_devicedb.h | build
++build/vms_ini_dpt_mb.o: src/vms_ini_dpt_mb.c src/vms_ini_dpt_templates.h src/vms_ini_devicedb.h src/vms_con_port.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_dpt_nl.o: src/vms_ini_dpt_nl.c src/vms_ini_dpt_templates.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3069,6 +3069,25 @@
+     }
+     bootstrap_message("INIT: SYS.EXE prelinked BOOT/OPA/MBA/NLA DDB/UCB records (DDTs pending).");
+ 
++    /* CONINTDSP.MAR action transitions execute in native SYS.EXE on a
++     * verified OPA0 source-layout copy. No class/port DDT or UART QIO. */
++    static struct port_sys_exec_result con_result;
++    const struct port_sys_exec_start con_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&con_result,
++        .phase=PORT_SYS_EXEC_INIT_CONPORT};
++    if(loaded_sys(&con_request)!=PORT_SYS_EXEC_NORMAL ||
++       con_result.signature!=PORT_SYS_EXEC_CON_RESULT_TAG ||
++       !con_result.console_action_scratch ||
++       con_result.console_action_result!=PORT_V37_CON_DEFERRED ||
++       (uintptr_t)con_result.console_action_scratch<PORT_SYS_ELF_START ||
++       (uintptr_t)con_result.console_action_scratch>
++           PORT_SYS_ELF_LIMIT-PORT_V37_OPA_UCB_SIZE){
++        bootstrap_message("INIT: resident CONINTDSP source port action checks failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).");
++
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -7,6 +7,7 @@
+ #include "vms_ini_dpt_templates.h"
+ #include "vms_ini_syslog.h"
+ #include "vms_ini_devicedb.h"
++#include "vms_con_port.h"
+ #include <stdint.h>
+ /* All state belongs to SYS.EXE's separately loaded resident supervisor
+  * segment, not to the SYSBOOT monitor or a pretend VAX processor. */
+@@ -68,6 +69,8 @@
+ static union { uint32_t align; uint8_t data[PORT_V37_DEVICE_BYTES]; } executive_devicedb_bytes;
+ static struct port_v37_device_result executive_devicedb_result;
+ static uint32_t executive_devicedb_ready;
++static union {uint32_t align;uint8_t bytes[PORT_V37_OPA_UCB_SIZE];} executive_con_scratch;
++static uint32_t executive_conport_ready;
+ /* Original SYSTEM and NULL PCB slots have distinct persistent resident
+  * storage. Creating these source-derived scheduler descriptors is not a
+  * substitute for actually scheduling SYSTEM or running LOGINOUT. */
+@@ -456,6 +459,42 @@
+         p->result->signature=PORT_SYS_EXEC_SYSLOG_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_CONPORT){
++        /* Original CONINTDSP port actions operate on a source-layout
++         * OPA0 UCB copy; actual TT class driver/TERMINALIO is absent.
++         * No device output can be claimed from this diagnostic. */
++        if(!executive_devicedb_ready || executive_conport_ready ||
++           executive_devicedb_result.incomplete_driver_mask!=15u)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        for(unsigned i=0;i<PORT_V37_OPA_UCB_SIZE;i++)
++            executive_con_scratch.bytes[i]=
++                executive_devicedb_bytes.data[PORT_V37_UCB_OPA_OFF+i];
++        uint8_t *u=executive_con_scratch.bytes;
++        if(port_v37_con_xoff(u,PORT_V37_OPA_UCB_SIZE,0)!=PORT_V37_CON_DEFERRED ||
++           port_v37_con_xon(u,PORT_V37_OPA_UCB_SIZE,0)!=PORT_V37_CON_DEFERRED ||
++           port_v37_con_stop(u,PORT_V37_OPA_UCB_SIZE)!=PORT_V37_CON_OK ||
++           port_v37_con_stop2(u,PORT_V37_OPA_UCB_SIZE,7u)!=PORT_V37_CON_OK ||
++           port_v37_con_get32(u,PORT_V37_CON_DUETIM)!=9u)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        port_v37_con_set16(u,PORT_V37_CON_HOLD,
++            (uint16_t)(port_v37_con_get16(u,PORT_V37_CON_HOLD)|PORT_V37_CON_BURST));
++        port_v37_con_set16(u,PORT_V37_CON_OUTLEN,17u);
++        if(port_v37_con_resume(u,PORT_V37_OPA_UCB_SIZE,100u,0)!=PORT_V37_CON_DEFERRED ||
++           port_v37_con_get32(u,PORT_V37_CON_DUETIM)!=106u ||
++           port_v37_con_get32(u,PORT_V37_CON_STATE)&PORT_V37_CON_CTRLS ||
++           port_v37_con_abort(u,PORT_V37_OPA_UCB_SIZE,UINT32_MAX)!=PORT_V37_CON_OK ||
++           port_v37_con_get32(u,PORT_V37_CON_DUETIM)!=1u ||
++           port_v37_con_get16(u,PORT_V37_CON_HOLD)!=
++               (PORT_V37_CON_XOFF|PORT_V37_CON_XON) ||
++           port_v37_con_get16(u,PORT_V37_CON_STS)!=
++               (PORT_V37_UCB_ONLINE|PORT_V37_CON_TIM))
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_conport_ready=1u;
++        p->result->console_action_scratch=u;
++        p->result->console_action_result=PORT_V37_CON_DEFERRED;
++        p->result->signature=PORT_SYS_EXEC_CON_RESULT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_DEVICE_DB){
+         /* DEVICEDAT.MAR IOC$GL_DEVLIST: copy real pointer-linked
+          * BOOT->OPA->MBA->NLA DDB/UCB templates into resident SYS.EXE.
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -16,10 +16,11 @@
+ #include "vms_ini_dpt_templates.h"
+ #include "vms_ini_bootdev_scan.h"
+ #include "vms_ini_devicedb.h"
++#include "vms_con_port.h"
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=16u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=17u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -36,7 +37,8 @@
+        PORT_SYS_EXEC_INIT_NL_FDT=12u, PORT_SYS_EXEC_NL_RESULT_TAG=0x4c554e4cu,
+        PORT_SYS_EXEC_INIT_BOOTDEV_SCAN=13u, PORT_SYS_EXEC_BOOTDEV_RESULT_TAG=0x56444249u,
+        PORT_SYS_EXEC_INIT_DPT_STAGES=14u, PORT_SYS_EXEC_DPT_RESULT_TAG=0x54504453u,
+-       PORT_SYS_EXEC_INIT_DEVICE_DB=15u,PORT_SYS_EXEC_DEVICE_RESULT_TAG=0x42444456u };
++       PORT_SYS_EXEC_INIT_DEVICE_DB=15u,PORT_SYS_EXEC_DEVICE_RESULT_TAG=0x42444456u,
++       PORT_SYS_EXEC_INIT_CONPORT=16u,PORT_SYS_EXEC_CON_RESULT_TAG=0x4e4f4350u };
+ /* The IA-32 privilege-transition stack is the first live counterpart of
+  * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
+ /* SYSBOOT passes the genuine Files-11 SYS.EXE extent map through the
+@@ -89,6 +91,9 @@
+     const uint8_t *device_db_bytes;
+     uint32_t (*device_db_check)(const uint8_t *,size_t,uint32_t,
+          const struct port_v37_device_result *);
++    /* Diagnostic source transitions only, not an active OP driver. */
++    const uint8_t *console_action_scratch;
++    uint32_t console_action_result;
+     uint32_t logical_table[2];
+     uint8_t lock_max_resource_depth;
+     const struct port_ini_procvec *process_vector;
+--- /dev/null
++++ b/src/vms_con_port.h
+@@ -0,0 +1,38 @@
++#ifndef VMS_CON_PORT_H
++#define VMS_CON_PORT_H
++#include <stddef.h>
++#include <stdint.h>
++/* Source: SYS/SRC/CONINTDSP.MAR 484-550 and SHRLIB/TTYDEF.MAR 245-449.
++ * These act on original VMS 3.7 UCB bytes, not on a VAX emulator. The
++ * class routine TERMINALIO and real OP/TT DPTs have not been linked.
++ * DEFERRED means the caller must not claim an output was transmitted. */
++enum {
++    PORT_V37_CON_OK=1u, PORT_V37_CON_BAD=2u, PORT_V37_CON_DEFERRED=4u,
++    PORT_V37_CON_UCB_BYTES=256u,
++    PORT_V37_CON_STS=88u, PORT_V37_CON_DUETIM=92u,
++    PORT_V37_CON_STATE=132u, PORT_V37_CON_HOLD=174u,
++    PORT_V37_CON_OUTLEN=220u,
++    PORT_V37_CON_TIM=1u, PORT_V37_CON_INT=2u,
++    PORT_V37_CON_CTRLS=1u,
++    PORT_V37_CON_XOFF=0x100u, PORT_V37_CON_XON=0x200u,
++    PORT_V37_CON_STOP=0x400u, PORT_V37_CON_STOP2=0x800u,
++    PORT_V37_CON_BURST=0x2000u
++};
++struct port_v37_con_backend {
++    /* Real terminal class/port dispatch; no simulated success on NULL. */
++    uint32_t (*kick)(void *);
++    void *context;
++};
++uint16_t port_v37_con_get16(const uint8_t *,unsigned);
++uint32_t port_v37_con_get32(const uint8_t *,unsigned);
++void port_v37_con_set16(uint8_t *,unsigned,uint16_t);
++void port_v37_con_set32(uint8_t *,unsigned,uint32_t);
++uint32_t port_v37_con_valid(const uint8_t *,size_t);
++uint32_t port_v37_con_kick(uint8_t *,const struct port_v37_con_backend *);
++uint32_t port_v37_con_xoff(uint8_t *,size_t,const struct port_v37_con_backend *);
++uint32_t port_v37_con_xon(uint8_t *,size_t,const struct port_v37_con_backend *);
++uint32_t port_v37_con_stop(uint8_t *,size_t);
++uint32_t port_v37_con_stop2(uint8_t *,size_t,uint32_t);
++uint32_t port_v37_con_abort(uint8_t *,size_t,uint32_t);
++uint32_t port_v37_con_resume(uint8_t *,size_t,uint32_t,const struct port_v37_con_backend *);
++#endif
+--- /dev/null
++++ b/src/vms_con_port.c
+@@ -0,0 +1,37 @@
++#include "vms_con_port.h"
++#include "vms_v37_dyn_tags.h"
++/* Source little-endian UCB layout and TTY UCB extension offsets.
++ * Caller must supply actual IA-32 resident data or a host-test copy.
++ * No reinterpreted host-endian structs, no VAX interpreter. */
++uint16_t port_v37_con_get16(const uint8_t *u,unsigned n){
++    return (uint16_t)((unsigned)u[n]|((unsigned)u[n+1u]<<8));
++}
++uint32_t port_v37_con_get32(const uint8_t *u,unsigned n){
++    return (uint32_t)u[n]|((uint32_t)u[n+1u]<<8)|
++        ((uint32_t)u[n+2u]<<16)|((uint32_t)u[n+3u]<<24);
++}
++void port_v37_con_set16(uint8_t *u,unsigned n,uint16_t x){
++    u[n]=(uint8_t)x;u[n+1u]=(uint8_t)(x>>8);
++}
++void port_v37_con_set32(uint8_t *u,unsigned n,uint32_t x){
++    u[n]=(uint8_t)x;u[n+1u]=(uint8_t)(x>>8);
++    u[n+2u]=(uint8_t)(x>>16);u[n+3u]=(uint8_t)(x>>24);
++}
++uint32_t port_v37_con_valid(const uint8_t *u,size_t capacity){
++    if(!u || capacity<PORT_V37_CON_UCB_BYTES ||
++       ((uintptr_t)u&3u))return PORT_V37_CON_BAD;
++    const uint32_t declared=port_v37_con_get16(u+0u,8u);
++    return u[10u]==PORT_V37_DYN_UCB &&
++           declared>=PORT_V37_CON_UCB_BYTES && declared<=capacity ?
++           PORT_V37_CON_OK:PORT_V37_CON_BAD;
++}
++uint32_t port_v37_con_kick(uint8_t *u,const struct port_v37_con_backend *b){
++    uint16_t status=port_v37_con_get16(u,PORT_V37_CON_STS);
++    if(status&PORT_V37_CON_INT)return PORT_V37_CON_OK;
++    /* The original CON$XON / CON$RESUME calls TERMINALIO here.
++     * Without its real class/port backend leave output queued, not sent. */
++    if(!b || !b->kick || b->kick(b->context)!=PORT_V37_CON_OK)
++        return PORT_V37_CON_DEFERRED;
++    port_v37_con_set16(u,PORT_V37_CON_STS,(uint16_t)(status|PORT_V37_CON_INT));
++    return PORT_V37_CON_OK;
++}
+--- /dev/null
++++ b/src/vms_con_xoff.c
+@@ -0,0 +1,8 @@
++#include "vms_con_port.h"
++/* CONINTDSP.MAR 484-487: schedule XOFF before lower-priority data. */
++uint32_t port_v37_con_xoff(uint8_t *u,size_t n,const struct port_v37_con_backend *b){
++    if(port_v37_con_valid(u,n)!=PORT_V37_CON_OK)return PORT_V37_CON_BAD;
++    port_v37_con_set16(u,PORT_V37_CON_HOLD,
++        (uint16_t)(port_v37_con_get16(u,PORT_V37_CON_HOLD)|PORT_V37_CON_XOFF));
++    return port_v37_con_kick(u,b);
++}
+--- /dev/null
++++ b/src/vms_con_xon.c
+@@ -0,0 +1,8 @@
++#include "vms_con_port.h"
++/* CONINTDSP.MAR 488-499: schedule XON and initiate output when not busy. */
++uint32_t port_v37_con_xon(uint8_t *u,size_t n,const struct port_v37_con_backend *b){
++    if(port_v37_con_valid(u,n)!=PORT_V37_CON_OK)return PORT_V37_CON_BAD;
++    port_v37_con_set16(u,PORT_V37_CON_HOLD,
++        (uint16_t)(port_v37_con_get16(u,PORT_V37_CON_HOLD)|PORT_V37_CON_XON));
++    return port_v37_con_kick(u,b);
++}
+--- /dev/null
++++ b/src/vms_con_stop.c
+@@ -0,0 +1,10 @@
++#include "vms_con_port.h"
++/* CONINTDSP.MAR 501-508: block class output and schedule port STOP. */
++uint32_t port_v37_con_stop(uint8_t *u,size_t n){
++    if(port_v37_con_valid(u,n)!=PORT_V37_CON_OK)return PORT_V37_CON_BAD;
++    port_v37_con_set32(u,PORT_V37_CON_STATE,
++        port_v37_con_get32(u,PORT_V37_CON_STATE)|PORT_V37_CON_CTRLS);
++    port_v37_con_set16(u,PORT_V37_CON_HOLD,
++        (uint16_t)(port_v37_con_get16(u,PORT_V37_CON_HOLD)|PORT_V37_CON_STOP));
++    return PORT_V37_CON_OK;
++}
+--- /dev/null
++++ b/src/vms_con_stop2.c
+@@ -0,0 +1,13 @@
++#include "vms_con_port.h"
++/* CONINTDSP.MAR 509-517: broadcast STOP2 activates two-tick timeout. */
++uint32_t port_v37_con_stop2(uint8_t *u,size_t n,uint32_t now){
++    if(port_v37_con_valid(u,n)!=PORT_V37_CON_OK)return PORT_V37_CON_BAD;
++    port_v37_con_set32(u,PORT_V37_CON_STATE,
++        port_v37_con_get32(u,PORT_V37_CON_STATE)|PORT_V37_CON_CTRLS);
++    port_v37_con_set16(u,PORT_V37_CON_HOLD,
++        (uint16_t)(port_v37_con_get16(u,PORT_V37_CON_HOLD)|PORT_V37_CON_STOP2));
++    port_v37_con_set16(u,PORT_V37_CON_STS,
++        (uint16_t)(port_v37_con_get16(u,PORT_V37_CON_STS)|PORT_V37_CON_TIM));
++    port_v37_con_set32(u,PORT_V37_CON_DUETIM,now+2u);
++    return PORT_V37_CON_OK;
++}
+--- /dev/null
++++ b/src/vms_con_abort.c
+@@ -0,0 +1,9 @@
++#include "vms_con_port.h"
++/* CONINTDSP.MAR 519-525: clear burst and schedule in-flight stop timeout. */
++uint32_t port_v37_con_abort(uint8_t *u,size_t n,uint32_t now){
++    if(port_v37_con_valid(u,n)!=PORT_V37_CON_OK)return PORT_V37_CON_BAD;
++    port_v37_con_set16(u,PORT_V37_CON_HOLD,
++        (uint16_t)(port_v37_con_get16(u,PORT_V37_CON_HOLD)&~PORT_V37_CON_BURST));
++    port_v37_con_set32(u,PORT_V37_CON_DUETIM,now+2u);
++    return PORT_V37_CON_OK;
++}
+--- /dev/null
++++ b/src/vms_con_resume.c
+@@ -0,0 +1,18 @@
++#include "vms_con_port.h"
++/* CONINTDSP.MAR 527-550: release Ctrl-S and STOP/STOP2; timer depends
++ * on source burst length /4, with +2 tick minimum, wrapping at 32 bits. */
++uint32_t port_v37_con_resume(uint8_t *u,size_t n,uint32_t now,
++                              const struct port_v37_con_backend *b){
++    if(port_v37_con_valid(u,n)!=PORT_V37_CON_OK)return PORT_V37_CON_BAD;
++    port_v37_con_set32(u,PORT_V37_CON_STATE,
++        port_v37_con_get32(u,PORT_V37_CON_STATE)&~(uint32_t)PORT_V37_CON_CTRLS);
++    uint16_t hold=(uint16_t)(port_v37_con_get16(u,PORT_V37_CON_HOLD)&
++                       (uint16_t)~(PORT_V37_CON_STOP|PORT_V37_CON_STOP2));
++    port_v37_con_set16(u,PORT_V37_CON_HOLD,hold);
++    const uint32_t delta=2u+((hold&PORT_V37_CON_BURST)?
++        (uint32_t)(port_v37_con_get16(u,PORT_V37_CON_OUTLEN)/4u):0u);
++    port_v37_con_set32(u,PORT_V37_CON_DUETIM,now+delta);
++    port_v37_con_set16(u,PORT_V37_CON_STS,
++        (uint16_t)(port_v37_con_get16(u,PORT_V37_CON_STS)|PORT_V37_CON_TIM));
++    return port_v37_con_kick(u,b);
++}
+--- /dev/null
++++ b/tests/test_con_port_host.c
+@@ -0,0 +1,56 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_con_port.h"
++#include "vms_v37_dyn_tags.h"
++#define CHECK(c) do{if(!(c)){fprintf(stderr,"FAIL %s:%d %s\n",__FILE__,__LINE__,#c);return 1;}}while(0)
++static uint32_t calls;
++static uint32_t succeeded(void *ctx){++*(uint32_t *)ctx;return PORT_V37_CON_OK;}
++static uint32_t refused(void *ctx){++*(uint32_t *)ctx;return PORT_V37_CON_BAD;}
++int main(void){
++    uint32_t buffer[320/4]={0};uint8_t *u=(uint8_t *)buffer;
++    struct port_v37_con_backend ok={succeeded,&calls},no={refused,&calls};
++    u[8]=320u&255u;u[9]=320u>>8;u[10]=PORT_V37_DYN_UCB;
++    CHECK(port_v37_con_valid(u,sizeof buffer)==PORT_V37_CON_OK);
++    CHECK(port_v37_con_xoff(u,255u,&ok)==PORT_V37_CON_BAD);
++    CHECK(port_v37_con_get16(u,PORT_V37_CON_HOLD)==0u && calls==0u);
++    CHECK(port_v37_con_xoff(u,sizeof buffer,0)==PORT_V37_CON_DEFERRED);
++    CHECK(port_v37_con_get16(u,PORT_V37_CON_HOLD)==PORT_V37_CON_XOFF);
++    CHECK(!(port_v37_con_get16(u,PORT_V37_CON_STS)&PORT_V37_CON_INT));
++    CHECK(port_v37_con_xon(u,sizeof buffer,&no)==PORT_V37_CON_DEFERRED);
++    CHECK(calls==1u && port_v37_con_get16(u,PORT_V37_CON_HOLD)==(PORT_V37_CON_XOFF|PORT_V37_CON_XON));
++    CHECK(port_v37_con_xon(u,sizeof buffer,&ok)==PORT_V37_CON_OK);
++    CHECK(calls==2u && (port_v37_con_get16(u,PORT_V37_CON_STS)&PORT_V37_CON_INT));
++    CHECK(port_v37_con_xoff(u,sizeof buffer,&ok)==PORT_V37_CON_OK && calls==2u);
++    CHECK(port_v37_con_stop(u,sizeof buffer)==PORT_V37_CON_OK);
++    CHECK(port_v37_con_get32(u,PORT_V37_CON_STATE)&PORT_V37_CON_CTRLS);
++    CHECK(port_v37_con_get16(u,PORT_V37_CON_HOLD)&PORT_V37_CON_STOP);
++    CHECK(port_v37_con_stop2(u,sizeof buffer,123u)==PORT_V37_CON_OK);
++    CHECK(port_v37_con_get16(u,PORT_V37_CON_HOLD)&PORT_V37_CON_STOP2);
++    CHECK(port_v37_con_get32(u,PORT_V37_CON_DUETIM)==125u);
++    CHECK(port_v37_con_get16(u,PORT_V37_CON_STS)&PORT_V37_CON_TIM);
++    port_v37_con_set16(u,PORT_V37_CON_HOLD,port_v37_con_get16(u,PORT_V37_CON_HOLD)|PORT_V37_CON_BURST);
++    port_v37_con_set16(u,PORT_V37_CON_OUTLEN,17u);
++    CHECK(port_v37_con_resume(u,sizeof buffer,200u,&ok)==PORT_V37_CON_OK);
++    CHECK(calls==2u); /* INT active, do not call TERMINALIO again */
++    CHECK(port_v37_con_get32(u,PORT_V37_CON_DUETIM)==206u);
++    CHECK(!(port_v37_con_get32(u,PORT_V37_CON_STATE)&PORT_V37_CON_CTRLS));
++    CHECK(!(port_v37_con_get16(u,PORT_V37_CON_HOLD)&(PORT_V37_CON_STOP|PORT_V37_CON_STOP2)));
++    CHECK(port_v37_con_abort(u,sizeof buffer,UINT32_MAX)==PORT_V37_CON_OK);
++    CHECK(!(port_v37_con_get16(u,PORT_V37_CON_HOLD)&PORT_V37_CON_BURST));
++    CHECK(port_v37_con_get32(u,PORT_V37_CON_DUETIM)==1u);
++    port_v37_con_set16(u,PORT_V37_CON_STS,0u);
++    CHECK(port_v37_con_resume(u,sizeof buffer,UINT32_MAX,0)==PORT_V37_CON_DEFERRED);
++    CHECK(port_v37_con_get32(u,PORT_V37_CON_DUETIM)==1u);
++    CHECK(port_v37_con_resume(u,sizeof buffer,3u,&ok)==PORT_V37_CON_OK);
++    CHECK(calls==3u && (port_v37_con_get16(u,PORT_V37_CON_STS)&PORT_V37_CON_INT));
++    /* Every invalid request leaves data untouched, including source type. */
++    u[10]=PORT_V37_DYN_DDB;
++    uint8_t old[320];memcpy(old,u,sizeof old);
++    CHECK(port_v37_con_stop2(u,sizeof buffer,20u)==PORT_V37_CON_BAD);
++    CHECK(port_v37_con_abort(u,sizeof buffer,20u)==PORT_V37_CON_BAD);
++    CHECK(port_v37_con_resume(u,sizeof buffer,20u,&ok)==PORT_V37_CON_BAD);
++    CHECK(!memcmp(old,u,sizeof old));
++    puts("CONINTDSP.MAR source terminal XON/XOFF/STOP/STOP2/ABORT/RESUME transitions PASS");
++    return 0;
++}
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2133,6 +2133,55 @@
+     'sections':rows,'unresolved_integration':'Original DEC source prelinked DDB/UCB layout staged at resident native SYS.EXE addresses; actual class/port/MB/NL driver DDT, CRB, IOC queue and native SYS$QIO still absent.'})
+ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ 
++
++# M119: original CONINTDSP.MAR console-port action routines. The six
++# source routines are directly callable IA-32, but TERMINALIO and the
++# class-driver GETNXT/PUTNXT remain absent, so there is NO live tty output.
++con_original=next(f for f in result['files'] if f['original_file']=='SYS/SRC/CONINTDSP.MAR')
++con_rows=[
++ (1,82,None,None,'Original VAX declarations and console hardware setup unresolved','unresolved'),
++ (83,97,'src/vms_ini_dpt_op.c','port_v37_dpt_stage_op','Original OP source DPT prologue metadata only, no linked driver','partial'),
++ (98,483,None,None,'Original VAX console ISR, TERMINALIO, PDR and hardware output dispatch still unresolved','unresolved'),
++ (484,487,'src/vms_con_xoff.c','port_v37_con_xoff','Schedule source XOFF hold, defer TERMINALIO until class ready','partial'),
++ (488,500,'src/vms_con_xon.c','port_v37_con_xon','Schedule source XON hold, defer physical output until class ready','partial'),
++ (501,508,'src/vms_con_stop.c','port_v37_con_stop','Original Ctrl-S state and STOP hold transition','partial'),
++ (509,518,'src/vms_con_stop2.c','port_v37_con_stop2','Original broadcast STOP2, TIM status and two-tick due time','partial'),
++ (519,526,'src/vms_con_abort.c','port_v37_con_abort','Clear BURST hold and set 2 tick timeout','partial'),
++ (527,550,'src/vms_con_resume.c','port_v37_con_resume','Resume Ctrl-S, clear STOP flags and compute burst timeout; no live terminal class dispatch','partial'),
++ (551,556,None,None,'Original CON_END, VAX driver finishing and assembler end','unresolved')]
++con_sections=[]
++for lo,hi,pc,symbol,why,status in con_rows:
++    if pc:
++        line=line_for_symbol(pc,symbol)
++        if line is None:missing+=1
++        con_sections.append({'original_lines':[lo,hi], 'status':status if line else 'missing',
++            'pc_file':pc,'pc_symbol':symbol,'pc_line':line,'function':why})
++    else:con_sections.append({'original_lines':[lo,hi],'status':status,'reason':why})
++con_original['sections']=con_sections
++con_original['unresolved_integration']='Source port-action state changes are linked into real SYS.EXE and guest-tested on a diagnostic OPA0 copy only. Original class driver, TERMINALIO, output interrupt service and IOC are absent.'
++# SHRLIB/TTYDEF.MAR literal source UCB fields, not the entire terminal class.
++tty_rows=[
++ (1,244,None,None,'Original terminal-driver macro and constant definitions not ported in full','unresolved'),
++ (245,267,'src/vms_con_port.c','port_v37_con_valid','Source 132-byte UCB base and terminal state/extension validity','partial'),
++ (268,298,None,None,'Other terminal AST and typeahead fields not ported','unresolved'),
++ (299,311,'src/vms_con_xon.c','port_v37_con_xon','Original HOLD tank XON/XOFF/STOP/STOP2/BURST bit values','partial'),
++ (312,348,None,None,'Cursor, defaults and queued terminal output still missing','unresolved'),
++ (349,351,'src/vms_con_resume.c','port_v37_con_resume','Original terminal output length used to time burst restart','partial'),
++ (352,447,None,None,'Remaining modem speed and char defaults not implemented','unresolved'),
++ (448,449,'src/vms_con_port.c','port_v37_con_valid','Source terminal UCB length of 256 bytes','partial'),
++ (450,781,None,None,'Terminal class vectors and remaining macros require original service translation','unresolved')]
++sec=[]
++for lo,hi,pc,sym,why,status in tty_rows:
++    if pc:
++        line=line_for_symbol(pc,sym)
++        if line is None:missing+=1
++        sec.append({'original_lines':[lo,hi],'status':status if line else 'missing',
++            'pc_file':pc,'pc_symbol':sym,'pc_line':line,'function':why})
++    else:sec.append({'original_lines':[lo,hi],'status':status,'reason':why})
++result['files'].append({'original_file':'SHRLIB/TTYDEF.MAR','original_lines':781,
++    'sections':sec,'unresolved_integration':'Only source UCB extension offsets and tank flags are mapped; no complete terminal-driver class or port runtime.'})
++assert len({f['original_file'] for f in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- /dev/null
++++ b/tools/qemu_sysboot_m119.py
+@@ -0,0 +1,122 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; check source-ordered real SYS.EXE retrieval map and INIT.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M119: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE prelinked BOOT/OPA/MBA/NLA DDB/UCB records (DDTs pending).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m119-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,119,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M119: guest source DPT headers, FDT, ATA boot scan, typed LOG and early INIT verified PASS')
++        return 0
++    print('QEMU M119: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
