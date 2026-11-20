@@ -58,6 +58,8 @@ jobs:
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           make -j2 all
           make rtl85check rtl107check rtl108check rtl109check rtl110check sourcerangecheck m21bootcheck
+          # Run the full historical guest-layout/host test suite, not only the modern smoke subset.
+          make test
           make bootcheck imagecheck sysnativecheck sysnormalizedmapcheck iniloacheck inicpbuscheck sysexecentrycheck sysloa386check sysloa386imagecheck
           make inidptlistcheck inittydrvcheck inittybindcheck pktlayoutcheck packetqueuecheck inilockdbcheck iniprocveccheck iniphvswapcheck inimpwcheck inipflveccheck inisyswcbcheck inisyswcbdiskcheck inisyslogcheck files1186check files1187check
           python3 tools/gen_source_coverage.py
