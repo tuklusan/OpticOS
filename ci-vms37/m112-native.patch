@@ -1,0 +1,1659 @@
+--- a/Makefile
++++ b/Makefile
+@@ -1025,3 +1025,21 @@
+ 	python3 tools/gen_source_coverage.py
+ 	python3 tests/test_rtl_m111_integrity.py
+ all: build/rtl-m111-partial.o
++
++# M112: 30 exact FORTRAN statement entry dispatchers + 10 original FORTRAN RTL sources.
++M112_MODULE_SRCS=$(wildcard src/native_rtl_m112/*.c)
++M112_MODULE_OBJS=$(patsubst src/native_rtl_m112/%.c,build/m112/%.o,$(M112_MODULE_SRCS))
++build/vms_for_m112.o: src/vms_for_m112.c src/vms_for_m112.h | build
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/m112/%.o: src/native_rtl_m112/%.c src/vms_for_m112.h | build
++	mkdir -p build/m112
++	$(CC) $(EXEFLAGS) -c $< -o $@
++build/rtl-m112-partial.o: build/vms_for_m112.o $(M112_MODULE_OBJS)
++	$(LD) -m elf_i386 -r -o $@ $^
++.PHONY: rtl112check
++rtl112check: build/rtl-m112-partial.o
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc src/vms_for_m112.c $(M112_MODULE_SRCS) tests/test_rtl_m112.c -o build/rtl112check
++	./build/rtl112check
++	python3 tools/gen_source_coverage.py
++	python3 tests/test_rtl_m112_integrity.py
++all: build/rtl-m112-partial.o
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -1975,6 +1975,46 @@
+ assert len(m111_seen)==40
+ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ 
++# M112: forty additional original VMS 3.7 FORTRAN RTL programs.
++# 30 source-specific MAR entrypoint selectors plus 10 B32 control/dispatcher
++# modules, each with a compiled native IA-32 ELF32 callable translation.
++# Source-level status remains PARTIAL: original VAX frames, RMS callbacks,
++# full FORTRAN error handler, nested LUB stack, guest binding are unfinished.
++m112=json.loads((ROOT/'tools/m112_originals.json').read_text())
++assert m112['revision']==REVISION and m112['file_count']==40
++assert len(m112['modules'])==40
++m112_seen=set()
++for item in m112['modules']:
++    original=item['source'];total=item['lines'];entries=item['entries']
++    assert original.startswith('RTL/SRC/FOR') and original not in m112_seen
++    m112_seen.add(original)
++    native='src/native_rtl_m112/'+item['name'].lower()+'.c'
++    assert (ROOT/native).is_file()
++    assert entries and all(0<e['line']<total for e in entries)
++    sections=[]
++    first=entries[0]['line']
++    if first>1:
++        sections.append({'original_lines':[1,first-1],'status':'unresolved',
++          'reason':'Original VAX module declarations, procedure masks, error handlers, VAX RMS LUB and ABI not yet implemented'})
++    for i,e in enumerate(entries):
++        start=e['line']
++        end=entries[i+1]['line']-1 if i+1<len(entries) else total-1
++        sym=e['symbol']; lineno=line_for_symbol(native,sym)
++        if lineno is None:missing+=1
++        sections.append({'original_lines':[start,end],
++          'status':'partial' if lineno else 'missing',
++          'pc_file':native,'pc_symbol':sym,'pc_line':lineno,
++          'function':('Source-specific native statement ordinal and object-format flag dispatch' if item['kind']=='statement-dispatch' else
++            'Bounded native FORTRAN LUB/RMS operation via explicit checked backend'),
++          'unresolved':'No live RMS/ACP, runtime AST/unwind frames, exact IOSTAT and signal semantics or guest linkage'})
++    sections.append({'original_lines':[total,total],'status':'excluded',
++       'reason':'Non-executable final module END directive or terminal blank line'})
++    result['files'].append({'original_file':original,'original_lines':total,
++      'sections':sections,'unresolved_integration':
++        'Source selector/host-verified native subset only; no VAX execution. Requires native FORTRAN backend attached to real VMS disk/file system and condition handling; not yet run in QEMU.'})
++assert len(m112_seen)==40
++assert len({x['original_file'] for x in result['files']})==len(result['files'])
++
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+ print('Source ranges:',sum(len(x.get('sections',[])) for x in result['files']),'; missing mapped functions:',missing)
+ raise SystemExit(1 if missing else 0)
+--- /dev/null
++++ b/tools/m112_originals.json
+@@ -0,0 +1,600 @@
++{
++  "reference": "https://github.com/calmsacibis995/vms37-src",
++  "revision": "2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752",
++  "file_count": 40,
++  "dispatch_files": 30,
++  "core_files": 10,
++  "scope": "Exact original FORTRAN statement type selection, source-specific native callbacks, bounded partial LUB/RMS support. No simulated VAX execution; no guest connection yet.",
++  "modules": [
++    {
++      "name": "FORDECOMF",
++      "source": "RTL/SRC/FORDECOMF.MAR",
++      "lines": 178,
++      "entries": [
++        {
++          "line": 172,
++          "label": "FOR$DECODE_MF",
++          "symbol": "port112_fordecomf"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 12,
++      "object_format": false
++    },
++    {
++      "name": "FORDECOMO",
++      "source": "RTL/SRC/FORDECOMO.MAR",
++      "lines": 183,
++      "entries": [
++        {
++          "line": 176,
++          "label": "FOR$DECODE_MO",
++          "symbol": "port112_fordecomo"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 12,
++      "object_format": true
++    },
++    {
++      "name": "FORENCOMF",
++      "source": "RTL/SRC/FORENCOMF.MAR",
++      "lines": 178,
++      "entries": [
++        {
++          "line": 172,
++          "label": "FOR$ENCODE_MF",
++          "symbol": "port112_forencomf"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 11,
++      "object_format": false
++    },
++    {
++      "name": "FORENCOMO",
++      "source": "RTL/SRC/FORENCOMO.MAR",
++      "lines": 183,
++      "entries": [
++        {
++          "line": 176,
++          "label": "FOR$ENCODE_MO",
++          "symbol": "port112_forencomo"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 11,
++      "object_format": true
++    },
++    {
++      "name": "FORREADDF",
++      "source": "RTL/SRC/FORREADDF.MAR",
++      "lines": 180,
++      "entries": [
++        {
++          "line": 174,
++          "label": "FOR$READ_DF",
++          "symbol": "port112_forreaddf"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 6,
++      "object_format": false
++    },
++    {
++      "name": "FORREADDO",
++      "source": "RTL/SRC/FORREADDO.MAR",
++      "lines": 185,
++      "entries": [
++        {
++          "line": 178,
++          "label": "FOR$READ_DO",
++          "symbol": "port112_forreaddo"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 6,
++      "object_format": true
++    },
++    {
++      "name": "FORREADDU",
++      "source": "RTL/SRC/FORREADDU.MAR",
++      "lines": 179,
++      "entries": [
++        {
++          "line": 173,
++          "label": "FOR$READ_DU",
++          "symbol": "port112_forreaddu"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 8,
++      "object_format": false
++    },
++    {
++      "name": "FORREADIF",
++      "source": "RTL/SRC/FORREADIF.MAR",
++      "lines": 178,
++      "entries": [
++        {
++          "line": 172,
++          "label": "FOR$READ_IF",
++          "symbol": "port112_forreadif"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 18,
++      "object_format": false
++    },
++    {
++      "name": "FORREADIO",
++      "source": "RTL/SRC/FORREADIO.MAR",
++      "lines": 183,
++      "entries": [
++        {
++          "line": 176,
++          "label": "FOR$READ_IO",
++          "symbol": "port112_forreadio"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 18,
++      "object_format": true
++    },
++    {
++      "name": "FORREADKF",
++      "source": "RTL/SRC/FORREADKF.MAR",
++      "lines": 181,
++      "entries": [
++        {
++          "line": 175,
++          "label": "FOR$READ_KF",
++          "symbol": "port112_forreadkf"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 14,
++      "object_format": false
++    },
++    {
++      "name": "FORREADKO",
++      "source": "RTL/SRC/FORREADKO.MAR",
++      "lines": 186,
++      "entries": [
++        {
++          "line": 179,
++          "label": "FOR$READ_KO",
++          "symbol": "port112_forreadko"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 14,
++      "object_format": true
++    },
++    {
++      "name": "FORREADKU",
++      "source": "RTL/SRC/FORREADKU.MAR",
++      "lines": 180,
++      "entries": [
++        {
++          "line": 174,
++          "label": "FOR$READ_KU",
++          "symbol": "port112_forreadku"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 16,
++      "object_format": false
++    },
++    {
++      "name": "FORREADSF",
++      "source": "RTL/SRC/FORREADSF.MAR",
++      "lines": 177,
++      "entries": [
++        {
++          "line": 171,
++          "label": "FOR$READ_SF",
++          "symbol": "port112_forreadsf"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 2,
++      "object_format": false
++    },
++    {
++      "name": "FORREADSL",
++      "source": "RTL/SRC/FORREADSL.MAR",
++      "lines": 176,
++      "entries": [
++        {
++          "line": 170,
++          "label": "FOR$READ_SL",
++          "symbol": "port112_forreadsl"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 10,
++      "object_format": false
++    },
++    {
++      "name": "FORREADSN",
++      "source": "RTL/SRC/FORREADSN.MAR",
++      "lines": 131,
++      "entries": [
++        {
++          "line": 125,
++          "label": "FOR$READ_SN",
++          "symbol": "port112_forreadsn"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 20,
++      "object_format": false
++    },
++    {
++      "name": "FORREADSO",
++      "source": "RTL/SRC/FORREADSO.MAR",
++      "lines": 182,
++      "entries": [
++        {
++          "line": 175,
++          "label": "FOR$READ_SO",
++          "symbol": "port112_forreadso"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 2,
++      "object_format": true
++    },
++    {
++      "name": "FORREADSU",
++      "source": "RTL/SRC/FORREADSU.MAR",
++      "lines": 178,
++      "entries": [
++        {
++          "line": 172,
++          "label": "FOR$READ_SU",
++          "symbol": "port112_forreadsu"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 4,
++      "object_format": false
++    },
++    {
++      "name": "FORREWRSF",
++      "source": "RTL/SRC/FORREWRSF.MAR",
++      "lines": 177,
++      "entries": [
++        {
++          "line": 171,
++          "label": "FOR$REWRITE_SF",
++          "symbol": "port112_forrewrsf"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 13,
++      "object_format": false
++    },
++    {
++      "name": "FORREWRSO",
++      "source": "RTL/SRC/FORREWRSO.MAR",
++      "lines": 182,
++      "entries": [
++        {
++          "line": 175,
++          "label": "FOR$REWRITE_SO",
++          "symbol": "port112_forrewrso"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 13,
++      "object_format": true
++    },
++    {
++      "name": "FORREWRSU",
++      "source": "RTL/SRC/FORREWRSU.MAR",
++      "lines": 180,
++      "entries": [
++        {
++          "line": 174,
++          "label": "FOR$REWRITE_SU",
++          "symbol": "port112_forrewrsu"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 15,
++      "object_format": false
++    },
++    {
++      "name": "FORWRITDF",
++      "source": "RTL/SRC/FORWRITDF.MAR",
++      "lines": 179,
++      "entries": [
++        {
++          "line": 173,
++          "label": "FOR$WRITE_DF",
++          "symbol": "port112_forwritdf"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 5,
++      "object_format": false
++    },
++    {
++      "name": "FORWRITDO",
++      "source": "RTL/SRC/FORWRITDO.MAR",
++      "lines": 180,
++      "entries": [
++        {
++          "line": 173,
++          "label": "FOR$WRITE_DO",
++          "symbol": "port112_forwritdo"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 5,
++      "object_format": true
++    },
++    {
++      "name": "FORWRITDU",
++      "source": "RTL/SRC/FORWRITDU.MAR",
++      "lines": 179,
++      "entries": [
++        {
++          "line": 173,
++          "label": "FOR$WRITE_DU",
++          "symbol": "port112_forwritdu"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 7,
++      "object_format": false
++    },
++    {
++      "name": "FORWRITIF",
++      "source": "RTL/SRC/FORWRITIF.MAR",
++      "lines": 180,
++      "entries": [
++        {
++          "line": 174,
++          "label": "FOR$WRITE_IF",
++          "symbol": "port112_forwritif"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 17,
++      "object_format": false
++    },
++    {
++      "name": "FORWRITIO",
++      "source": "RTL/SRC/FORWRITIO.MAR",
++      "lines": 185,
++      "entries": [
++        {
++          "line": 178,
++          "label": "FOR$WRITE_IO",
++          "symbol": "port112_forwritio"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 17,
++      "object_format": true
++    },
++    {
++      "name": "FORWRITSF",
++      "source": "RTL/SRC/FORWRITSF.MAR",
++      "lines": 177,
++      "entries": [
++        {
++          "line": 171,
++          "label": "FOR$WRITE_SF",
++          "symbol": "port112_forwritsf"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 1,
++      "object_format": false
++    },
++    {
++      "name": "FORWRITSL",
++      "source": "RTL/SRC/FORWRITSL.MAR",
++      "lines": 176,
++      "entries": [
++        {
++          "line": 170,
++          "label": "FOR$WRITE_SL",
++          "symbol": "port112_forwritsl"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 9,
++      "object_format": false
++    },
++    {
++      "name": "FORWRITSN",
++      "source": "RTL/SRC/FORWRITSN.MAR",
++      "lines": 131,
++      "entries": [
++        {
++          "line": 125,
++          "label": "FOR$WRITE_SN",
++          "symbol": "port112_forwritsn"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 19,
++      "object_format": false
++    },
++    {
++      "name": "FORWRITSO",
++      "source": "RTL/SRC/FORWRITSO.MAR",
++      "lines": 183,
++      "entries": [
++        {
++          "line": 176,
++          "label": "FOR$WRITE_SO",
++          "symbol": "port112_forwritso"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 1,
++      "object_format": true
++    },
++    {
++      "name": "FORWRITSU",
++      "source": "RTL/SRC/FORWRITSU.MAR",
++      "lines": 176,
++      "entries": [
++        {
++          "line": 170,
++          "label": "FOR$WRITE_SU",
++          "symbol": "port112_forwritsu"
++        }
++      ],
++      "kind": "statement-dispatch",
++      "statement_kind": 3,
++      "object_format": false
++    },
++    {
++      "name": "FORIOBEG",
++      "source": "RTL/SRC/FORIOBEG.B32",
++      "lines": 824,
++      "entries": [
++        {
++          "line": 305,
++          "label": "FOR$$IO_BEG",
++          "symbol": "port112_foriobeg"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORIOEND",
++      "source": "RTL/SRC/FORIOEND.B32",
++      "lines": 258,
++      "entries": [
++        {
++          "line": 139,
++          "label": "FOR$IO_END",
++          "symbol": "port112_forioend"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORASSOC",
++      "source": "RTL/SRC/FORASSOC.B32",
++      "lines": 169,
++      "entries": [
++        {
++          "line": 101,
++          "label": "FOR$$ASSOC",
++          "symbol": "port112_forassoc"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORBACKSP",
++      "source": "RTL/SRC/FORBACKSP.B32",
++      "lines": 296,
++      "entries": [
++        {
++          "line": 135,
++          "label": "FOR$BACKSPACE",
++          "symbol": "port112_forbacksp"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORCLOSE",
++      "source": "RTL/SRC/FORCLOSE.B32",
++      "lines": 403,
++      "entries": [
++        {
++          "line": 177,
++          "label": "FOR$CLOSE",
++          "symbol": "port112_forclose"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORDEFINE",
++      "source": "RTL/SRC/FORDEFINE.B32",
++      "lines": 328,
++      "entries": [
++        {
++          "line": 135,
++          "label": "FOR$DEF_FILE_W",
++          "symbol": "port112_fordefine_w"
++        },
++        {
++          "line": 178,
++          "label": "FOR$DEF_FILE",
++          "symbol": "port112_fordefine_l"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORDELETE",
++      "source": "RTL/SRC/FORDELETE.B32",
++      "lines": 462,
++      "entries": [
++        {
++          "line": 110,
++          "label": "FOR$DELETE",
++          "symbol": "port112_fordelete"
++        },
++        {
++          "line": 243,
++          "label": "FOR$DELETE_D",
++          "symbol": "port112_fordelete_d"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORENDFIL",
++      "source": "RTL/SRC/FORENDFIL.B32",
++      "lines": 262,
++      "entries": [
++        {
++          "line": 109,
++          "label": "FOR$ENDFILE",
++          "symbol": "port112_forendfil"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORREWIND",
++      "source": "RTL/SRC/FORREWIND.B32",
++      "lines": 250,
++      "entries": [
++        {
++          "line": 122,
++          "label": "FOR$REWIND",
++          "symbol": "port112_forrewind"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    },
++    {
++      "name": "FORUNLOCK",
++      "source": "RTL/SRC/FORUNLOCK.B32",
++      "lines": 222,
++      "entries": [
++        {
++          "line": 113,
++          "label": "FOR$UNLOCK",
++          "symbol": "port112_forunlock"
++        }
++      ],
++      "kind": "fortran-runtime-core"
++    }
++  ]
++}
+--- /dev/null
++++ b/src/vms_for_m112.c
+@@ -0,0 +1,164 @@
++#include "vms_for_m112.h"
++/* Source: FORIOBEG.B32 original statement ordinals 0..20.
++ * Exact STMT_ARG and ERR_ADR_IDX arrays below derived from original source.
++ * VAX calling frame, RMS file record services, and error-handler unwind
++ * cannot be implemented solely by selecting an I/O statement ordinal.
++ */
++static const uint8_t argument_flags[21]={
++    0,33,33,0,0,35,35,2,2,32,32,53,53,33,41,0,8,49,49,33,33};
++static const uint8_t error_argument_index[21]={
++    0,3,3,2,2,4,4,3,3,2,2,4,4,3,6,2,5,3,3,3,3};
++/* Explicit native bitset for each original 'forbidden unit attributes'
++ * entry: READ_ONLY=1, DIRECT=2, FORMATTED=4, UNFORMATTED=8,
++ * SEQUENTIAL=16, KEYED=32. Original FORIOBEG lines 255..277. */
++static const uint8_t forbidden_modes[21]={
++    0,11,10,7,6,57,56,53,52,43,42,0,0,11,26,7,22,0,0,11,10};
++uint32_t port112_statement_argument_flags(uint32_t kind){
++    return kind<=20u?argument_flags[kind]:0u;
++}
++uint32_t port112_statement_error_arg_index(uint32_t kind){
++    return kind<=20u?error_argument_index[kind]:0u;
++}
++uint32_t port112_statement_forbidden_modes(uint32_t kind){
++    return kind<=20u?forbidden_modes[kind]:0u;
++}
++int port112_unit_init(struct port112_unit *u,uint32_t number){
++    if(!u || number>99999u)return PORT112_BADARG;
++    struct port112_unit zero={0};*u=zero;
++    u->number=number;u->record_number=1u;
++    return PORT112_OK;
++}
++static int done(const struct port112_backend *b,enum port112_action action,
++                const struct port112_unit *u,uint32_t flags,uint32_t record){
++    if(!b||!b->operate)return PORT112_NO_BACKEND;
++    return b->operate(b->context,action,u->number,flags,record)==PORT112_OK ?
++           PORT112_OK : PORT112_IO_ERROR;
++}
++/* Does not issue synthetic RMS I/O: the callback must perform it or fail. */
++int port112_io_begin(struct port112_unit *u,const struct port112_backend *b,
++                     uint32_t statement){
++    uint32_t kind=statement&255u;
++    if(!u || kind<1u||kind>20u || (statement & ~0x1ffu))return PORT112_BADARG;
++    if(u->in_statement)return PORT112_BUSY;
++    /* Object-time format works only on formatted I/O (ARG_FMT). */
++    if((statement&PORT112_OBJ_FMT) && !(argument_flags[kind]&1u))
++        return PORT112_MODE;
++    const int internal= kind==11u||kind==12u||kind==17u||kind==18u;
++    uint32_t attrs=u->attributes;
++    if(!internal){
++        if(u->opened){
++            if(!attrs || (attrs&forbidden_modes[kind]))return PORT112_MODE;
++        }else{
++            if(!b||!b->operate)return PORT112_NO_BACKEND;
++            /* Preserve a native DEFINE FILE specification across default OPEN;
++             * otherwise select attributes from this first I/O statement. */
++            if(!attrs){
++                if(kind==5u||kind==6u||kind==7u||kind==8u)attrs=PORT112_DIRECT;
++                else if(kind==14u||kind==16u)attrs=PORT112_KEYED;
++                else attrs=PORT112_SEQUENTIAL;
++                attrs|=(kind==3u||kind==4u||kind==7u||kind==8u||kind==15u||kind==16u)?
++                          PORT112_UNFORMATTED:PORT112_FORMATTED;
++            }
++            if(attrs&forbidden_modes[kind])return PORT112_MODE;
++            if(done(b,PORT112_ACT_OPEN,u,statement,u->record_number)!=PORT112_OK)
++                return PORT112_IO_ERROR;
++            u->opened=1u;u->attributes=attrs;
++        }
++    }
++    int r=done(b,PORT112_ACT_BEGIN,u,statement,u->record_number);
++    if(r!=PORT112_OK)return r;
++    u->statement_kind=statement;
++    u->current_args=argument_flags[kind] | (statement&PORT112_OBJ_FMT?0x40u:0u);
++    u->err_arg_index=error_argument_index[kind];
++    u->in_statement=1u;u->last_iostat=0u;
++    return PORT112_OK;
++}
++int port112_io_end(struct port112_unit *u,const struct port112_backend *b){
++    if(!u)return PORT112_BADARG;
++    if(!u->in_statement)return PORT112_STATE;
++    int r=done(b,PORT112_ACT_END,u,u->statement_kind,u->record_number);
++    if(r!=PORT112_OK)return r;
++    u->in_statement=0u;u->current_args=0u;u->statement_kind=0u;
++    return PORT112_OK;
++}
++int port112_associated(struct port112_unit *u){
++    if(!u)return PORT112_BADARG;
++    if(!u->associated_variable)return PORT112_OK;
++    if(u->associated_bytes!=2u&&u->associated_bytes!=4u)return PORT112_BADARG;
++    uint32_t value=u->record_number;
++    uint8_t *p=(uint8_t *)u->associated_variable;
++    for(unsigned i=0;i<u->associated_bytes;i++)p[i]=(uint8_t)(value>>(i*8u));
++    return PORT112_OK;
++}
++int port112_backspace(struct port112_unit *u,const struct port112_backend *b){
++    if(!u)return PORT112_BADARG;
++    if(u->in_statement)return PORT112_BUSY;
++    if(!u->opened)return PORT112_OK;
++    if(u->attributes&(PORT112_DIRECT|PORT112_KEYED|PORT112_NOTSEQORG|PORT112_APPEND))
++        return PORT112_MODE;
++    int r=done(b,PORT112_ACT_BACKSPACE,u,0u,u->record_number);
++    if(r!=PORT112_OK)return r;
++    if(u->record_number>1u)u->record_number--;
++    return port112_associated(u);
++}
++int port112_close(struct port112_unit *u,const struct port112_backend *b){
++    if(!u)return PORT112_BADARG;
++    if(u->in_statement)return PORT112_BUSY;
++    if(!u->opened)return PORT112_OK;
++    int r=done(b,PORT112_ACT_CLOSE,u,0u,u->record_number);
++    if(r!=PORT112_OK)return r;
++    u->opened=0u;u->attributes=0u;u->record_number=1u;
++    return PORT112_OK;
++}
++int port112_define(struct port112_unit *u,uint32_t max_records,
++                   uint32_t record_words,void *associated,unsigned associated_bytes){
++    if(!u||u->in_statement)return PORT112_BADARG;
++    if(u->opened || (u->attributes&PORT112_DIRECT))return PORT112_STATE;
++    if(!max_records||!record_words||record_words>32767u ||
++       (associated && associated_bytes!=2u && associated_bytes!=4u) ||
++       (!associated && associated_bytes))return PORT112_RANGE;
++    u->maximum_records=max_records;
++    u->record_bytes=record_words*2u;
++    u->attributes=PORT112_DIRECT|PORT112_UNFORMATTED;
++    u->associated_variable=associated;
++    u->associated_bytes=associated_bytes;
++    return port112_associated(u);
++}
++int port112_delete(struct port112_unit *u,const struct port112_backend *b,int direct){
++    if(!u)return PORT112_BADARG;
++    if(u->in_statement)return PORT112_BUSY;
++    if(!u->opened || (u->attributes&PORT112_READ_ONLY))return PORT112_MODE;
++    if(direct && !(u->attributes&PORT112_DIRECT))return PORT112_MODE;
++    if(!direct && (u->attributes&PORT112_SEQUENTIAL))return PORT112_MODE;
++    if(done(b,PORT112_ACT_DELETE,u,(uint32_t)(direct!=0),u->record_number)!=PORT112_OK)
++        return PORT112_IO_ERROR;
++    return PORT112_OK;
++}
++int port112_endfile(struct port112_unit *u,const struct port112_backend *b){
++    if(!u)return PORT112_BADARG;
++    if(u->in_statement)return PORT112_BUSY;
++    if(!u->opened)return PORT112_OK;
++    if(u->attributes&(PORT112_DIRECT|PORT112_KEYED|PORT112_READ_ONLY))
++        return PORT112_MODE;
++    if(done(b,PORT112_ACT_ENDFILE,u,0u,u->record_number)!=PORT112_OK)
++        return PORT112_IO_ERROR;
++    return PORT112_OK;
++}
++int port112_rewind(struct port112_unit *u,const struct port112_backend *b){
++    if(!u)return PORT112_BADARG;
++    if(u->in_statement)return PORT112_BUSY;
++    if(!u->opened)return PORT112_OK;
++    if(u->attributes&(PORT112_DIRECT|PORT112_KEYED|PORT112_NOTSEQORG))
++        return PORT112_MODE;
++    int r=done(b,PORT112_ACT_REWIND,u,0u,u->record_number);
++    if(r!=PORT112_OK)return r;
++    u->record_number=1u;u->attributes&=~PORT112_APPEND;
++    return port112_associated(u);
++}
++int port112_unlock(struct port112_unit *u,const struct port112_backend *b){
++    if(!u)return PORT112_BADARG;
++    if(u->in_statement)return PORT112_BUSY;
++    if(!u->opened || !(u->attributes&(PORT112_KEYED|PORT112_NOTSEQORG)))
++        return PORT112_MODE;
++    return done(b,PORT112_ACT_UNLOCK,u,0u,u->record_number);
++}
+--- /dev/null
++++ b/src/vms_for_m112.h
+@@ -0,0 +1,108 @@
++#ifndef VMS_FOR_M112_H
++#define VMS_FOR_M112_H
++#include <stddef.h>
++#include <stdint.h>
++/* A native IA-32 FORTRAN RTL subset. None of these status values claim to
++ * be VMS SS$_ statuses. Real RMS, condition frames, and VAX argument lists
++ * remain UNSUPPORTED. I/O calls succeed only on a confirmed backend action.
++ */
++enum { PORT112_OK=1, PORT112_BADARG=2, PORT112_MODE=4,
++       PORT112_NO_BACKEND=6, PORT112_STATE=8, PORT112_RANGE=10,
++       PORT112_BUSY=12, PORT112_IO_ERROR=14, PORT112_OBJ_FMT=0x100u };
++/* Statement ordinals from RTL/SRC/FORIOBEG.B32 STMT_ARG, STMT_ATR, ERR_ADR_IDX. */
++enum {PORT112_WSF=1,PORT112_RSF=2,PORT112_WSU=3,PORT112_RSU=4,
++      PORT112_WDF=5,PORT112_RDF=6,PORT112_WDU=7,PORT112_RDU=8,
++      PORT112_WSL=9,PORT112_RSL=10,PORT112_WMF=11,PORT112_RMF=12,
++      PORT112_WXF=13,PORT112_RKF=14,PORT112_WXU=15,PORT112_RKU=16,
++      PORT112_WIF=17,PORT112_RIF=18,PORT112_WSN=19,PORT112_RSN=20};
++/* Logical LUB mode flags, not ABI bit positions in original VAX LUBDEF. */
++enum {PORT112_READ_ONLY=1u<<0,PORT112_DIRECT=1u<<1,
++      PORT112_FORMATTED=1u<<2,PORT112_UNFORMATTED=1u<<3,
++      PORT112_SEQUENTIAL=1u<<4,PORT112_KEYED=1u<<5,
++      PORT112_APPEND=1u<<6,PORT112_NOTSEQORG=1u<<7};
++enum port112_action { PORT112_ACT_OPEN=1,PORT112_ACT_BEGIN=2,
++ PORT112_ACT_END=3,PORT112_ACT_BACKSPACE=4,PORT112_ACT_CLOSE=5,
++ PORT112_ACT_DELETE=6,PORT112_ACT_ENDFILE=7,PORT112_ACT_REWIND=8,
++ PORT112_ACT_UNLOCK=9 };
++struct port112_backend {
++    void *context;
++    /* Return PORT112_OK only after the actual operation happened. */
++    int (*operate)(void *context,enum port112_action action,
++                   uint32_t unit,uint32_t flags,uint32_t record);
++};
++struct port112_unit {
++    uint32_t number;
++    uint32_t attributes;
++    uint32_t record_number;
++    uint32_t maximum_records;
++    uint32_t record_bytes;
++    void *associated_variable;
++    uint32_t associated_bytes;
++    uint32_t statement_kind;
++    uint32_t current_args;
++    uint32_t err_arg_index;
++    uint32_t opened;
++    uint32_t in_statement;
++    uint32_t last_iostat;
++};
++int port112_unit_init(struct port112_unit *unit,uint32_t number);
++int port112_io_begin(struct port112_unit *unit,
++                     const struct port112_backend *backend,uint32_t stmt);
++int port112_io_end(struct port112_unit *unit,const struct port112_backend *backend);
++int port112_associated(struct port112_unit *unit);
++int port112_backspace(struct port112_unit *unit,const struct port112_backend *backend);
++int port112_close(struct port112_unit *unit,const struct port112_backend *backend);
++int port112_define(struct port112_unit *unit,uint32_t max_records,
++                   uint32_t record_words,void *associated,unsigned associated_bytes);
++int port112_delete(struct port112_unit *unit,const struct port112_backend *backend,int direct);
++int port112_endfile(struct port112_unit *unit,const struct port112_backend *backend);
++int port112_rewind(struct port112_unit *unit,const struct port112_backend *backend);
++int port112_unlock(struct port112_unit *unit,const struct port112_backend *backend);
++uint32_t port112_statement_argument_flags(uint32_t kind);
++uint32_t port112_statement_error_arg_index(uint32_t kind);
++uint32_t port112_statement_forbidden_modes(uint32_t kind);
++/* Source-specific native symbols (each in its own translation unit). */
++int port112_fordecomf(struct port112_unit *,const struct port112_backend *);
++int port112_fordecomo(struct port112_unit *,const struct port112_backend *);
++int port112_forencomf(struct port112_unit *,const struct port112_backend *);
++int port112_forencomo(struct port112_unit *,const struct port112_backend *);
++int port112_forreaddf(struct port112_unit *,const struct port112_backend *);
++int port112_forreaddo(struct port112_unit *,const struct port112_backend *);
++int port112_forreaddu(struct port112_unit *,const struct port112_backend *);
++int port112_forreadif(struct port112_unit *,const struct port112_backend *);
++int port112_forreadio(struct port112_unit *,const struct port112_backend *);
++int port112_forreadkf(struct port112_unit *,const struct port112_backend *);
++int port112_forreadko(struct port112_unit *,const struct port112_backend *);
++int port112_forreadku(struct port112_unit *,const struct port112_backend *);
++int port112_forreadsf(struct port112_unit *,const struct port112_backend *);
++int port112_forreadsl(struct port112_unit *,const struct port112_backend *);
++int port112_forreadsn(struct port112_unit *,const struct port112_backend *);
++int port112_forreadso(struct port112_unit *,const struct port112_backend *);
++int port112_forreadsu(struct port112_unit *,const struct port112_backend *);
++int port112_forrewrsf(struct port112_unit *,const struct port112_backend *);
++int port112_forrewrso(struct port112_unit *,const struct port112_backend *);
++int port112_forrewrsu(struct port112_unit *,const struct port112_backend *);
++int port112_forwritdf(struct port112_unit *,const struct port112_backend *);
++int port112_forwritdo(struct port112_unit *,const struct port112_backend *);
++int port112_forwritdu(struct port112_unit *,const struct port112_backend *);
++int port112_forwritif(struct port112_unit *,const struct port112_backend *);
++int port112_forwritio(struct port112_unit *,const struct port112_backend *);
++int port112_forwritsf(struct port112_unit *,const struct port112_backend *);
++int port112_forwritsl(struct port112_unit *,const struct port112_backend *);
++int port112_forwritsn(struct port112_unit *,const struct port112_backend *);
++int port112_forwritso(struct port112_unit *,const struct port112_backend *);
++int port112_forwritsu(struct port112_unit *,const struct port112_backend *);
++int port112_foriobeg(struct port112_unit *,const struct port112_backend *,uint32_t);
++int port112_forioend(struct port112_unit *,const struct port112_backend *);
++int port112_forassoc(struct port112_unit *);
++int port112_forbacksp(struct port112_unit *,const struct port112_backend *);
++int port112_forclose(struct port112_unit *,const struct port112_backend *);
++int port112_fordefine_w(struct port112_unit *,uint32_t,uint32_t,void *);
++int port112_fordefine_l(struct port112_unit *,uint32_t,uint32_t,void *);
++int port112_fordelete(struct port112_unit *,const struct port112_backend *);
++int port112_fordelete_d(struct port112_unit *,const struct port112_backend *);
++int port112_forendfil(struct port112_unit *,const struct port112_backend *);
++int port112_forrewind(struct port112_unit *,const struct port112_backend *);
++int port112_forunlock(struct port112_unit *,const struct port112_backend *);
++
++#endif
+--- /dev/null
++++ b/tests/test_rtl_m112.c
+@@ -0,0 +1,159 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_for_m112.h"
++static unsigned errors=0;
++#define CHECK(x) do { if(!(x)){fprintf(stderr,"M112 test %s:%d: %s\n",__FILE__,__LINE__,#x);errors++;} }while(0)
++struct mock {unsigned calls[10];int deny;enum port112_action last_action;uint32_t last_unit,last_type,last_record;};
++static int op(void *ctx,enum port112_action act,uint32_t unit,uint32_t type,uint32_t record){
++ struct mock *m=(struct mock *)ctx;
++ if(m->deny)return PORT112_IO_ERROR;
++ if(act<1||act>9)return PORT112_IO_ERROR;
++ m->calls[(unsigned)act]++;
++ m->last_action=act;m->last_unit=unit;m->last_type=type;m->last_record=record;
++ return PORT112_OK;
++}
++struct testcase{char const *name;int (*fn)(struct port112_unit *,const struct port112_backend *);uint32_t flags;};
++static const struct testcase cases[]={
++ {"FORDECOMF",port112_fordecomf,12u },
++ {"FORDECOMO",port112_fordecomo,12u+PORT112_OBJ_FMT },
++ {"FORENCOMF",port112_forencomf,11u },
++ {"FORENCOMO",port112_forencomo,11u+PORT112_OBJ_FMT },
++ {"FORREADDF",port112_forreaddf,6u },
++ {"FORREADDO",port112_forreaddo,6u+PORT112_OBJ_FMT },
++ {"FORREADDU",port112_forreaddu,8u },
++ {"FORREADIF",port112_forreadif,18u },
++ {"FORREADIO",port112_forreadio,18u+PORT112_OBJ_FMT },
++ {"FORREADKF",port112_forreadkf,14u },
++ {"FORREADKO",port112_forreadko,14u+PORT112_OBJ_FMT },
++ {"FORREADKU",port112_forreadku,16u },
++ {"FORREADSF",port112_forreadsf,2u },
++ {"FORREADSL",port112_forreadsl,10u },
++ {"FORREADSN",port112_forreadsn,20u },
++ {"FORREADSO",port112_forreadso,2u+PORT112_OBJ_FMT },
++ {"FORREADSU",port112_forreadsu,4u },
++ {"FORREWRSF",port112_forrewrsf,13u },
++ {"FORREWRSO",port112_forrewrso,13u+PORT112_OBJ_FMT },
++ {"FORREWRSU",port112_forrewrsu,15u },
++ {"FORWRITDF",port112_forwritdf,5u },
++ {"FORWRITDO",port112_forwritdo,5u+PORT112_OBJ_FMT },
++ {"FORWRITDU",port112_forwritdu,7u },
++ {"FORWRITIF",port112_forwritif,17u },
++ {"FORWRITIO",port112_forwritio,17u+PORT112_OBJ_FMT },
++ {"FORWRITSF",port112_forwritsf,1u },
++ {"FORWRITSL",port112_forwritsl,9u },
++ {"FORWRITSN",port112_forwritsn,19u },
++ {"FORWRITSO",port112_forwritso,1u+PORT112_OBJ_FMT },
++ {"FORWRITSU",port112_forwritsu,3u },
++};
++static void dispatch_tests(void){
++ for(unsigned i=0;i<sizeof cases/sizeof cases[0];i++){
++  struct port112_unit u; struct mock m={{0},0,0,0,0,0};
++  struct port112_backend b={&m,op};
++  CHECK(port112_unit_init(&u,25u)==PORT112_OK);
++  CHECK(cases[i].fn(&u,&b)==PORT112_OK);
++  CHECK(u.in_statement==1u);
++  CHECK(u.statement_kind==cases[i].flags);
++  CHECK(u.current_args==(port112_statement_argument_flags(cases[i].flags&255u)|
++          ((cases[i].flags&PORT112_OBJ_FMT)?0x40u:0u)));
++  CHECK(u.err_arg_index==port112_statement_error_arg_index(cases[i].flags&255u));
++  CHECK(m.calls[PORT112_ACT_BEGIN]==1u);
++  CHECK(m.last_type==cases[i].flags && m.last_unit==25u);
++  unsigned internal=(cases[i].flags&255u)==11u||(cases[i].flags&255u)==12u||
++    (cases[i].flags&255u)==17u||(cases[i].flags&255u)==18u;
++  CHECK(m.calls[PORT112_ACT_OPEN]==(internal?0u:1u));
++  CHECK(cases[i].fn(&u,&b)==PORT112_BUSY);
++  CHECK(port112_forioend(&u,&b)==PORT112_OK);
++  CHECK(m.calls[PORT112_ACT_END]==1u);
++  CHECK(u.in_statement==0u);
++  CHECK(port112_forioend(&u,&b)==PORT112_STATE);
++ }
++ CHECK(sizeof cases/sizeof cases[0]==30u);
++}
++static void unit_tests(void){
++ struct port112_unit u;struct mock m={{0},0,0,0,0,0};struct port112_backend b={&m,op};
++ CHECK(port112_unit_init(NULL,1)==PORT112_BADARG);
++ CHECK(port112_unit_init(&u,100000)==PORT112_BADARG);
++ CHECK(port112_unit_init(&u,5)==PORT112_OK);
++ CHECK(port112_foriobeg(&u,&b,0)==PORT112_BADARG);
++ CHECK(port112_foriobeg(&u,&b,21)==PORT112_BADARG);
++ CHECK(port112_foriobeg(&u,&b,PORT112_RSU+PORT112_OBJ_FMT)==PORT112_MODE);
++ CHECK(!u.opened && !u.in_statement);
++ CHECK(port112_forreadsf(&u,NULL)==PORT112_NO_BACKEND);
++ CHECK(!u.opened);
++ m.deny=1;
++ CHECK(port112_forreadsf(&u,&b)==PORT112_IO_ERROR);
++ CHECK(!u.opened && !u.in_statement);
++ m.deny=0;
++ CHECK(port112_forreadsf(&u,&b)==PORT112_OK);
++ CHECK(u.opened && u.in_statement);
++ CHECK(u.attributes==(PORT112_SEQUENTIAL|PORT112_FORMATTED));
++ CHECK(port112_forclose(&u,&b)==PORT112_BUSY);
++ m.deny=1;
++ CHECK(port112_forioend(&u,&b)==PORT112_IO_ERROR);
++ CHECK(u.in_statement);
++ m.deny=0;
++ CHECK(port112_forioend(&u,&b)==PORT112_OK);
++ u.attributes|=PORT112_READ_ONLY;
++ CHECK(port112_forwritsf(&u,&b)==PORT112_MODE);
++ CHECK(port112_forreadsf(&u,&b)==PORT112_OK);
++ CHECK(port112_forioend(&u,&b)==PORT112_OK);
++ u.record_number=15u;
++ uint32_t assoc=0;
++ u.associated_variable=&assoc;u.associated_bytes=4u;
++ CHECK(port112_forassoc(&u)==PORT112_OK && assoc==15u);
++ u.attributes|=PORT112_APPEND;
++ CHECK(port112_forbacksp(&u,&b)==PORT112_MODE);
++ u.attributes&=~(PORT112_APPEND|PORT112_READ_ONLY);
++ m.deny=1;CHECK(port112_forbacksp(&u,&b)==PORT112_IO_ERROR && u.record_number==15u);
++ m.deny=0;CHECK(port112_forbacksp(&u,&b)==PORT112_OK && u.record_number==14u && assoc==14u);
++ u.attributes|=PORT112_APPEND;
++ CHECK(port112_forrewind(&u,&b)==PORT112_OK && u.record_number==1u && assoc==1u);
++ CHECK((u.attributes&PORT112_APPEND)==0u);
++ CHECK(port112_forendfil(&u,&b)==PORT112_OK);
++ CHECK(port112_forunlock(&u,&b)==PORT112_MODE);
++ CHECK(port112_forclose(&u,&b)==PORT112_OK && !u.opened);
++ CHECK(port112_forclose(&u,&b)==PORT112_OK);
++ CHECK(port112_forrewind(&u,&b)==PORT112_OK);
++ CHECK(port112_forendfil(&u,&b)==PORT112_OK);
++}
++static void define_tests(void){
++ struct port112_unit u;struct mock m={{0},0,0,0,0,0};struct port112_backend b={&m,op};
++ uint32_t assoc=999u;
++ CHECK(port112_unit_init(&u,8)==PORT112_OK);
++ CHECK(port112_fordefine_l(&u,200,32768,&assoc)==PORT112_RANGE);
++ CHECK(port112_fordefine_l(&u,200,10,&assoc)==PORT112_OK);
++ CHECK(u.record_bytes==20u && u.maximum_records==200u);
++ CHECK(u.attributes==(PORT112_DIRECT|PORT112_UNFORMATTED));
++ CHECK(port112_forwritdu(&u,&b)==PORT112_OK);
++ CHECK(u.attributes==(PORT112_DIRECT|PORT112_UNFORMATTED));
++ CHECK(m.calls[PORT112_ACT_OPEN]==1u);
++ CHECK(port112_forioend(&u,&b)==PORT112_OK);
++ CHECK(port112_fordelete(&u,&b)==PORT112_OK);
++ CHECK(port112_fordelete_d(&u,&b)==PORT112_OK);
++ CHECK(port112_forbacksp(&u,&b)==PORT112_MODE);
++ CHECK(port112_forrewind(&u,&b)==PORT112_MODE);
++ CHECK(port112_forendfil(&u,&b)==PORT112_MODE);
++ CHECK(port112_forclose(&u,&b)==PORT112_OK);
++ CHECK(port112_unit_init(&u,8)==PORT112_OK);
++ uint16_t short_assoc=0;
++ CHECK(port112_fordefine_w(&u,99,5,&short_assoc)==PORT112_OK);
++ u.record_number=0x123456u;
++ CHECK(port112_forassoc(&u)==PORT112_OK && short_assoc==0x3456u);
++ CHECK(port112_fordefine_w(&u,100,5,&short_assoc)==PORT112_STATE);
++ CHECK(port112_unit_init(&u,8)==PORT112_OK);
++ CHECK(port112_define(&u,20,2,&assoc,1)==PORT112_RANGE);
++ CHECK(port112_define(&u,20,2,NULL,2)==PORT112_RANGE);
++ CHECK(port112_define(&u,0,2,&assoc,4)==PORT112_RANGE);
++}
++int main(void){
++ dispatch_tests();unit_tests();define_tests();
++ for(unsigned i=1;i<=20;i++){
++    CHECK(port112_statement_error_arg_index(i)>=2u);
++    CHECK(port112_statement_error_arg_index(i)<=6u);
++ }
++ CHECK(port112_statement_error_arg_index(21)==0u);
++ if(errors)return 1;
++ puts("M112: 40 original FORTRAN RTL files, 30 exact statement selectors and 10 native partial I/O controls passed");
++ return 0;
++}
+--- /dev/null
++++ b/tests/test_rtl_m112_integrity.py
+@@ -0,0 +1,45 @@
++#!/usr/bin/env python3
++"""M112 original-specific source, IA-32 ELF32 symbols and partial-ranges audit."""
++import json,re,subprocess
++from pathlib import Path
++r=Path(__file__).resolve().parents[1]
++m=json.loads((r/'tools/m112_originals.json').read_text())
++assert m['file_count']==40 and m['dispatch_files']==30 and m['core_files']==10
++assert m['revision']=='2f5bd967bc163bdb4aa9a5e4b1f9981d9995e752'
++files={x['original_file']:x for x in json.loads((r/'source-coverage.json').read_text())['files']}
++assert len(files)>=390,(len(files),'expected new source indexed')
++seen=set();syms=set();npartial=nunresolved=0
++for mod in m['modules']:
++ assert mod['source'] not in seen;seen.add(mod['source'])
++ p=r/'src/native_rtl_m112'/(mod['name'].lower()+'.c')
++ assert p.is_file()
++ s=p.read_text()
++ native=set(re.findall(r'\bint\s+(port112_[A-Za-z_0-9]+)\s*\(',s))
++ for e in mod['entries']:
++  assert e['symbol'] in native,e
++  syms.add(e['symbol'])
++ entry=files[mod['source']]
++ assert entry['original_lines']==mod['lines']
++ expected=1
++ for a in entry['sections']:
++  assert a['original_lines'][0]==expected,(mod['source'],a,expected)
++  expected=a['original_lines'][1]+1
++  if a['status']=='partial':
++   npartial+=1
++   assert a['pc_symbol'] in native
++   assert a['pc_line']>=1
++  elif a['status']=='unresolved':
++   nunresolved+=1
++   assert a['reason']
++  else:
++   assert a['status']=='excluded'
++ assert expected==mod['lines']+1
++assert len(seen)==40 and len(syms)==42
++assert npartial==42 and nunresolved==40
++obj=r/'build/rtl-m112-partial.o'
++h=subprocess.check_output(['readelf','-h',str(obj)],text=True)
++assert 'ELF32' in h and 'Intel 80386' in h
++assert not subprocess.check_output(['nm','-u',str(obj)],text=True).strip()
++pub={x.split()[-1] for x in subprocess.check_output(['nm','-g','--defined-only',str(obj)],text=True).splitlines() if x}
++assert syms<=pub,(syms-pub)
++print('M112: 40 distinct pinned FORTRAN source files, 42 ELF32 entry symbols, 42 partial + 40 unresolved ranges PASS')
+--- /dev/null
++++ b/src/native_rtl_m112/forassoc.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation of RTL/SRC/FORASSOC.B32, pinned VMS 3.7.
++ * Original lines 1..169 with public entry points:
++ * 101: FOR$$ASSOC
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_forassoc(struct port112_unit *u){return port112_associated(u);}
+--- /dev/null
++++ b/src/native_rtl_m112/forbacksp.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation of RTL/SRC/FORBACKSP.B32, pinned VMS 3.7.
++ * Original lines 1..296 with public entry points:
++ * 135: FOR$BACKSPACE
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_forbacksp(struct port112_unit *u,const struct port112_backend *b){return port112_backspace(u,b);}
+--- /dev/null
++++ b/src/native_rtl_m112/forclose.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation of RTL/SRC/FORCLOSE.B32, pinned VMS 3.7.
++ * Original lines 1..403 with public entry points:
++ * 177: FOR$CLOSE
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_forclose(struct port112_unit *u,const struct port112_backend *b){return port112_close(u,b);}
+--- /dev/null
++++ b/src/native_rtl_m112/fordecomf.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORDECOMF.MAR lines 1..178 (entry 172: FOR$DECODE_MF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_fordecomf(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,12u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/fordecomo.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORDECOMO.MAR lines 1..183 (entry 176: FOR$DECODE_MO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_fordecomo(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,12u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/fordefine.c
+@@ -0,0 +1,15 @@
++/* Native IA-32 partial translation of RTL/SRC/FORDEFINE.B32, pinned VMS 3.7.
++ * Original lines 1..328 with public entry points:
++ * 135: FOR$DEF_FILE_W
++ * 178: FOR$DEF_FILE
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_fordefine_w(struct port112_unit *u,uint32_t n,uint32_t words,void *assoc){
++    return port112_define(u,n,words,assoc,2u);
++}
++int port112_fordefine_l(struct port112_unit *u,uint32_t n,uint32_t words,void *assoc){
++    return port112_define(u,n,words,assoc,4u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/fordelete.c
+@@ -0,0 +1,11 @@
++/* Native IA-32 partial translation of RTL/SRC/FORDELETE.B32, pinned VMS 3.7.
++ * Original lines 1..462 with public entry points:
++ * 110: FOR$DELETE
++ * 243: FOR$DELETE_D
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_fordelete(struct port112_unit *u,const struct port112_backend *b){return port112_delete(u,b,0);}
++int port112_fordelete_d(struct port112_unit *u,const struct port112_backend *b){return port112_delete(u,b,1);}
+--- /dev/null
++++ b/src/native_rtl_m112/forencomf.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORENCOMF.MAR lines 1..178 (entry 172: FOR$ENCODE_MF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forencomf(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,11u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forencomo.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORENCOMO.MAR lines 1..183 (entry 176: FOR$ENCODE_MO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forencomo(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,11u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forendfil.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation of RTL/SRC/FORENDFIL.B32, pinned VMS 3.7.
++ * Original lines 1..262 with public entry points:
++ * 109: FOR$ENDFILE
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_forendfil(struct port112_unit *u,const struct port112_backend *b){return port112_endfile(u,b);}
+--- /dev/null
++++ b/src/native_rtl_m112/foriobeg.c
+@@ -0,0 +1,14 @@
++/* Native IA-32 partial translation of RTL/SRC/FORIOBEG.B32, pinned VMS 3.7.
++ * Original lines 1..824 with public entry points:
++ * 305: FOR$$IO_BEG
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_foriobeg(struct port112_unit *u,const struct port112_backend *b,
++                        uint32_t statement){
++    /* Original receives FLAGS_ARG in R0 and UNIT on AP; native ABI supplies
++     * both explicitly. Real RMS open/dispatch remains a backend dependency. */
++    return port112_io_begin(u,b,statement);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forioend.c
+@@ -0,0 +1,11 @@
++/* Native IA-32 partial translation of RTL/SRC/FORIOEND.B32, pinned VMS 3.7.
++ * Original lines 1..258 with public entry points:
++ * 139: FOR$IO_END
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_forioend(struct port112_unit *u,const struct port112_backend *b){
++    return port112_io_end(u,b);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreaddf.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADDF.MAR lines 1..180 (entry 174: FOR$READ_DF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreaddf(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,6u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreaddo.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADDO.MAR lines 1..185 (entry 178: FOR$READ_DO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreaddo(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,6u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreaddu.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADDU.MAR lines 1..179 (entry 173: FOR$READ_DU).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreaddu(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,8u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadif.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADIF.MAR lines 1..178 (entry 172: FOR$READ_IF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadif(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,18u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadio.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADIO.MAR lines 1..183 (entry 176: FOR$READ_IO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadio(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,18u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadkf.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADKF.MAR lines 1..181 (entry 175: FOR$READ_KF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadkf(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,14u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadko.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADKO.MAR lines 1..186 (entry 179: FOR$READ_KO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadko(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,14u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadku.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADKU.MAR lines 1..180 (entry 174: FOR$READ_KU).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadku(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,16u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadsf.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADSF.MAR lines 1..177 (entry 171: FOR$READ_SF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadsf(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,2u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadsl.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADSL.MAR lines 1..176 (entry 170: FOR$READ_SL).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadsl(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,10u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadsn.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADSN.MAR lines 1..131 (entry 125: FOR$READ_SN).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadsn(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,20u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadso.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADSO.MAR lines 1..182 (entry 175: FOR$READ_SO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadso(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,2u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forreadsu.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREADSU.MAR lines 1..178 (entry 172: FOR$READ_SU).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forreadsu(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,4u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forrewind.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation of RTL/SRC/FORREWIND.B32, pinned VMS 3.7.
++ * Original lines 1..250 with public entry points:
++ * 122: FOR$REWIND
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_forrewind(struct port112_unit *u,const struct port112_backend *b){return port112_rewind(u,b);}
+--- /dev/null
++++ b/src/native_rtl_m112/forrewrsf.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREWRSF.MAR lines 1..177 (entry 171: FOR$REWRITE_SF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forrewrsf(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,13u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forrewrso.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREWRSO.MAR lines 1..182 (entry 175: FOR$REWRITE_SO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forrewrso(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,13u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forrewrsu.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORREWRSU.MAR lines 1..180 (entry 174: FOR$REWRITE_SU).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forrewrsu(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,15u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forunlock.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 partial translation of RTL/SRC/FORUNLOCK.B32, pinned VMS 3.7.
++ * Original lines 1..222 with public entry points:
++ * 113: FOR$UNLOCK
++ * Native unit state and backend dispatch are bounded, tested operations.
++ * RMS, full VAX condition handling, recursion and runtime ASTs remain unresolved.
++ * No original proprietary DEC source has been included.
++ */
++#include "../vms_for_m112.h"
++int port112_forunlock(struct port112_unit *u,const struct port112_backend *b){return port112_unlock(u,b);}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritdf.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITDF.MAR lines 1..179 (entry 173: FOR$WRITE_DF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritdf(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,5u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritdo.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITDO.MAR lines 1..180 (entry 173: FOR$WRITE_DO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritdo(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,5u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritdu.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITDU.MAR lines 1..179 (entry 173: FOR$WRITE_DU).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritdu(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,7u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritif.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITIF.MAR lines 1..180 (entry 174: FOR$WRITE_IF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritif(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,17u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritio.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITIO.MAR lines 1..185 (entry 178: FOR$WRITE_IO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritio(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,17u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritsf.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITSF.MAR lines 1..177 (entry 171: FOR$WRITE_SF).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritsf(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,1u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritsl.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITSL.MAR lines 1..176 (entry 170: FOR$WRITE_SL).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritsl(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,9u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritsn.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITSN.MAR lines 1..131 (entry 125: FOR$WRITE_SN).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritsn(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,19u);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritso.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITSO.MAR lines 1..183 (entry 176: FOR$WRITE_SO).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritso(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,1u+PORT112_OBJ_FMT);
++}
+--- /dev/null
++++ b/src/native_rtl_m112/forwritsu.c
+@@ -0,0 +1,9 @@
++/* Native IA-32 source-specific VMS 3.7 FORTRAN dispatch translation.
++ * Original RTL/SRC/FORWRITSU.MAR lines 1..176 (entry 170: FOR$WRITE_SU).
++ * Implements source MOVZB[L/W] statement type and JMP FOR$$IO_BEG+2.
++ * No DEC source is copied. User VAX call frame, RMS and guest binding unresolved.
++ */
++#include "../vms_for_m112.h"
++int port112_forwritsu(struct port112_unit *unit,const struct port112_backend *backend){
++    return port112_io_begin(unit,backend,3u);
++}
