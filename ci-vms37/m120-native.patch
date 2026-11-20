@@ -1,6 +1,15 @@
 --- a/Makefile
 +++ b/Makefile
-@@ -793,8 +793,8 @@
+@@ -786,6 +786,8 @@
+ # M119: original CONINTDSP source-defined port control on real UCB bytes.
+ M119_CON_SRCS=src/vms_con_port.c src/vms_con_xoff.c src/vms_con_xon.c src/vms_con_stop.c src/vms_con_stop2.c src/vms_con_abort.c src/vms_con_resume.c
+ M119_CON_OBJS=$(patsubst src/%.c,build/%.o,$(M119_CON_SRCS))
++M120_IOC_SRCS=$(wildcard src/vms_ioc_*.c)
++M120_IOC_OBJS=$(patsubst src/%.c,build/%.o,$(M120_IOC_SRCS))
+ $(M119_CON_OBJS): build/%.o: src/%.c src/vms_con_port.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ .PHONY: conportcheck
+@@ -793,8 +795,8 @@
  	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
  	./build/conportcheck
  
@@ -11,7 +20,7 @@
  build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
  	$(CC) $(CFLAGS) -c $< -o $@
  build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
-@@ -818,7 +818,7 @@
+@@ -818,7 +820,7 @@
  	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
  .PHONY: sysexecentrycheck
  sysexecentrycheck: | build
@@ -20,15 +29,13 @@
  	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
  .PHONY: inicpbuscheck
  inicpbuscheck: | build
-@@ -1124,3 +1124,14 @@
+@@ -1124,3 +1126,12 @@
  inidpttemplatecheck: build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o | build
  	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M117_DPT_SRCS) tests/test_ini_dpt_templates_host.c -o build/inidpttemplatecheck
  	./build/inidpttemplatecheck
 +
 +# M120: original IOSUBPAGD read-only IOC$SEARCHDEV physical device walk.
 +# A prelinked DDB/UCB match remains UNBOUND until real $ASSIGN/$QIO and DDT.
-+M120_IOC_SRCS=$(wildcard src/vms_ioc_*.c)
-+M120_IOC_OBJS=$(patsubst src/%.c,build/%.o,$(M120_IOC_SRCS))
 +build/vms_ioc_%.o: src/vms_ioc_%.c src/vms_ioc_phys.h src/vms_ini_devicedb.h | build
 +	$(CC) $(CFLAGS) -c $< -o $@
 +.PHONY: iocphyscheck
