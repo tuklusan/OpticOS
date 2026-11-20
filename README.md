@@ -4,7 +4,7 @@
 [![GitHub release](https://img.shields.io/github/v/release/tuklusan/OpticOS)](https://github.com/tuklusan/OpticOS/releases)
 [![Downloads](https://img.shields.io/github/downloads/tuklusan/OpticOS/total)](https://github.com/tuklusan/OpticOS/releases)
 
-**OpticOS RAM** is a TZX-loadable, RAM-resident version of **OpticOS / OpticBASIC** for a standard **48K Sinclair ZX Spectrum**. It runs with the factory Sinclair ROM still installed: **no replacement ROM, modified emulator ROM, or ROM switcher is needed**.
+**OpticOS RAM** is a TZX-loadable, RAM-resident AI-generated version of **OpticOS / OpticBASIC** for a standard **48K Sinclair ZX Spectrum**. It runs with the factory Sinclair ROM still installed: **no replacement ROM, modified emulator ROM, or ROM switcher is needed**.
 
 This edition is **derived from the original [ROM-based OpticOS by Optica Technology Design](https://github.com/brixham99/OpticOS)**. The original project is a clean-room 16K replacement ROM containing the structured, line-number-free OpticBASIC language and 64-column display. This fork relocates that software into a normal RAM program and packages it as a tape image. The original ROM source and build remain available.
 
