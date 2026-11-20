@@ -245,6 +245,285 @@
 +assert lbn+count <= 2880
 +assert count*512 >= len(kernel), 'Recorded disk allocation must fit stage-2'
 +print('Current live counted CHS boot loader and bounds PASS')
+--- a/tests/test_m36_layout.py
++++ b/tests/test_m36_layout.py
+@@ -1,11 +1,17 @@
++"""M36 UART RX: current cooked/raw console paths; no stale old-line matching."""
+ from pathlib import Path
+ import subprocess
+-r=Path(__file__).resolve().parent.parent
+-s=(r/'src/kernel.c').read_text()
+-assert 'int serial=port_serial_x86_getc();' in s
++
++r = Path(__file__).resolve().parents[1]
++s = (r/'src/kernel.c').read_text()
++serial = (r/'src/vms_serial.c').read_text()
++assert 'static char getkey_mode(int preserve_case)' in s
++assert 'preserve_case?port_serial_x86_getc_raw():port_serial_x86_getc()' in s
+ assert 'if(serial>=0)return (char)serial;' in s
+-assert 'decnet_service(); continue;' in s
+-assert 'int port_serial_getc(' in (r/'src/vms_serial.c').read_text()
+-assert 'port_serial_x86_getc' in subprocess.check_output(['nm',str(r/'build/kernel.elf')],text=True)
++assert 'if ((inb(0x64) & 1) == 0) { decnet_service(); continue; }' in s
++assert 'int port_serial_getc(' in serial
++names = subprocess.check_output(['nm', str(r/'build/kernel.elf')], text=True)
++assert 'port_serial_x86_getc' in names
++assert 'port_serial_x86_getc_raw' in names
+ assert len((r/'build/kernel.bin').read_bytes()) <= 251*512
+-print('M36 serial console RX linked and stage-1 boot limit PASS')
++print('M36 raw/cooked UART console poll and fallback linked PASS')
+--- a/tests/test_m37_layout.py
++++ b/tests/test_m37_layout.py
+@@ -1,16 +1,22 @@
++"""M37: verify the actual counted stage-two CHS read/reset/retry contract."""
+ from pathlib import Path
+ import subprocess
+-r=Path(__file__).resolve().parent.parent
++
++r=Path(__file__).resolve().parents[1]
+ boot=(r/'build/boot.bin').read_bytes()
++s=(r/'src/boot.s').read_text()
+ assert len(boot)==512 and boot[-2:]==b'\x55\xaa'
+-s=(r/'src/boot.s').read_text()
+-assert s.count('    call bios_read_retry')>=7
+-assert s.count('    int $0x13')==2
+-assert '    movw $3, %si' in s
+-assert '    decw %si' in s and '    jnz .retry' in s
+-assert '    jmp disk_error' in s
+-assert '    pushw %es' in s and '    popw %es' in s
++assert s.count('    call bios_read_retry') == 1  # counted read loop
++assert s.count('    int $0x13') == 2     # one read and one reset per retry
++assert 'read_block:' in s and 'next_block:' in s
++assert '    movw stage2_count, %bp' in s
++assert '    cmpw $251, %bp' in s
++assert '    movw stage2_lbn, %di' in s
++assert '    movw $3, %si' in s and '    decw %si' in s
++assert '    jnz .retry' in s and '    jmp disk_error' in s
++assert s.count('    pushw %es')==2 and s.count('    popw %es')==3
++assert '    movb $1, %al' in s and '    xorw %ax, %ax' in s
+ nm=subprocess.check_output(['nm',str(r/'build/boot.o')],text=True)
+ assert 'bios_read_retry' in nm
+ assert 'u->last_cr=0;' in (r/'src/vms_serial.c').read_text()
+-print('M37 BIOS bounded retry/reset, 7 CHS tracks, UART CRLF PASS')
++print('M37 counted single-sector CHS read, three retries, drive reset and UART CRLF PASS')
+--- a/tests/test_m39_layout.py
++++ b/tests/test_m39_layout.py
+@@ -1,16 +1,24 @@
++"""M39/M40: actual stage-2 size/LBN patching and 1-MiB PC geometry."""
+ from pathlib import Path
+-import subprocess
+-r=Path(__file__).resolve().parent.parent
++import struct
++
++r=Path(__file__).resolve().parents[1]
+ s=(r/'src/boot.s').read_text()
+-assert s.count('    call bios_read_retry')==15
+-assert s.count('    int $0x13')==2
+-assert 'movw $0x1fa0, %ax' in s
+-assert 'movw %ax, %es' in s
+-assert 'xorw %bx, %bx' in s
+-assert 'movw $0xd200, %bx' in s
+-assert 'movb $6, %ch' in s and 'movb $1, %dh' in s
+-assert len((r/'build/boot.bin').read_bytes())==512
+-assert len((r/'build/kernel.bin').read_bytes())<=251*512
+-assert 0x1fa00+126*512==0x2f600
+-assert (r/'vms37lab.ima').stat().st_size==1474560
+-print('M39/M40 stage-1 251-sector load, CHS geometry PASS')
++boot=(r/'build/boot.bin').read_bytes()
++image=(r/'vms37lab.ima').read_bytes()
++kernel=(r/'build/kernel.bin').read_bytes()
++assert s.count('    call bios_read_retry')==1
++assert '    movw stage2_count, %bp' in s and '    movw stage2_lbn, %di' in s
++assert '    movw $0x1000, %si' in s and '    addw $32, %si' in s
++assert '    movw $36, %bx' in s and '    movb $18, %bl' in s
++assert '    movb $1, %al' in s and '    cmpw $2880, %ax' in s
++assert '    ljmp $0x08, $0x00010000' in s
++assert len(boot)==512 and boot[-2:]==b'\x55\xaa'
++assert len(kernel)<=251*512
++assert len(image)==1474560
++position=boot.find(b'VMSB')
++assert 0 <= position <= 500
++count,lbn=struct.unpack_from('<HH', image, position+4)
++assert 1 <= count <= 251 and 1 <= lbn and lbn+count <= 2880
++assert count*512 >= len(kernel)
++print('M39/M40 counted stage-2 disk allocation, 1.44MB CHS bounds and 0x10000 entry PASS')
+--- a/tests/test_m40_dma.py
++++ b/tests/test_m40_dma.py
+@@ -1,71 +1,43 @@
+-"""Emulate the BIOS request sequence from the assembly and reject 8237 DMA crossings.
++"""M40 DMA test for the current counted, one-sector BIOS INT 13h loop.
+ 
+-This test checks the disk geometry, buffer offsets, 64KiB physical DMA boundaries,
+-and exact LBA-to-RAM placement for every of 251 sectors (not just ES:BX arithmetic).
++The historical 15 fixed requests no longer exist. The live BOO$BLOCK
++reads one 512-byte sector per iteration, with ES advancing by 0x20.
+ """
+ from pathlib import Path
+-import re
++import struct
+ 
+ ROOT = Path(__file__).resolve().parents[1]
+-src = (ROOT / 'src/boot.s').read_text().split('bios_read_retry:')[0]
+-# Interpret a deliberately small, explicit subset of 16-bit assembly.
+-registers = {'ax': None, 'bx': None, 'es': None, 'ah': None, 'al': None,
+-             'ch': None, 'cl': None, 'dh': None}
+-reads = []
+-for line in src.splitlines():
+-    line = line.split('/*')[0].strip()
+-    m = re.fullmatch(r'movw \$(0x[0-9a-fA-F]+|\d+), %([a-z]{2})', line)
+-    if m:
+-        val, reg = m.groups()
+-        registers[reg] = int(val, 0)
+-        if reg == 'ax':
+-            registers['ah'] = (registers['ax'] >> 8) & 255
+-            registers['al'] = registers['ax'] & 255
+-        continue
+-    m = re.fullmatch(r'movb \$(0x[0-9a-fA-F]+|\d+), %(ah|al|ch|cl|dh)', line)
+-    if m:
+-        val, reg = m.groups()
+-        registers[reg] = int(val, 0)
+-        continue
+-    if line == 'xorw %bx, %bx':
+-        registers['bx'] = 0
+-        continue
+-    if line == 'movw %ax, %es':
+-        registers['es'] = registers['ax']
+-        continue
+-    if line == 'call bios_read_retry':
+-        r = registers
+-        assert r['ah'] == 2, r
+-        count = r['al']
+-        ch, cl, dh = (r['ch'], r['cl'], r['dh'])
+-        assert 1 <= count <= 18
+-        assert 1 <= cl <= 18 and cl + count - 1 <= 18, r
+-        assert dh in (0, 1) and ch is not None
+-        phys = 16 * r['es'] + r['bx']
+-        assert r['bx'] + count * 512 <= 0x10000, ('ES:BX wrap', r)
+-        assert (phys // 0x10000) == ((phys + count * 512 - 1) // 0x10000), (
+-            'physical 64KiB DMA crossing', hex(phys), count)
+-        lba = (ch * 2 + dh) * 18 + cl - 1
+-        reads.append((lba, count, phys))
+-
+-assert len(reads) == 15, reads
+-expected_lba = 1
+-expected_phys = 0x10000
+-for lba, count, phys in reads:
+-    assert lba == expected_lba, (lba, expected_lba)
+-    assert phys == expected_phys, (hex(phys), hex(expected_phys))
+-    expected_lba += count
+-    expected_phys += count * 512
+-assert expected_lba == 252, expected_lba
+-assert expected_phys == 0x2F600, hex(expected_phys)
+-assert (reads[7], reads[8]) == ((126, 3, 0x1FA00), (129, 15, 0x20000))
++src = (ROOT/'src/boot.s').read_text()
+ boot = (ROOT/'build/boot.bin').read_bytes()
+ image = (ROOT/'vms37lab.ima').read_bytes()
+-assert len(boot) == 512 and boot[-2:] == b'\x55\xaa'
+-assert len(image) == 1474560
+-assert image[:512] == boot
+-for lba, count, phys in reads:
+-    # A BIOS read is a direct mapping from consecutive LBA bytes into RAM.
+-    assert len(image[lba*512:(lba+count)*512]) == count*512
+-    assert 0x10000 <= phys and phys+count*512 <= 0x2F600
+-print('M40: 15 CHS reads, 251 contiguous sectors, 64KiB physical DMA boundary PASS')
++kernel = (ROOT/'build/kernel.bin').read_bytes()
++assert len(boot)==512 and boot[-2:]==b'\x55\xaa'
++assert len(image)==2880*512
++assert src.count('    call bios_read_retry')==1
++for instruction in ('    movw $36, %bx', '    divw %bx', '    movb $18, %bl',
++                    '    divb %bl', '    movb $1, %al', '    movw $0x1000, %si',
++                    '    addw $32, %si', '    incw %di', '    decw %bp',
++                    '    jnz read_block', '    cmpw $251, %bp'):
++    assert instruction in src,instruction
++pos=boot.find(b'VMSB')
++assert 0<=pos<=500
++assert image[:pos+4]==boot[:pos+4]
++count,first=struct.unpack_from('<HH', image, pos+4)
++assert 1 <= first < 2880 and 1<=count<=251 and first+count<=2880
++assert (count-1)*512 < len(kernel) <= count*512
++assert image[pos+8:512] == boot[pos+8:512]
++for index in range(count):
++    lba=first+index
++    track,within=divmod(lba,36)
++    head,sector0=divmod(within,18)
++    assert 0<=track<80 and head in (0,1) and 1<=sector0+1<=18
++    assert (track*2+head)*18+sector0==lba
++    phys=0x10000+index*512
++    assert phys>=0x10000 and phys+512<=0x10000+251*512
++    assert phys//65536==(phys+511)//65536,('DMA boundary',hex(phys))
++    assert len(image[lba*512:(lba+1)*512])==512
++# Exercise the maximum supported count at each 64KiB DMA boundary too.
++for index in range(251):
++    addr=0x10000+index*512
++    assert addr//65536==(addr+511)//65536
++print(f'M40: {count} counted single-sector CHS reads, geometry and 64KiB DMA bounds PASS')
+--- a/tests/test_m41_a20.py
++++ b/tests/test_m41_a20.py
+@@ -23,7 +23,7 @@
+ assert '0x00100000u' in (r/'src/vms_phys.h').read_text()
+ k=(r/'src/kernel.c').read_text()
+ assert '"SHOW A20"' in k and 'arch_a20_ready()' in k
+-assert 'FATAL: A20 address line disabled' in k
++assert 'System initialization stopped: PC memory check failed.' in k
+ assert dict(runpy.run_path(str(r/"tools/qemu_smoke.py"))["CHECKS"])["SHOW A20"] == b"A20 enabled and verified."
+ nm=subprocess.check_output(['nm',str(r/'build/kernel.elf')],text=True)
+ assert 'arch_a20_ready' in nm
+--- a/tests/test_m44_layout.py
++++ b/tests/test_m44_layout.py
+@@ -10,8 +10,8 @@
+ assert start.index('arch_verify_a20()') < start.index('port_ram_probe_3mib(&ram_bus)')
+ assert start.index('port_ram_probe_3mib(&ram_bus)') < start.index('arch_install_gdt()')
+ assert 'if (!ram_window_ready) return;' in start
+-assert 'if (!arch_ram_window_ready())' in k
+-assert 'FATAL: 1..3 MiB RAM window is aliased or unavailable' in k
++assert 'if(!arch_a20_ready()||!arch_ram_window_ready())' in k
++assert 'System initialization stopped: PC memory check failed.' in k
+ assert 'SHOW RAM' in k and '3MiB RAM window alias probe PASS.' in k
+ assert dict(runpy.run_path(str(r/"tools/qemu_smoke.py"))["CHECKS"])["SHOW RAM"] == b"3MiB RAM window alias probe PASS."
+ symbols=subprocess.check_output(['nm',str(r/'build/kernel.elf')],text=True)
+--- a/tests/test_m47_qemu_manifest.py
++++ b/tests/test_m47_qemu_manifest.py
+@@ -1,6 +1,7 @@
+ #!/usr/bin/env python3
+ """Catch guest monitor/assertion drift before spending a QEMU CI run."""
+ import importlib.util
++import re
+ from pathlib import Path
+ 
+ root = Path(__file__).resolve().parent.parent
+@@ -8,12 +9,12 @@
+ module = importlib.util.module_from_spec(spec)
+ spec.loader.exec_module(module)
+ code = (root / "src/kernel.c").read_text()
+-assert len(module.CHECKS) == 22
++assert len(module.CHECKS) == 32
+ assert len(set(x for x, _ in module.CHECKS)) == len(module.CHECKS)
+ for command, text in module.CHECKS:
+-    assert f'eq(line, "{command}")' in code, command
++    assert re.search(r'\beq\(line,\s*"' + re.escape(command) + r'"\)', code), command
+     if command.startswith('TEST '):
+         assert text.decode('ascii') in code, command
+ for forbidden in ('readonly=on',):
+     assert forbidden not in (root / 'tools/qemu_smoke.py').read_text()
+-print(f"M51 POSTEF manifest: {len(module.CHECKS)} unique guest checks mapped to kernel PASS strings; QEMU snapshot disks PASS")
++print(f"M110 historic guest-monitor manifest: {len(module.CHECKS)} unique guest checks mapped to kernel PASS strings; QEMU snapshot disks PASS")
+--- a/tests/test_m49_stress_manifest.py
++++ b/tests/test_m49_stress_manifest.py
+@@ -6,7 +6,7 @@
+ spec=importlib.util.spec_from_file_location('qemu_smoke',root/'tools/qemu_smoke.py')
+ module=importlib.util.module_from_spec(spec)
+ spec.loader.exec_module(module)
+-assert len(module.CHECKS)==25
++assert len(module.CHECKS)==32
+ assert len(module.STRESS_CHECKS)==76
+ assert sum(c=='TEST DEMAND' for c,_ in module.STRESS_CHECKS)==12
+ assert sum(c=='SHOW MEMORY' for c,_ in module.STRESS_CHECKS)==12
+@@ -22,4 +22,4 @@
+     else:
+         assert 'Physical 4K frames free=' in (root/'src/kernel.c').read_text()
+ assert all(x=='Physical 4K frames free=0x00000200' for c,e in module.STRESS_CHECKS if c=='SHOW MEMORY' for x in [e.decode('ascii')])
+-print('M53: 25 baseline + 76 repeated guest checks, manifest PASS')
++print('M110: 32 baseline + 76 repeated guest checks, manifest PASS')
 --- a/src/vms_rtl_m109_x87.c
 +++ b/src/vms_rtl_m109_x87.c
 @@ -65,3 +65,15 @@
