@@ -1,0 +1,516 @@
+--- a/Makefile
++++ b/Makefile
+@@ -758,7 +758,7 @@
+ 	./build/files1187check portdisk.img
+ 
+ # M88: genuine, independently linked native SYS.EXE and Files-11 installation.
+-build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h src/vms_ini_mpw.h src/vms_ini_pflvec.h src/vms_ini_syswcb.h src/vms_ini_log_templates.h src/vms_ini_syslog.h src/vms_ini_bootdev_scan.h src/vms_sys85.h | build
++build/vms_sys_executive_entry.o: src/vms_sys_executive_entry.c src/vms_sys_executive_entry.h src/vms_sysloavec.h src/vms_sysloa386.h src/vms_exe_gettim.h src/vms_ini_packet_queues.h src/vms_sysboot_pktmem.h src/vms_ini_lockdb.h src/vms_ini_procvec.h src/vms_ini_phv_swap.h src/vms_ini_mpw.h src/vms_ini_pflvec.h src/vms_ini_syswcb.h src/vms_ini_log_templates.h src/vms_v37_dyn_tags.h src/vms_ini_syslog.h src/vms_ini_bootdev_scan.h src/vms_sys85.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_sysboot_pktmem.o: src/vms_sysboot_pktmem.c src/vms_sysboot_pktmem.h src/vms_booparam.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+@@ -1065,7 +1065,7 @@
+ all: build/rtl-m113-partial.o
+ 
+ # M114: true source-size INIT.MAR logical-name templates in resident SYS.EXE.
+-build/vms_ini_log_templates.o: src/vms_ini_log_templates.c src/vms_ini_log_templates.h | build
++build/vms_ini_log_templates.o: src/vms_ini_log_templates.c src/vms_ini_log_templates.h src/vms_v37_dyn_tags.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ .PHONY: inilogtemplatecheck
+ inilogtemplatecheck: build/vms_ini_log_templates.o build/vms_ini_syslog.o | build
+@@ -1080,3 +1080,10 @@
+ inibootdevscancheck: build/vms_ini_bootdev_scan.o | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc src/vms_ini_bootdev_scan.c tests/test_ini_bootdev_scan_host.c -o build/inibootdevscancheck
+ 	./build/inibootdevscancheck
++
++# M116: DYN typed record values taken from VMS 3.7 SYSDEF.MDL,
++# with LOG$B_TYPE=11 in the guest. No live logical-name lookup yet.
++.PHONY: v37dyntagcheck
++v37dyntagcheck: | build
++	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc tests/test_vms_v37_dyn_tags_host.c -o build/v37dyntagcheck
++	./build/v37dyntagcheck
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -2,6 +2,7 @@
+ #include "vms_iniloa_entry.h"
+ #include "vms_ini_pc_bus.h"
+ #include "vms_sys_executive_entry.h"
++#include "vms_v37_dyn_tags.h"
+ #include "vms_sysboot_map.h"
+ #include "vms_sysloa386.h"
+ /* Native VMS 3.7 port research monitor. NOT VAX/VMS or a VMS implementation.
+@@ -2960,15 +2961,13 @@
+     bootstrap_message("INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).");
+ 
+     /* Original INIT.MAR 1240-1255 LOG$AL_DISKLOG/SYSDISKLOG. The
+-     * prelinked templates are source-sized and resident. DYNDEF tags,
+-     * DPT/TTY drivers, and SWAPINIT translation remain unresolved. */
++     * prelinked templates are source-sized and resident, now with the
++     * source-verified DYN tag. DPT/TTY and SWAPINIT are unresolved. */
+     static struct port_sys_exec_result log_result;
+-    static const struct port_sys_exec_syslog_settings log_settings={
+-        .dyn_log_type=0u};
+     const struct port_sys_exec_start log_request={
+         .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
+         .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&log_result,
+-        .phase=PORT_SYS_EXEC_INIT_SYSLOG,.syslog_settings=&log_settings};
++        .phase=PORT_SYS_EXEC_INIT_SYSLOG};
+     if(loaded_sys(&log_request)!=PORT_SYS_EXEC_NORMAL ||
+        log_result.signature!=PORT_SYS_EXEC_SYSLOG_RESULT_TAG ||
+        !log_result.syslog ||
+@@ -2980,12 +2979,12 @@
+        (uintptr_t)log_result.syslog->records[1]>=PORT_SYS_ELF_LIMIT ||
+        log_result.syslog->records[0][20u]!=8u ||
+        log_result.syslog->records[1][20u]!=13u ||
+-       log_result.syslog->records[0][10u]!=0u ||
+-       log_result.syslog->records[1][10u]!=0u){
++       log_result.syslog->records[0][10u]!=PORT_V37_DYN_LOG ||
++       log_result.syslog->records[1][10u]!=PORT_V37_DYN_LOG){
+         bootstrap_message("INIT: resident SYS.EXE logical record staging failed.");
+         bootstrap_halt();
+     }
+-    bootstrap_message("INIT: SYS.EXE staged source-size logical records (DYN type unresolved).");
++    bootstrap_message("INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).");
+ 
+     /* Source INI_BOOTDEVIC (1311-1330): preflight the adapter list
+      * published by real INILOA. Device DDB/UCB creation must wait for
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -47,9 +47,9 @@
+ static uint8_t executive_wcb_header[48] __attribute__((aligned(4)));
+ static struct port_ini_syswcb executive_system_wcb;
+ static uint32_t executive_system_wcb_ready;
+-/* Original INIT.MAR 328-358, 1240-1255; the LOG records occupy real
+- * resident SYS.EXE nonpaged data. A zero DYN type means their use is
+- * held until original DYNDEF and the logical-name table are ported. */
++/* Original INIT.MAR 328-358, 1240-1255; typed LOG records occupy
++ * resident SYS.EXE nonpaged data. Live table insertion still requires
++ * original SYSLOGNAM, boot DDB/UCB and SWAPINIT translation. */
+ static uint8_t executive_disklog[PORT_INI_LOG_TEMPLATE_BYTES];
+ static uint8_t executive_sysdevlog[PORT_INI_LOG_TEMPLATE_BYTES];
+ static struct port_ini_syslog_result executive_syslog;
+@@ -387,12 +387,11 @@
+         return PORT_SYS_EXEC_NORMAL;
+     }
+     if(p->phase==PORT_SYS_EXEC_INIT_SYSLOG){
+-        /* INI_LOG consumes the initialized nonpaged pool. Since the
+-         * original DPT list and full driver images are not present,
+-         * these two records are staged only and not linked as live LOGs. */
++        /* INI_LOG consumes initialized nonpaged pool. The verified VMS
++         * DYN$C_LOG=11 is used; IOC/DDB and SWAPINIT remain absent,
++         * so these two records cannot yet be active logical names. */
+         if(!executive_system_wcb_ready || !executive_pflvec_ready ||
+-           !executive_null_fdt_ready || executive_syslog_ready || !p->syslog_settings ||
+-           p->syslog_settings->dyn_log_type!=0u)
++           !executive_null_fdt_ready || executive_syslog_ready)
+             return PORT_SYS_EXEC_BAD_PARAMETERS;
+         const uint32_t size=executive_free_npages;
+         uint32_t used=0u;
+@@ -412,8 +411,7 @@
+         used=(used+15u)&~15u;
+         if(used>size || size-used<2u*PORT_INI_LOG_TEMPLATE_BYTES)
+             return PORT_SYS_EXEC_BAD_PARAMETERS;
+-        port_ini_log_templates(executive_disklog,executive_sysdevlog,
+-            p->syslog_settings->dyn_log_type);
++        port_ini_log_templates(executive_disklog,executive_sysdevlog);
+         struct port_ini_syslog_settings settings={
+             .size_field_offset=PORT_INI_LOG_SIZE_OFFSET,
+             .pool_address=(uint32_t)(uintptr_t)(executive_packet_pages+used),
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -17,7 +17,7 @@
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=13u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=14u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -44,11 +44,6 @@
+     uint32_t expected_extent_count;
+     uint32_t expected_first_lbn;
+     uint32_t expected_total_blocks;
+-};
+-struct port_sys_exec_syslog_settings {
+-    /* DYN$C_LOG remains unverified. A zero type can be staged but not
+-     * inserted into the real VMS logical-name tables. */
+-    uint8_t dyn_log_type;
+ };
+ struct port_sys_exec_intstack_settings {
+     uint32_t stack_high,stack_pages,lock_extra_bytes;
+@@ -108,7 +103,6 @@
+     const struct port_sys_exec_intstack_settings *intstack_settings;
+     const struct port_ini_pflvec_settings *pfl_settings;
+     const struct port_sys_exec_wcb_settings *syswcb_settings;
+-    const struct port_sys_exec_syslog_settings *syslog_settings;
+     const struct port_ini_io_state *bootdev_state;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+--- a/src/vms_ini_log_templates.c
++++ b/src/vms_ini_log_templates.c
+@@ -5,12 +5,12 @@
+ static void clear(uint8_t *p){for(unsigned i=0;i<PORT_INI_LOG_TEMPLATE_BYTES;i++)p[i]=0u;}
+ static void copy(uint8_t *p,const char *s,unsigned n){for(unsigned i=0;i<n;i++)p[i]=(uint8_t)s[i];}
+ void port_ini_log_templates(uint8_t disk[PORT_INI_LOG_TEMPLATE_BYTES],
+-    uint8_t sysdevice[PORT_INI_LOG_TEMPLATE_BYTES],uint8_t dyn_log_type){
++    uint8_t sysdevice[PORT_INI_LOG_TEMPLATE_BYTES]){
+     if(!disk||!sysdevice)return;
+     clear(disk);clear(sysdevice);
+     word(disk+8u,PORT_INI_LOG_TEMPLATE_BYTES);
+     word(sysdevice+8u,PORT_INI_LOG_TEMPLATE_BYTES);
+-    disk[10u]=sysdevice[10u]=dyn_log_type;
++    disk[10u]=sysdevice[10u]=PORT_V37_DYN_LOG;
+     /* LOG$C_SYSTEM=0 (SYSGETDEV.MAR); UIC member/group both 1. */
+     word(disk+12u,1u);word(disk+14u,1u);
+     word(sysdevice+12u,1u);word(sysdevice+14u,1u);
+--- a/src/vms_ini_log_templates.h
++++ b/src/vms_ini_log_templates.h
+@@ -1,11 +1,12 @@
+ #ifndef VMS_INI_LOG_TEMPLATES_H
+ #define VMS_INI_LOG_TEMPLATES_H
+ #include <stdint.h>
++#include "vms_v37_dyn_tags.h"
+ /* SYS/SRC/INIT.MAR 328-358: prelinked LOG$AL_DISKLOG and SYSDISKLOG.
+  * VAX/IA-32 little-endian DYN header, 16-byte padded original records.
+- * The DYN$C_LOG byte must be supplied from a verified DEC macro definition;
+- * a zero byte is only a preliminary construction, not an active record. */
++ * DYN$C_LOG=11 is source-defined in SHRLIB/SYSDEF.MDL.
++ * Real LOG table linkage and boot-volume equivalence are not ready. */
+ enum {PORT_INI_LOG_TEMPLATE_BYTES=48u,PORT_INI_LOG_SIZE_OFFSET=8u};
+ void port_ini_log_templates(uint8_t disk[PORT_INI_LOG_TEMPLATE_BYTES],
+-    uint8_t sysdevice[PORT_INI_LOG_TEMPLATE_BYTES],uint8_t dyn_log_type);
++    uint8_t sysdevice[PORT_INI_LOG_TEMPLATE_BYTES]);
+ #endif
+--- /dev/null
++++ b/src/vms_v37_dyn_tags.h
+@@ -0,0 +1,74 @@
++#ifndef PORT_V37_DYN_TAGS_H
++#define PORT_V37_DYN_TAGS_H
++/* Numeric structure tags transcribed independently from the ordered
++ * DYN C <,,1,1 declaration in original SHRLIB/SYSDEF.MDL 1330-1444.
++ * No original DEC source text is redistributed. Values name VMS 3.7
++ * record types; enumerating them does NOT instantiate the structures. */
++enum {
++    PORT_V37_DYN_ADP = 1u,
++    PORT_V37_DYN_ACB = 2u,
++    PORT_V37_DYN_AQB = 3u,
++    PORT_V37_DYN_CEB = 4u,
++    PORT_V37_DYN_CRB = 5u,
++    PORT_V37_DYN_DDB = 6u,
++    PORT_V37_DYN_FCB = 7u,
++    PORT_V37_DYN_FRK = 8u,
++    PORT_V37_DYN_IDB = 9u,
++    PORT_V37_DYN_IRP = 10u,
++    PORT_V37_DYN_LOG = 11u,
++    PORT_V37_DYN_PCB = 12u,
++    PORT_V37_DYN_PQB = 13u,
++    PORT_V37_DYN_RVT = 14u,
++    PORT_V37_DYN_TQE = 15u,
++    PORT_V37_DYN_UCB = 16u,
++    PORT_V37_DYN_VCB = 17u,
++    PORT_V37_DYN_WCB = 18u,
++    PORT_V37_DYN_BUFIO = 19u,
++    PORT_V37_DYN_TYPAHD = 20u,
++    PORT_V37_DYN_GSD = 21u,
++    PORT_V37_DYN_MVL = 22u,
++    PORT_V37_DYN_NET = 23u,
++    PORT_V37_DYN_KFI = 24u,
++    PORT_V37_DYN_MTL = 25u,
++    PORT_V37_DYN_BRDCST = 26u,
++    PORT_V37_DYN_CXB = 27u,
++    PORT_V37_DYN_NDB = 28u,
++    PORT_V37_DYN_SSB = 29u,
++    PORT_V37_DYN_DPT = 30u,
++    PORT_V37_DYN_JPB = 31u,
++    PORT_V37_DYN_PBH = 32u,
++    PORT_V37_DYN_PDB = 33u,
++    PORT_V37_DYN_PIB = 34u,
++    PORT_V37_DYN_PFL = 35u,
++    PORT_V37_DYN_UNUSED = 36u,
++    PORT_V37_DYN_PTR = 37u,
++    PORT_V37_DYN_KFH = 38u,
++    PORT_V37_DYN_RVX = 39u,
++    PORT_V37_DYN_EXTGSD = 40u,
++    PORT_V37_DYN_SHMGSD = 41u,
++    PORT_V37_DYN_SHB = 42u,
++    PORT_V37_DYN_MBX = 43u,
++    PORT_V37_DYN_IRPE = 44u,
++    PORT_V37_DYN_SLAVCEB = 45u,
++    PORT_V37_DYN_SHMCEB = 46u,
++    PORT_V37_DYN_JIB = 47u,
++    PORT_V37_DYN_TWP = 48u,
++    PORT_V37_DYN_RBM = 49u,
++    PORT_V37_DYN_VCA = 50u,
++    PORT_V37_DYN_BCB = 51u,
++    PORT_V37_DYN_CDB = 52u,
++    PORT_V37_DYN_LPD = 53u,
++    PORT_V37_DYN_JMT = 54u,
++    PORT_V37_DYN_LKB = 55u,
++    PORT_V37_DYN_RSB = 56u,
++    PORT_V37_DYN_LKID = 57u,
++    PORT_V37_DYN_RSHT = 58u,
++    PORT_V37_DYN_CDRP = 59u,
++    PORT_V37_DYN_RUL = 60u,
++    PORT_V37_DYN_ERP = 61u,
++    PORT_V37_DYN_CIDG = 62u,
++    PORT_V37_DYN_CIMSG = 63u,
++    PORT_V37_DYN_COUNT = 63u,
++    PORT_V37_DPT_VERSION = 3u /* SHRLIB/SYSDEF.MDL DPT header */
++};
++#endif
+--- /dev/null
++++ b/tests/test_vms_v37_dyn_tags_host.c
+@@ -0,0 +1,79 @@
++#include <stdio.h>
++#include "vms_v37_dyn_tags.h"
++#define CHECK(x) do {if(!(x)){fprintf(stderr,"VMS 3.7 DYN check failed at line %d: %s\n",__LINE__,#x);return 1;}} while(0)
++static const unsigned source_order[] = {
++    PORT_V37_DYN_ADP, /* source ordinal 1 */
++    PORT_V37_DYN_ACB, /* source ordinal 2 */
++    PORT_V37_DYN_AQB, /* source ordinal 3 */
++    PORT_V37_DYN_CEB, /* source ordinal 4 */
++    PORT_V37_DYN_CRB, /* source ordinal 5 */
++    PORT_V37_DYN_DDB, /* source ordinal 6 */
++    PORT_V37_DYN_FCB, /* source ordinal 7 */
++    PORT_V37_DYN_FRK, /* source ordinal 8 */
++    PORT_V37_DYN_IDB, /* source ordinal 9 */
++    PORT_V37_DYN_IRP, /* source ordinal 10 */
++    PORT_V37_DYN_LOG, /* source ordinal 11 */
++    PORT_V37_DYN_PCB, /* source ordinal 12 */
++    PORT_V37_DYN_PQB, /* source ordinal 13 */
++    PORT_V37_DYN_RVT, /* source ordinal 14 */
++    PORT_V37_DYN_TQE, /* source ordinal 15 */
++    PORT_V37_DYN_UCB, /* source ordinal 16 */
++    PORT_V37_DYN_VCB, /* source ordinal 17 */
++    PORT_V37_DYN_WCB, /* source ordinal 18 */
++    PORT_V37_DYN_BUFIO, /* source ordinal 19 */
++    PORT_V37_DYN_TYPAHD, /* source ordinal 20 */
++    PORT_V37_DYN_GSD, /* source ordinal 21 */
++    PORT_V37_DYN_MVL, /* source ordinal 22 */
++    PORT_V37_DYN_NET, /* source ordinal 23 */
++    PORT_V37_DYN_KFI, /* source ordinal 24 */
++    PORT_V37_DYN_MTL, /* source ordinal 25 */
++    PORT_V37_DYN_BRDCST, /* source ordinal 26 */
++    PORT_V37_DYN_CXB, /* source ordinal 27 */
++    PORT_V37_DYN_NDB, /* source ordinal 28 */
++    PORT_V37_DYN_SSB, /* source ordinal 29 */
++    PORT_V37_DYN_DPT, /* source ordinal 30 */
++    PORT_V37_DYN_JPB, /* source ordinal 31 */
++    PORT_V37_DYN_PBH, /* source ordinal 32 */
++    PORT_V37_DYN_PDB, /* source ordinal 33 */
++    PORT_V37_DYN_PIB, /* source ordinal 34 */
++    PORT_V37_DYN_PFL, /* source ordinal 35 */
++    PORT_V37_DYN_UNUSED, /* source ordinal 36 */
++    PORT_V37_DYN_PTR, /* source ordinal 37 */
++    PORT_V37_DYN_KFH, /* source ordinal 38 */
++    PORT_V37_DYN_RVX, /* source ordinal 39 */
++    PORT_V37_DYN_EXTGSD, /* source ordinal 40 */
++    PORT_V37_DYN_SHMGSD, /* source ordinal 41 */
++    PORT_V37_DYN_SHB, /* source ordinal 42 */
++    PORT_V37_DYN_MBX, /* source ordinal 43 */
++    PORT_V37_DYN_IRPE, /* source ordinal 44 */
++    PORT_V37_DYN_SLAVCEB, /* source ordinal 45 */
++    PORT_V37_DYN_SHMCEB, /* source ordinal 46 */
++    PORT_V37_DYN_JIB, /* source ordinal 47 */
++    PORT_V37_DYN_TWP, /* source ordinal 48 */
++    PORT_V37_DYN_RBM, /* source ordinal 49 */
++    PORT_V37_DYN_VCA, /* source ordinal 50 */
++    PORT_V37_DYN_BCB, /* source ordinal 51 */
++    PORT_V37_DYN_CDB, /* source ordinal 52 */
++    PORT_V37_DYN_LPD, /* source ordinal 53 */
++    PORT_V37_DYN_JMT, /* source ordinal 54 */
++    PORT_V37_DYN_LKB, /* source ordinal 55 */
++    PORT_V37_DYN_RSB, /* source ordinal 56 */
++    PORT_V37_DYN_LKID, /* source ordinal 57 */
++    PORT_V37_DYN_RSHT, /* source ordinal 58 */
++    PORT_V37_DYN_CDRP, /* source ordinal 59 */
++    PORT_V37_DYN_RUL, /* source ordinal 60 */
++    PORT_V37_DYN_ERP, /* source ordinal 61 */
++    PORT_V37_DYN_CIDG, /* source ordinal 62 */
++    PORT_V37_DYN_CIMSG, /* source ordinal 63 */
++};
++int main(void) {
++    CHECK(sizeof source_order / sizeof source_order[0]==PORT_V37_DYN_COUNT);
++    for(unsigned i=0;i<PORT_V37_DYN_COUNT;i++)CHECK(source_order[i]==i+1u);
++    CHECK(PORT_V37_DYN_LOG==11u);
++    CHECK(PORT_V37_DYN_DPT==30u);
++    CHECK(PORT_V37_DYN_DDB==6u && PORT_V37_DYN_UCB==16u);
++    CHECK(PORT_V37_DYN_WCB==18u && PORT_V37_DYN_IRP==10u);
++    CHECK(PORT_V37_DPT_VERSION==3u);
++    puts("SHRLIB/SYSDEF.MDL original ordered 63 DYN tags and DPT version PASS");
++    return 0;
++}
+--- a/tests/test_ini_log_templates_host.c
++++ b/tests/test_ini_log_templates_host.c
+@@ -9,8 +9,8 @@
+     struct port_ini_syslog_result r={0};
+     struct port_ini_syslog_settings s={.size_field_offset=8u,.pool_address=0x320000u,.allocation_alignment=16u};
+     memset(p,0xa5,sizeof p);
+-    port_ini_log_templates(a,b,0x53u);
+-    CHECK(a[10]==0x53u && b[10]==0x53u && a[11]==0u && b[11]==0u);
++    port_ini_log_templates(a,b);
++    CHECK(a[10]==PORT_V37_DYN_LOG && b[10]==PORT_V37_DYN_LOG && a[11]==0u && b[11]==0u);
+     CHECK(a[8]==48u && b[8]==48u);
+     CHECK(a[12]==1u && b[12]==1u && a[14]==1u && b[14]==1u);
+     CHECK(a[20]==8u && b[20]==13u && !memcmp(a+21,"SYS$DISK",8u));
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -30,6 +30,8 @@
+         if path == 'src/boot.s' and line.lstrip().startswith(symbol + ':'):
+             return i
+         if path == 'build_image.py' and re.search(r'^' + re.escape(symbol) + r'\s*=', line):
++            return i
++        if path == 'src/vms_v37_dyn_tags.h' and re.search(r'\b' + re.escape(symbol) + r'\s*=', line):
+             return i
+         if (symbol in ('port_exe_announce','port_exe_version_quadword','types','port_bug_debug','port_mmg_pfn_patch','port_mmg_pfn_patch_desc') or symbol.startswith('port_lib_ab_')) and re.search(r'\b' + re.escape(symbol) + r'\s*\[', line):
+             return i
+@@ -315,11 +317,17 @@
+ # Only this range is mapped; the rest of SYSDEF.MDL is unfinished.
+ result['files'].append({
+     'original_file':'SHRLIB/SYSDEF.MDL',
+-    'status':'partial; only UAF structure mapped',
++    'status':'partial; DYN type numbers and UAF layout only',
+     'original_lines':6969,
+     'sections':[
+-      {'original_lines':[1,6142], 'status':'unresolved',
+-       'reason':'Original system-wide definitions before the UAF layout are not ported'},
++      {'original_lines':[1,1329], 'status':'unresolved',
++       'reason':'Original system-wide definitions before the DPT and DYN layouts are unfinished'},
++      {'original_lines':[1330,1445], 'status':'partial',
++       'pc_file':'src/vms_v37_dyn_tags.h','pc_symbol':'PORT_V37_DYN_LOG',
++       'pc_line':line_for_symbol('src/vms_v37_dyn_tags.h','PORT_V37_DYN_LOG'),
++       'function':'Source-ordered 63 original DYN structure type identifiers; DPT ABI and structures are incomplete'},
++      {'original_lines':[1446,6142], 'status':'unresolved',
++       'reason':'Other original system-wide definitions before UAF layout are unfinished'},
+       {'original_lines':[6143,6146], 'status':'excluded',
+        'reason':'structure introduction and source headings'},
+       {'original_lines':[6147,6232], 'status':'mapped',
+@@ -1677,7 +1685,7 @@
+     (1189,1212,'src/vms_ini_syswcb.c','port_ini_syswcb_from_boot_map','Actual guest-executed 8-to-6 byte extent compaction in resident SYS.EXE from real Files-11 BOO$L_SYS_MAP, with resident partial native WCB header; original WCB constants and ACP consumers still unresolved','partial'),
+     (1213,1231,None,None,'Original VAX PR$_NICR/ICCS/ICR clock-counter timing loop needs real IA-32 hardware equivalent','hardware-excluded'),
+     (1232,1239,'src/vms_ini_dptlist.c','port_ini_dpt_attach_three','32-bit VAX INSQUE source-ordered MB, NL, OP DPT prologue list layout; host-tested but actual driver records and guest IOC attachment remain unresolved','partial'),
+-    (1240,1255,'src/vms_ini_syslog.c','port_ini_syslog_init','48-byte source templates and guest-resident copy at verified SYS.EXE nonpaged addresses; DYN$C_LOG, real DPT and logical-name service remain unresolved','partial'),
++    (1240,1255,'src/vms_ini_syslog.c','port_ini_syslog_init','Original DYN$C_LOG=11 typed 48-byte records copied into guest SYS.EXE nonpaged addresses; DPT, boot UCB, SWAPINIT and live logical-name service pending','partial'),
+     (1256,1288,'src/vms_ini_ttydrv.c','port_ini_tty_class_relocate','Source DPTAB prologue type/UCB size checks and class vector self-relative relocation; host tested; terminal service and live IOC/DDB/UCB are pending','partial'),
+     (1289,1304,'src/vms_ini_ttydrv.c','port_ini_tty_bind_console','Original DEVICEDAT/TTYDEF DDB and OPA0 UCB class/port dispatch fields; host-tested but actual TTDRIVER/OP$DPT images and I/O service not running','partial'),
+     (1305,1310,None,None,'Full class-driver and port-driver console registration remain unresolved','unresolved'),
+--- /dev/null
++++ b/tools/qemu_sysboot_m116.py
+@@ -0,0 +1,116 @@
++#!/usr/bin/env python3
++"""One native IA-32 QEMU boot; check source-ordered real SYS.EXE retrieval map and INIT.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M116: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m116-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,116,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M116: real SYS.EXE null-driver FDT, ATA adapter scan and early INIT verified PASS')
++        return 0
++    print('QEMU M116: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
