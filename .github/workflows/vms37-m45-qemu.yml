@@ -56,6 +56,8 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m110-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
+          # Replay the 46 exact SHA-256-verified current guest-layout fixtures, not stale M89 copies.
+          python3 tools/m110_sync_test_fixtures.py
           make -j2 all
           make rtl85check rtl107check rtl108check rtl109check rtl110check sourcerangecheck m21bootcheck
           # Run the full historical guest-layout/host test suite, not only the modern smoke subset.
