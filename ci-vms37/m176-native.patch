@@ -162,7 +162,8 @@ new file mode 100644
 +  if(st!=PORT_DQ_IOC_IO)return st;
 + }
 + return PORT_DQ_IOC_CORRUPT;
-+}diff --git a/src/vms_dq_ioc_run.c b/src/vms_dq_ioc_run.c
++}
+diff --git a/src/vms_dq_ioc_run.c b/src/vms_dq_ioc_run.c
 new file mode 100644
 --- /dev/null
 +++ b/src/vms_dq_ioc_run.c
@@ -324,7 +325,8 @@ new file mode 100644
 +++ b/tests/test_retry_attempt_2.c
 @@ -0,0 +1,5 @@
 +#include "dq_retry_test_common.h"
-+int test_retry_attempt_2(void){+struct port_dq_ioc_queue q;struct retry_fixture f;retry_setup(&q,&f,0,0);assert(port_dq_ioc_attempt(&q)==PORT_DQ_IOC_NOTFOUND);assert(f.calls==0);
++int test_retry_attempt_2(void){
++struct port_dq_ioc_queue q;struct retry_fixture f;retry_setup(&q,&f,0,0);assert(port_dq_ioc_attempt(&q)==PORT_DQ_IOC_NOTFOUND);assert(f.calls==0);
 +return 1;
 +}
 diff --git a/tests/test_retry_attempt_3.c b/tests/test_retry_attempt_3.c
@@ -503,7 +505,8 @@ new file mode 100644
 +}
 diff --git a/tests/test_retry_recover_1.c b/tests/test_retry_recover_1.c
 new file mode 100644
---- /dev/null+++ b/tests/test_retry_recover_1.c
+--- /dev/null
++++ b/tests/test_retry_recover_1.c
 @@ -0,0 +1,5 @@
 +#include "dq_retry_test_common.h"
 +int test_retry_recover_1(void){
@@ -666,7 +669,8 @@ new file mode 100644
 +++ b/tests/test_retry_set_retry_1.c
 @@ -0,0 +1,5 @@
 +#include "dq_retry_test_common.h"
-+int test_retry_set_retry_1(void){+struct port_dq_ioc_queue q;struct retry_fixture f;retry_setup(&q,&f,0,0);assert(port_dq_ioc_set_retry(&q,10,1)==PORT_DQ_IOC_NOTFOUND);assert(port_dq_ioc_set_retry(&q,0,1)==PORT_DQ_IOC_BAD);
++int test_retry_set_retry_1(void){
++struct port_dq_ioc_queue q;struct retry_fixture f;retry_setup(&q,&f,0,0);assert(port_dq_ioc_set_retry(&q,10,1)==PORT_DQ_IOC_NOTFOUND);assert(port_dq_ioc_set_retry(&q,0,1)==PORT_DQ_IOC_BAD);
 +return 1;
 +}
 diff --git a/tests/test_retry_set_retry_2.c b/tests/test_retry_set_retry_2.c
@@ -772,7 +776,8 @@ new file mode 100644
 +        b'INIT: SYS.EXE native FIL$FINDFILID reopened SYS.EXE through real MFD/SYSEXE/FH2 and verified 768 text bytes (ACP unbound).',
 +        b'INIT: SYS.EXE native FIL$FINDFILID enumerated real SYSEXE.DIR image FIDs via ATA (ACP unbound).',
 +        b'INIT: SYS.EXE FIL$RDCHKFILHDR collected source FH2 extent chain and verified 777 bytes via ATA (ACP unbound).',
-+        b'INIT: SYS.EXE FIL$READVBN cursor compared 901 resident bytes through four physical ATA IRPs (ACP unbound).',+        b'INIT: SYS.EXE source DQ_STARTIO private IOC queue completed three FIFO ATA IRPs with real resident text (DDT and ACP unbound).',
++        b'INIT: SYS.EXE FIL$READVBN cursor compared 901 resident bytes through four physical ATA IRPs (ACP unbound).',
++        b'INIT: SYS.EXE source DQ_STARTIO private IOC queue completed three FIFO ATA IRPs with real resident text (DDT and ACP unbound).',
 +        b'INIT: SYS.EXE RETRYERR/IOCIOPOST posted three source FIFO ATA IOSBs after live resident reads (no DQA0 DDT or IRQ).',
 +        b'INIT: SYS.EXE FIN_DATABASE staged DQA0 names and resident SYS$DISK/SYS$SYSDEVICE (logical lookup pending).',
 +        b'INIT: SYS.EXE LOG$TRANSLATE resolved original SYS$DISK and SYS$SYSDEVICE names (system bootstrap only).',
