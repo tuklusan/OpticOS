@@ -1,0 +1,727 @@
+diff --git a/Makefile b/Makefile
+index 0c3677e..33e778d 100644
+--- a/Makefile
++++ b/Makefile
+@@ -796,6 +796,8 @@ M121_QIO_SRCS=$(wildcard src/vms_qio_*.c)
+ M121_QIO_OBJS=$(patsubst src/%.c,build/%.o,$(M121_QIO_SRCS))
+ M122_NL_DDT_SRCS=$(wildcard src/vms_nl_ddt_*.c)
+ M122_NL_DDT_OBJS=$(patsubst src/%.c,build/%.o,$(M122_NL_DDT_SRCS))
++M126_DQ_READ_SRCS=$(wildcard src/vms_dq_bootread_*.c)
++M126_DQ_READ_OBJS=$(patsubst src/%.c,build/%.o,$(M126_DQ_READ_SRCS))
+ M123_IOPOST_SRCS=$(filter-out $(M124_SWI_SRCS),$(wildcard src/vms_iopost_*.c))
+ M123_IOPOST_OBJS=$(patsubst src/%.c,build/%.o,$(M123_IOPOST_SRCS))
+ $(M124_SWI_OBJS): build/%.o: src/%.c src/vms_iopost_swi.h | build
+@@ -811,8 +813,8 @@ conportcheck: $(M119_CON_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
+ 	./build/conportcheck
+ 
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -836,7 +838,7 @@ build/install_iniloa_image: tools/install_iniloa_image.c src/vms_boot_files11.c
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1185,3 +1187,11 @@ build/vms_dq_fdt_%.o: src/vms_dq_fdt_%.c src/vms_dq_fdt.h | build
+ dqfdtcheck: $(M125_DQ_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M125_DQ_SRCS) tests/test_dq_fdt_host.c -o build/dqfdtcheck
+ 	./build/dqfdtcheck
++
++# M126: one genuine privileged DQ READPBLK at the SYSBOOT/INIT boundary.
++$(M126_DQ_READ_OBJS): build/%.o: src/%.c src/vms_dq_bootread.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: dqbootreadcheck
++dqbootreadcheck: $(M126_DQ_READ_OBJS) portdisk.img | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-sanitize-recover=undefined -Isrc $(M126_DQ_READ_SRCS) $(M125_DQ_SRCS) $(M118_DB_SRCS) src/vms_qio_irp_prepare.c tests/test_dq_bootread_host.c -o build/dqbootreadcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/dqbootreadcheck
+diff --git a/src/kernel.c b/src/kernel.c
+index 4fd65c7..5666efb 100644
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3115,6 +3115,46 @@ void kmain(void) {
+     }
+     bootstrap_message("INIT: SYS.EXE linked NL$DDT DDTAB/FUNCTAB to NLA0 (other drivers absent).");
+ 
++    /* Source DQDRIVER.MAR PREPROCESS (640-671), FDISPATCH (678-709)
++     * and FUNCXT (917-938): pass the real ATA PIO callback into the
++     * already loaded native SYS.EXE for a guarded *physical* READPBLK.
++     * This proves one actual Files-11 home sector data path, not an
++     * ACP-mediated disk driver, public $QIO, or original DEC driver load. */
++    static struct port_sys_exec_result dq_bootread_result;
++    const struct port_sys_exec_dq_boot_settings dq_boot_io={
++        .read_sector=native_ini_ata_read,.context=0,
++        .boot_unit=boot_rpb.boot_unit,.reserved=0u};
++    const struct port_sys_exec_start dq_bootread_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&dq_bootread_result,
++        .phase=PORT_SYS_EXEC_INIT_DQ_BOOTREAD,.dq_boot_io=&dq_boot_io};
++    struct port_f11_home actual_dq_home={0};
++    if(loaded_sys(&dq_bootread_request)!=PORT_SYS_EXEC_NORMAL ||
++       dq_bootread_result.signature!=PORT_SYS_EXEC_DQ_BOOTREAD_TAG ||
++       !dq_bootread_result.dq_bootread ||
++       !dq_bootread_result.dq_bootread_sector ||
++       (uintptr_t)dq_bootread_result.dq_bootread<PORT_SYS_ELF_START ||
++       (uintptr_t)dq_bootread_result.dq_bootread>=PORT_SYS_ELF_LIMIT ||
++       (uintptr_t)dq_bootread_result.dq_bootread_sector<PORT_SYS_ELF_START ||
++       (uintptr_t)dq_bootread_result.dq_bootread_sector>
++          PORT_SYS_ELF_LIMIT-PORT_DQ_BOOTREAD_BYTES ||
++       dq_bootread_result.dq_bootread->lbn!=1u ||
++       dq_bootread_result.dq_bootread->bytes!=512u ||
++       dq_bootread_result.dq_bootread->irp_status!=1u ||
++       dq_bootread_result.dq_bootread->irp_second!=512u ||
++       dq_bootread_result.dq_bootread->io_function!=PORT_DQ_READPBLK ||
++       dq_bootread_result.dq_bootread->unit!=0u ||
++       dq_bootread_result.dq_bootread->sector_checksum!=
++               dq_bootread_result.dq_bootread_sector[255u] ||
++       port_f11_home_read((const uint8_t *)dq_bootread_result.dq_bootread_sector,
++                         512u,1u,&actual_dq_home)!=PORT_F11_HOME_OK ||
++       actual_dq_home.home_lbn!=1u || actual_dq_home.cluster==0u){
++        bootstrap_message("INIT: resident DQ physical boot READPBLK failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE DQ READPBLK fetched actual ATA Files-11 LBN1 (disk DDT/ACP not linked).");
++
++
+     /* CONINTDSP.MAR action transitions execute in native SYS.EXE on a
+      * verified OPA0 source-layout copy. No class/port DDT or UART QIO. */
+     static struct port_sys_exec_result con_result;
+diff --git a/src/vms_dq_bootread.h b/src/vms_dq_bootread.h
+new file mode 100644
+index 0000000..51ae7a9
+--- /dev/null
++++ b/src/vms_dq_bootread.h
+@@ -0,0 +1,47 @@
++#ifndef VMS_DQ_BOOTREAD_H
++#define VMS_DQ_BOOTREAD_H
++#include <stddef.h>
++#include <stdint.h>
++#include "vms_dq_fdt.h"
++#include "vms_ini_devicedb.h"
++#include "vms_qio_post.h"
++/* DRIVER/SRC/DQDRIVER.MAR PREPROCESS (640-671), FDISPATCH (678-709),
++ * NORMAL/FUNCXT (790-940) on native ATA. Stage is one privileged raw
++ * Files-11 home block READPBLK, not a complete DQ driver or user $QIO.
++ * Source code uses IRP$L_MEDIA at offset 56 to hold the LBN before
++ * completion, sharing storage with IOST1 after completion. */
++enum {PORT_DQ_BOOTREAD_OK=1u, PORT_DQ_BOOTREAD_BAD=2u,
++      PORT_DQ_BOOTREAD_UNBOUND=4u,PORT_DQ_BOOTREAD_MEDIA=6u,
++      PORT_DQ_BOOTREAD_FAILED=8u,PORT_DQ_BOOTREAD_DONE=10u,
++      PORT_DQ_PHYSIO=0x0100u,PORT_DQ_UCB_MEDIA=156u,
++      PORT_DQ_UCB_FEX=134u,PORT_DQ_UCB_BCR=166u,
++      PORT_DQ_UCB_FUNC=142u,PORT_DQ_UCB_VALID=0x0800u,
++      PORT_DQ_BOOTREAD_LBN=1u,PORT_DQ_BOOTREAD_BYTES=512u};
++typedef int (*port_dq_native_read_fn)(void *,uint32_t,uint16_t[256]);
++struct port_dq_bootread_request {
++    const struct port_dq_fdt *fdt;
++    const uint8_t *device_db;
++    const struct port_v37_device_result *device_info;
++    uint8_t *irp;
++    size_t irp_bytes;
++    uint16_t *sector;
++    size_t sector_bytes;
++    uint16_t boot_unit;
++    port_dq_native_read_fn read_sector;
++    void *read_context;
++};
++struct port_dq_bootread_result {
++    uint32_t lbn,bytes,irp_status,irp_second;
++    uint32_t ucb_media,ucb_io_count;
++    uint16_t io_function,unit;
++    uint16_t sector_checksum,software_online;
++};
++uint32_t port_dq_bootread_preflight(const struct port_dq_bootread_request *);
++uint32_t port_dq_bootread_decode(const struct port_dq_bootread_request *,
++                                uint32_t *lbn,uint16_t *function);
++uint32_t port_dq_bootread_commit(const struct port_dq_bootread_request *,
++    const uint16_t [256],struct port_dq_bootread_result *);
++uint16_t port_dq_bootread_checksum(const uint16_t [256]);
++uint32_t port_dq_bootread_execute(const struct port_dq_bootread_request *,
++                                 struct port_dq_bootread_result *);
++#endif
+diff --git a/src/vms_dq_bootread_checksum.c b/src/vms_dq_bootread_checksum.c
+new file mode 100644
+index 0000000..7e5d1d2
+--- /dev/null
++++ b/src/vms_dq_bootread_checksum.c
+@@ -0,0 +1,9 @@
++#include "vms_dq_bootread.h"
++/* MOUNT/SRC/CHKSM2.B32: original Files-11 ODS2 home-checksum semantics.
++ * No fake signature: checksum the bytes returned by the real ATA read. */
++uint16_t port_dq_bootread_checksum(const uint16_t words[256]){
++    if(!words)return 0u;
++    uint16_t s=0u;
++    for(unsigned i=0;i<255u;i++)s=(uint16_t)(s+words[i]);
++    return s;
++}
+diff --git a/src/vms_dq_bootread_commit.c b/src/vms_dq_bootread_commit.c
+new file mode 100644
+index 0000000..fbe6937
+--- /dev/null
++++ b/src/vms_dq_bootread_commit.c
+@@ -0,0 +1,34 @@
++#include "vms_dq_bootread.h"
++/* Source DQDRIVER PREPROCESS/FUNCXT: commit *after* successful hardware
++ * operation, leaving failed/preflight requests and UCB intact. Physical
++ * boot READPBLK bypasses volume VALID exactly as source FDISPATCH does. */
++uint32_t port_dq_bootread_commit(const struct port_dq_bootread_request *q,
++    const uint16_t sector[256],struct port_dq_bootread_result *out){
++    if(!q||!sector||!out||!q->irp||!q->sector||!q->device_db||
++       q->sector_bytes!=PORT_DQ_BOOTREAD_BYTES)
++        return PORT_DQ_BOOTREAD_BAD;
++    uint8_t *u=(uint8_t *)(uintptr_t)(q->device_db+PORT_V37_UCB_BOOT_OFF);
++    const uint32_t ops=port_v37_read32(u+PORT_V37_UCB_OPCNT);
++    if(ops==UINT32_MAX)return PORT_DQ_BOOTREAD_BAD;
++    for(unsigned i=0;i<256u;i++)q->sector[i]=sector[i];
++    const uint32_t block=port_v37_read32(q->irp+PORT_V37_IRP_MEDIA);
++    port_v37_write32(u+PORT_DQ_UCB_MEDIA,block);
++    port_v37_write16(u+PORT_DQ_UCB_FUNC,PORT_DQ_READPBLK);
++    u[PORT_DQ_UCB_FEX]=(uint8_t)PORT_DQ_READPBLK;
++    u[112u]=u[113u]; /* source retry count initialization */
++    port_v37_write16(u+PORT_DQ_UCB_BCR,0u);
++    port_v37_write32(u+PORT_V37_UCB_OPCNT,ops+1u);
++    /* SYSQIOREQ EXE$FINISHIOC source IRP fields: IOST1 status and IOST2
++     * transferred bytes; no event flag or user-visible IOSB is posted. */
++    port_v37_write32(q->irp+PORT_V37_IRP_MEDIA,PORT_SYS85_NORMAL);
++    port_v37_write32(q->irp+PORT_V37_IRP_IOST2,PORT_DQ_BOOTREAD_BYTES);
++    *out=(struct port_dq_bootread_result){
++        .lbn=block,.bytes=PORT_DQ_BOOTREAD_BYTES,
++        .irp_status=port_v37_read32(q->irp+PORT_V37_IRP_MEDIA),
++        .irp_second=port_v37_read32(q->irp+PORT_V37_IRP_IOST2),
++        .ucb_media=port_v37_read32(u+PORT_DQ_UCB_MEDIA),
++        .ucb_io_count=ops+1u,.io_function=PORT_DQ_READPBLK,
++        .unit=q->boot_unit,.sector_checksum=port_dq_bootread_checksum(sector),
++        .software_online=(uint16_t)((port_v37_read16(u+88u)&PORT_V37_UCB_ONLINE)!=0u)};
++    return PORT_DQ_BOOTREAD_OK;
++}
+diff --git a/src/vms_dq_bootread_decode.c b/src/vms_dq_bootread_decode.c
+new file mode 100644
+index 0000000..6fdba43
+--- /dev/null
++++ b/src/vms_dq_bootread_decode.c
+@@ -0,0 +1,21 @@
++#include "vms_dq_bootread.h"
++/* DQ FDISPATCH first tests physical mode and legal FDT, then uses
++ * IRP$W_FUNC and IRP$L_MEDIA. This hardware-independent decode remains
++ * strictly bounded to one LBN 1 home block during bootstrap. */
++uint32_t port_dq_bootread_decode(const struct port_dq_bootread_request *q,
++                                uint32_t *lbn,uint16_t *function){
++    if(!q||!q->fdt||!q->irp||!lbn||!function)
++        return PORT_DQ_BOOTREAD_BAD;
++    const uint16_t func=port_v37_read16(q->irp+PORT_V37_IRP_FUNC);
++    const uint32_t media=port_v37_read32(q->irp+PORT_V37_IRP_MEDIA);
++    if(media!=PORT_DQ_BOOTREAD_LBN)return PORT_DQ_BOOTREAD_MEDIA;
++    if(func!=PORT_DQ_READPBLK)return PORT_DQ_BOOTREAD_UNBOUND;
++    struct port_dq_fdt_decision d={0};
++    if(port_dq_fdt_classify(q->fdt,sizeof(*q->fdt),func,&d)!=PORT_DQ_FDT_OK ||
++       d.action_class!=PORT_DQ_FDT_READ || d.buffered || d.driver_bound ||
++       d.full_function!=PORT_DQ_READPBLK)
++        return PORT_DQ_BOOTREAD_UNBOUND;
++    *lbn=media;
++    *function=func;
++    return PORT_DQ_BOOTREAD_OK;
++}
+diff --git a/src/vms_dq_bootread_execute.c b/src/vms_dq_bootread_execute.c
+new file mode 100644
+index 0000000..3f800d2
+--- /dev/null
++++ b/src/vms_dq_bootread_execute.c
+@@ -0,0 +1,18 @@
++#include "vms_dq_bootread.h"
++/* Complete one READPBLK of the original boot disk, using real IA32 ATA
++ * only. No hidden fake disk, user-mode $QIO, RB730 emulation or write. */
++uint32_t port_dq_bootread_execute(const struct port_dq_bootread_request *q,
++                                  struct port_dq_bootread_result *out){
++    if(!out)return PORT_DQ_BOOTREAD_BAD;
++    uint32_t st=port_dq_bootread_preflight(q);
++    if(st!=PORT_DQ_BOOTREAD_OK)return st;
++    uint32_t lbn=0u;uint16_t function=0u;
++    st=port_dq_bootread_decode(q,&lbn,&function);
++    if(st!=PORT_DQ_BOOTREAD_OK)return st;
++    if(function!=PORT_DQ_READPBLK||lbn!=PORT_DQ_BOOTREAD_LBN)
++        return PORT_DQ_BOOTREAD_UNBOUND;
++    uint16_t scratch[256];
++    if(q->read_sector(q->read_context,lbn,scratch)!=0)
++        return PORT_DQ_BOOTREAD_FAILED;
++    return port_dq_bootread_commit(q,scratch,out);
++}
+diff --git a/src/vms_dq_bootread_preflight.c b/src/vms_dq_bootread_preflight.c
+new file mode 100644
+index 0000000..3a6c7ef
+--- /dev/null
++++ b/src/vms_dq_bootread_preflight.c
+@@ -0,0 +1,46 @@
++#include "vms_dq_bootread.h"
++/* Privileged-only early-INIT DQ read path. Strictly no user buffers,
++ * media writes, ACP invocation or emulated RB730 channel ownership. */
++static int disjoint(const void *a,size_t as,const void *b,size_t bs){
++    uintptr_t x=(uintptr_t)a,y=(uintptr_t)b;
++    if(as>UINTPTR_MAX-x||bs>UINTPTR_MAX-y)return 0;
++    return x+as<=y||y+bs<=x;
++}
++uint32_t port_dq_bootread_preflight(const struct port_dq_bootread_request *q){
++    if(!q||!q->irp||!q->sector||!q->device_info||!q->device_db||
++       !q->read_sector||!q->fdt||q->irp_bytes!=PORT_V37_IRP_SIZE||
++       q->sector_bytes!=PORT_DQ_BOOTREAD_BYTES||q->boot_unit!=0u||
++       ((uintptr_t)q->irp&3u)||((uintptr_t)q->sector&1u)||
++       !disjoint(q->sector,q->sector_bytes,q->irp,q->irp_bytes)||
++       !disjoint(q->sector,q->sector_bytes,q->device_db,PORT_V37_DEVICE_BYTES)||
++       !disjoint(q->irp,q->irp_bytes,q->device_db,PORT_V37_DEVICE_BYTES)||
++       !disjoint(q->sector,q->sector_bytes,q->fdt,sizeof(*q->fdt))||
++       !disjoint(q->irp,q->irp_bytes,q->fdt,sizeof(*q->fdt)))
++        return PORT_DQ_BOOTREAD_BAD;
++    if(port_v37_devices_check(q->device_db,PORT_V37_DEVICE_BYTES,
++         (uint32_t)(uintptr_t)q->device_db,q->device_info)!=PORT_V37_DEV_OK ||
++       q->device_info->incomplete_driver_mask!=7u ||
++       !q->device_info->bound_nl_ddt ||
++       port_dq_fdt_validate(q->fdt,sizeof(*q->fdt))!=PORT_DQ_FDT_OK)
++        return PORT_DQ_BOOTREAD_BAD;
++    const uint8_t *u=q->device_db+PORT_V37_UCB_BOOT_OFF;
++    if(q->device_info->ucb[0]!=(uint32_t)(uintptr_t)u ||
++       port_v37_read16(u+8u)!=PORT_V37_BOOT_UCB_SIZE ||
++       port_v37_read32(u+36u)!=q->device_info->ddb[0] ||
++       port_v37_read16(u+58u)!=512u ||
++       port_v37_read16(u+72u)!=q->boot_unit ||
++       port_v37_read32(u+120u)!=0u || /* NO disk DDT linked */
++       port_v37_read32(q->irp+PORT_V37_IRP_UCB)!=q->device_info->ucb[0] ||
++       port_v37_read16(q->irp+8u)!=PORT_V37_IRP_SIZE ||
++       q->irp[10u]!=PORT_V37_DYN_IRP ||
++       q->irp[11u]!=0u ||  /* kernel mode */
++       port_v37_read16(q->irp+42u)!=PORT_DQ_PHYSIO ||
++       port_v37_read32(q->irp+36u)!=0u || /* No process IOSB */
++       port_v37_read16(q->irp+40u)!=0u || /* No user channel */
++       port_v37_read32(q->irp+44u)!=0u || /* No user PTEs */
++       port_v37_read16(q->irp+50u)!=PORT_DQ_BOOTREAD_BYTES ||
++       port_v37_read16(q->irp+48u)!=0u ||
++       port_v37_read32(q->irp+PORT_V37_IRP_IOST2)!=0u)
++        return PORT_DQ_BOOTREAD_BAD;
++    return PORT_DQ_BOOTREAD_OK;
++}
+diff --git a/src/vms_sys_executive_entry.c b/src/vms_sys_executive_entry.c
+index 6287491..eafa502 100644
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -72,6 +72,12 @@ static uint32_t executive_null_fdt_ready;
+ /* Source DQDRIVER legal, buffered and ten class masks. No read/write HW. */
+ static struct port_dq_fdt executive_dq_fdt __attribute__((aligned(8)));
+ static uint32_t executive_dq_fdt_ready;
++/* DQDRIVER physical READPBLK data really comes from the registered
++ * native PC ATA PIO driver. It cannot be issued as a process QIO yet. */
++static union {uint32_t align;uint8_t bytes[PORT_V37_IRP_SIZE];} executive_dq_boot_irp;
++static union {uint32_t align;uint16_t words[256];} executive_dq_boot_sector;
++static struct port_dq_bootread_result executive_dq_bootread_result;
++static uint32_t executive_dq_bootread_ready;
+ static struct port_ini_bootdev_result executive_bootdev_scan;
+ static uint32_t executive_bootdev_scan_ready;
+ /* DEVICEDAT.MAR prelinked BOOT/OPA/MBA/NLA DDB and UCB backing. */
+@@ -527,6 +533,52 @@ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *p){
+         p->result->signature=PORT_SYS_EXEC_DQ_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_DQ_BOOTREAD){
++        /* Source DQDRIVER.MAR PREPROCESS/FDISPATCH/FUNCXT 640-940:
++         * a physical read bypasses unavailable software volume-valid
++         * and hands one verified LBN to the real PC ATA 512-byte PIO.
++         * No disk DDT, ACP, normal $QIO or AST may be invented. */
++        if(!executive_dq_fdt_ready||!executive_devicedb_ready||
++           !executive_bootdev_scan_ready||executive_dq_bootread_ready||
++           executive_bootdev_scan.boot_kind!=PORT_INI_PC_ATA_PIO||
++           executive_devicedb_result.incomplete_driver_mask!=7u||
++           !p->dq_boot_io || !p->dq_boot_io->read_sector ||
++           p->dq_boot_io->boot_unit!=0u || p->dq_boot_io->reserved ||
++           (uintptr_t)executive_dq_boot_irp.bytes>UINT32_MAX)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        const uint32_t irp=(uint32_t)(uintptr_t)executive_dq_boot_irp.bytes;
++        if(port_v37_irp_prepare(executive_dq_boot_irp.bytes,
++                PORT_V37_IRP_SIZE,irp,executive_devicedb_result.ucb[0],
++                PORT_DQ_READPBLK)!=PORT_V37_QIO_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        port_v37_write16(executive_dq_boot_irp.bytes+42u,PORT_DQ_PHYSIO);
++        port_v37_write16(executive_dq_boot_irp.bytes+50u,PORT_DQ_BOOTREAD_BYTES);
++        port_v37_write32(executive_dq_boot_irp.bytes+PORT_V37_IRP_MEDIA,
++                         PORT_DQ_BOOTREAD_LBN);
++        const struct port_dq_bootread_request dq={
++            .fdt=&executive_dq_fdt,
++            .device_db=executive_devicedb_bytes.data,
++            .device_info=&executive_devicedb_result,
++            .irp=executive_dq_boot_irp.bytes,.irp_bytes=PORT_V37_IRP_SIZE,
++            .sector=executive_dq_boot_sector.words,
++            .sector_bytes=PORT_DQ_BOOTREAD_BYTES,
++            .boot_unit=p->dq_boot_io->boot_unit,
++            .read_sector=p->dq_boot_io->read_sector,
++            .read_context=p->dq_boot_io->context};
++        if(port_dq_bootread_execute(&dq,&executive_dq_bootread_result)!=
++                         PORT_DQ_BOOTREAD_OK ||
++           executive_dq_bootread_result.lbn!=1u ||
++           executive_dq_bootread_result.bytes!=512u ||
++           executive_dq_bootread_result.irp_status!=1u ||
++           executive_dq_bootread_result.irp_second!=512u ||
++           executive_dq_boot_sector.words[0]!=1u)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_dq_bootread_ready=1u;
++        p->result->dq_bootread=&executive_dq_bootread_result;
++        p->result->dq_bootread_sector=executive_dq_boot_sector.words;
++        p->result->signature=PORT_SYS_EXEC_DQ_BOOTREAD_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_IOPOST_END){
+         /* Wire the source IOCIOPOST.MAR entry to supervisor x86 IDT 0x90.
+          * Bootstrap may NOT drain the FIFO on its normal function stack. */
+diff --git a/src/vms_sys_executive_entry.h b/src/vms_sys_executive_entry.h
+index ec8b44f..f4df5a7 100644
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -16,6 +16,7 @@
+ #include "vms_ini_dpt_templates.h"
+ #include "vms_ini_bootdev_scan.h"
+ #include "vms_dq_fdt.h"
++#include "vms_dq_bootread.h"
+ #include "vms_ini_devicedb.h"
+ #include "vms_con_port.h"
+ #include "vms_ioc_phys.h"
+@@ -25,7 +26,7 @@
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=23u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=24u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -49,7 +50,15 @@ enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=23u,
+        PORT_SYS_EXEC_INIT_IOPOST_END=19u,PORT_SYS_EXEC_IOPOST_END_TAG=0x444e4549u,
+        PORT_SYS_EXEC_VERIFY_IOPOST_INT=20u,
+        PORT_SYS_EXEC_IOPOST_BIND_TAG=0x42494950u,
+-       PORT_SYS_EXEC_INIT_DQ_FDT=21u, PORT_SYS_EXEC_DQ_RESULT_TAG=0x54465144u };
++       PORT_SYS_EXEC_INIT_DQ_FDT=21u, PORT_SYS_EXEC_DQ_RESULT_TAG=0x54465144u,
++       PORT_SYS_EXEC_INIT_DQ_BOOTREAD=22u, PORT_SYS_EXEC_DQ_BOOTREAD_TAG=0x44425144u };
++/* This is an explicitly privileged early-boot disk path. Hardware is real
++ * ATA PIO; the original DQ disk DDT and Files-11 ACP are NOT bound. */
++struct port_sys_exec_dq_boot_settings {
++    port_dq_native_read_fn read_sector;
++    void *context;
++    uint16_t boot_unit,reserved;
++};
+ /* The IA-32 privilege-transition stack is the first live counterpart of
+  * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
+ /* SYSBOOT passes the genuine Files-11 SYS.EXE extent map through the
+@@ -101,6 +110,9 @@ struct port_sys_exec_result {
+     const struct port_dq_fdt *dq_source_fdt;
+     uint32_t (*dq_fdt_classify)(const struct port_dq_fdt *,size_t,uint16_t,
+                                 struct port_dq_fdt_decision *);
++    /* Resident one-sector physical LBN1 boot read, no public QIO. */
++    const struct port_dq_bootread_result *dq_bootread;
++    const uint16_t *dq_bootread_sector;
+     /* Prelinked DEVICEDAT DDB/UCB pointer graph; no live driver DDT. */
+     const struct port_v37_device_result *device_db;
+     const uint8_t *device_db_bytes;
+@@ -154,6 +166,7 @@ struct port_sys_exec_start {
+     const struct port_ini_pflvec_settings *pfl_settings;
+     const struct port_sys_exec_wcb_settings *syswcb_settings;
+     const struct port_ini_io_state *bootdev_state;
++    const struct port_sys_exec_dq_boot_settings *dq_boot_io;
+ };
+ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *parameters);
+ #endif
+diff --git a/tests/test_dq_bootread_host.c b/tests/test_dq_bootread_host.c
+new file mode 100644
+index 0000000..348a12f
+--- /dev/null
++++ b/tests/test_dq_bootread_host.c
+@@ -0,0 +1,119 @@
++#include <stdio.h>
++#include <stdint.h>
++#include <string.h>
++#include "vms_dq_bootread.h"
++#define CHECK(c) do{if(!(c)){fprintf(stderr,"DQ boot READPBLK failed line %d: %s\n",__LINE__,#c);return 1;}}while(0)
++static unsigned reads,last_lbn;
++static int read_home(void *ctx,uint32_t lbn,uint16_t dst[256]){
++    uint16_t *const block=ctx;
++    ++reads;last_lbn=lbn;
++    for(unsigned i=0;i<256u;i++)dst[i]=block[i];
++    return 0;
++}
++static int disk_error(void *ctx,uint32_t lbn,uint16_t dst[256]){
++    (void)ctx;(void)lbn;
++    ++reads;
++    for(unsigned i=0;i<256u;i++)dst[i]=0xdeadu;
++    return 1;
++}
++static int fails_when(int (*mutate)(struct port_dq_bootread_request *),
++    struct port_dq_bootread_request *q){
++    uint8_t old_irp[PORT_V37_IRP_SIZE];
++    uint8_t old_db[PORT_V37_DEVICE_BYTES];
++    uint16_t old_sector[256];
++    struct port_dq_bootread_result result={.irp_status=0xbeef};
++    memcpy(old_irp,q->irp,sizeof old_irp);
++    memcpy(old_db,q->device_db,sizeof old_db);
++    memcpy(old_sector,q->sector,sizeof old_sector);
++    if(mutate(q))return 0;
++    const uint32_t code=port_dq_bootread_execute(q,&result);
++    if(code==PORT_DQ_BOOTREAD_OK || result.irp_status!=0xbeef ||
++       memcmp(old_irp,q->irp,sizeof old_irp) ||
++       memcmp(old_db,q->device_db,sizeof old_db) ||
++       memcmp(old_sector,q->sector,sizeof old_sector))return 0;
++    return 1;
++}
++static int bad_func(struct port_dq_bootread_request *q){
++    port_v37_write16(q->irp+PORT_V37_IRP_FUNC,PORT_DQ_WRITELBLK);return 0;
++}
++static int bad_media(struct port_dq_bootread_request *q){
++    port_v37_write32(q->irp+PORT_V37_IRP_MEDIA,2u);return 0;
++}
++static int bad_status(struct port_dq_bootread_request *q){
++    port_v37_write16(q->irp+42u,0u);return 0;
++}
++int main(void){
++    uint32_t devices[PORT_V37_DEVICE_BYTES/4u]={0};
++    uint32_t irp_storage[PORT_V37_IRP_SIZE/4u]={0};
++    uint16_t read_result[256]={0};
++    uint16_t original_block[256]={0};
++    struct port_v37_device_result info={0};
++    struct port_dq_fdt fdt={0};
++    const uint32_t addr=(uint32_t)(uintptr_t)devices;
++    CHECK(addr && !(addr&3u));
++    CHECK(port_v37_devices_prelink((uint8_t *)devices,sizeof devices,addr,&info)==PORT_V37_DEV_OK);
++    const uint32_t nl_ddt=0x00700000u;
++    /* NLA is the only DDT bound at this stage. BOOT DDT/CRB is absent. */
++    port_v37_write32((uint8_t *)devices+PORT_V37_DDB_NL_OFF+12u,nl_ddt);
++    port_v37_write32((uint8_t *)devices+PORT_V37_UCB_NL_OFF+120u,nl_ddt);
++    info.bound_nl_ddt=nl_ddt;
++    info.incomplete_driver_mask=7u;
++    CHECK(port_v37_devices_check((const uint8_t *)devices,sizeof devices,addr,&info)==PORT_V37_DEV_OK);
++    CHECK(port_dq_fdt_build(&fdt,sizeof fdt)==PORT_DQ_FDT_OK);
++    CHECK(port_v37_irp_prepare((uint8_t *)irp_storage,PORT_V37_IRP_SIZE,
++       0x00712000u,info.ucb[0],PORT_DQ_READPBLK)==PORT_V37_QIO_OK);
++    uint8_t *const irp=(uint8_t *)irp_storage;
++    port_v37_write16(irp+42u,PORT_DQ_PHYSIO);
++    port_v37_write16(irp+50u,PORT_DQ_BOOTREAD_BYTES);
++    port_v37_write32(irp+PORT_V37_IRP_MEDIA,PORT_DQ_BOOTREAD_LBN);
++    FILE *file=fopen("portdisk.img","rb");
++    CHECK(file!=0);
++    CHECK(fseek(file,512L,SEEK_SET)==0);
++    CHECK(fread(original_block,1,512u,file)==512u);
++    CHECK(fclose(file)==0);
++    CHECK(original_block[0]==1u); /* Genuine source Files-11 home LBN */
++    struct port_dq_bootread_request q={
++        .fdt=&fdt,.device_db=(uint8_t *)devices,.device_info=&info,
++        .irp=irp,.irp_bytes=PORT_V37_IRP_SIZE,.sector=read_result,
++        .sector_bytes=512u,.boot_unit=0u,.read_sector=read_home,
++        .read_context=original_block};
++    struct port_dq_bootread_result result={0};
++    CHECK(port_dq_bootread_preflight(&q)==PORT_DQ_BOOTREAD_OK);
++    CHECK(port_dq_bootread_execute(&q,&result)==PORT_DQ_BOOTREAD_OK);
++    CHECK(reads==1u && last_lbn==1u);
++    CHECK(!memcmp(read_result,original_block,sizeof read_result));
++    CHECK(result.lbn==1u&&result.bytes==512u&&result.irp_status==1u&&
++          result.irp_second==512u && result.ucb_io_count==1u &&
++          result.ucb_media==1u && result.io_function==12u &&
++          result.sector_checksum==port_dq_bootread_checksum(original_block));
++    CHECK(port_v37_read32(irp+56u)==1u && port_v37_read32(irp+60u)==512u);
++    CHECK(port_v37_read32((uint8_t *)devices+PORT_V37_UCB_BOOT_OFF+156u)==1u);
++    CHECK(port_v37_read32((uint8_t *)devices+PORT_V37_UCB_BOOT_OFF+96u)==1u);
++    CHECK(port_dq_bootread_execute(&q,&result)==PORT_DQ_BOOTREAD_BAD);
++    CHECK(reads==1u);
++    port_v37_write32(irp+60u,0u);
++    CHECK(fails_when(bad_func,&q));
++    CHECK(reads==1u);
++    port_v37_write16(irp+32u,PORT_DQ_READPBLK);
++    CHECK(fails_when(bad_media,&q));
++    port_v37_write32(irp+56u,1u);
++    CHECK(fails_when(bad_status,&q));
++    port_v37_write16(irp+42u,PORT_DQ_PHYSIO);
++    q.read_sector=disk_error;
++    CHECK(fails_when(0,&q));
++    CHECK(reads==2u);
++    q.read_sector=read_home;
++    q.boot_unit=1u;
++    CHECK(port_dq_bootread_execute(&q,&result)==PORT_DQ_BOOTREAD_BAD);
++    q.boot_unit=0u;
++    fdt.mask[PORT_DQ_FDT_LEGAL]^=PORT_DQ_BIT(12u);
++    CHECK(port_dq_bootread_execute(&q,&result)==PORT_DQ_BOOTREAD_BAD);
++    fdt.mask[PORT_DQ_FDT_LEGAL]^=PORT_DQ_BIT(12u);
++    q.sector_bytes=510u;
++    CHECK(port_dq_bootread_execute(&q,&result)==PORT_DQ_BOOTREAD_BAD);
++    q.sector_bytes=512u;
++    q.read_sector=0;
++    CHECK(port_dq_bootread_execute(&q,&result)==PORT_DQ_BOOTREAD_BAD);
++    puts("DQDRIVER.MAR privileged native read of real Files-11 LBN1, original IRP/UCB completion and fail-closed controls PASS");
++    return 0;
++}
+diff --git a/tools/gen_source_coverage.py b/tools/gen_source_coverage.py
+index d953762..2473a66 100644
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2318,7 +2318,15 @@ dq_fdt_rows=[
+  (582,584,'src/vms_dq_fdt_one.c','port_dq_fdt_one','Source EXE$ONEPARM SEEK mask'),
+  (585,588,'src/vms_dq_fdt_sense.c','port_dq_fdt_sense','Source EXE$SENSEMODE characteristics mask'),
+  (589,592,'src/vms_dq_fdt_set.c','port_dq_fdt_set','Source EXE$SETCHAR disk set-mode mask'),
+- (593,2189,None,None,'Original DQ_STARTIO, RB730 controller I/O, error retry, port/ACP, interrupt and shutdown paths unresolved')]
++ (593,633,None,None,'Original RB730 driver setup and controller dispatch entry unresolved'),
++ (634,639,'src/vms_dq_bootread_execute.c','port_dq_bootread_execute','Native physical boot READPBLK entry: no general DQ driver, async IOC or ACP'),
++ (640,654,'src/vms_dq_bootread_decode.c','port_dq_bootread_decode','IRP MEDIA physical LBN extraction, one verified native ATA 512-byte sector only'),
++ (655,671,'src/vms_dq_bootread_commit.c','port_dq_bootread_commit','UCB retry count, BCNT, FEX and media field update, partial DQ PREPROCESS'),
++ (672,677,None,None,'Unimplemented RB730 branch/diagnostic bits and controller hardware'),
++ (678,709,'src/vms_dq_bootread_preflight.c','port_dq_bootread_preflight','Source FDISPATCH: PHYSIO bypass of volume-valid, guarded read-only boot transfer'),
++ (710,916,None,None,'Original pack acknowledgement, RB730 asynchronous transfer, ECC and retries remain unresolved'),
++ (917,939,'src/vms_dq_bootread_commit.c','port_dq_bootread_commit','Original FUNCXT status1/bytecount and BCR; IOC queue and hardware channel release absent'),
++ (940,2189,None,None,'RB730 CSR/interrupts, retry, init, controller/port resource and remaining disk source unresolved')]
+ dq_fdt_sections=[]
+ for first,last,path,symbol,detail in dq_fdt_rows:
+     if path is None:
+@@ -2331,7 +2339,7 @@ for first,last,path,symbol,detail in dq_fdt_rows:
+              'pc_file':path,'pc_symbol':symbol,'pc_line':line,'function':detail})
+ result['files'].append({'original_file':'DRIVER/SRC/DQDRIVER.MAR',
+     'original_lines':2189,'sections':dq_fdt_sections,
+-    'unresolved_integration':'Native SYS.EXE stages correct source mask bits; all DQ DDT, RB730/ATA hardware conversions, CRB, ACP action pointers and actual disk IO are absent. Dispatch fails closed.'})
++    'unresolved_integration':'Resident SYS.EXE stages source FDT masks and performs one privileged physical READPBLK of real ATA Files-11 home LBN1; DQ DDT, RB730/ATA full translation, IOC, CRB, Files-11 ACP and general I/O remain unbound.'})
+ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ 
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+diff --git a/tools/qemu_sysboot_m126.py b/tools/qemu_sysboot_m126.py
+new file mode 100644
+index 0000000..d82fb41
+--- /dev/null
++++ b/tools/qemu_sysboot_m126.py
+@@ -0,0 +1,133 @@
++#!/usr/bin/env python3
++"""One real native IA-32 QEMU boot; verify DPL0 software IPL4 dispatch.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M126: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE staged DQDRIVER 12 source FDT masks (disk DDT and ACP unbound).',
++        b'INIT: SYS.EXE linked NL$DDT DDTAB/FUNCTAB to NLA0 (other drivers absent).',
++        b'INIT: SYS.EXE DQ READPBLK fetched actual ATA Files-11 LBN1 (disk DDT/ACP not linked).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE IOC device search resolved NLA0 with native null DDT (others unbound).',
++        b'INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 requested).',
++        b'INIT: SYS.EXE IOCIOPOST serviced two NLA IRPs through IA-32 CPL0 software INT 0x90 (no process AST).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: resident source DQ FDT staging validation failed.',
++        b'INIT: resident DQ physical boot READPBLK failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.',
++        b'INIT: resident IOCIOPOST source kernel end-action processing failed.',
++        b'INIT: resident IOCIOPOST native software interrupt failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m126-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,126,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M126: guest real ATA Files-11 LBN1 through resident DQ READPBLK, IRQ 0x90 PASS')
++        return 0
++    print('QEMU M126: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
