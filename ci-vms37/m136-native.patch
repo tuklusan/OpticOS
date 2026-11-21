@@ -572,10 +572,10 @@ index 0000000..6bb21c1
 +int test_m136_case_33(void){return m136_physical_case(UINT32_C(0xffffffff),UINT32_C(0xffffffff),PORT_DQ_BOOTREAD_MEDIA,0);}
 diff --git a/tests/test_dq_physical_cases_main.c b/tests/test_dq_physical_cases_main.c
 new file mode 100644
-index 0000000..e00ea20
+index 0000000..9adbf9e
 --- /dev/null
 +++ b/tests/test_dq_physical_cases_main.c
-@@ -0,0 +1,127 @@
+@@ -0,0 +1,141 @@
 +#include <stdio.h>
 +#include <stdint.h>
 +#include <string.h>
@@ -624,6 +624,20 @@ index 0000000..e00ea20
 +            out.ucb_io_count!=1u||out.irp_status!=PORT_SYS85_NORMAL||
 +            out.sector_checksum!=port_dq_bootread_checksum(block));
 +        for(unsigned i=0;i<256u;i++)FAIL_IF(block[i]!=(uint16_t)(i^requested));
++        /* Same UCB, fresh IRP: the resident INIT does LBN1 then LBN0. */
++        uint32_t irp2[PORT_V37_IRP_SIZE/4u]={0};
++        uint16_t block2[256]={0};
++        FAIL_IF(port_v37_irp_prepare((uint8_t *)irp2,sizeof irp2,
++             (uint32_t)(uintptr_t)irp2,info.ucb[0],PORT_DQ_READPBLK)!=PORT_V37_QIO_OK);
++        port_v37_write16((uint8_t *)irp2+42u,PORT_DQ_PHYSIO);
++        port_v37_write16((uint8_t *)irp2+50u,PORT_DQ_BOOTREAD_BYTES);
++        port_v37_write32((uint8_t *)irp2+PORT_V37_IRP_MEDIA,0u);
++        req.irp=(uint8_t *)irp2;req.sector=block2;
++        struct port_dq_bootread_result followup={0};
++        FAIL_IF(port_dq_bootread_execute_physical(&req,&followup,0u)!=PORT_DQ_BOOTREAD_OK);
++        FAIL_IF(followup.lbn!=0u||followup.ucb_io_count!=2u||
++            port_v37_read32((uint8_t *)db+PORT_V37_UCB_BOOT_OFF+
++                           PORT_V37_UCB_OPCNT)!=2u||reads-before!=2u);
 +    }else{
 +        FAIL_IF(out.bytes!=UINT32_C(0xcafebabe)||
 +            port_v37_read32((uint8_t *)db+PORT_V37_UCB_BOOT_OFF+
