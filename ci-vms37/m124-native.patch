@@ -1,0 +1,644 @@
+diff --git a/Makefile b/Makefile
+index cd9296e..99763ad 100644
+--- a/Makefile
++++ b/Makefile
+@@ -206,8 +206,8 @@ build/kernel.o: src/kernel.c src/vms_ini_phv_swap.h src/vms_sys_executive_entry.
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/vms_ini_pc_bus.o: src/vms_ini_pc_bus.c src/vms_ini_pc_bus.h src/vms_iniloa_iomap.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+-build/kernel.elf: build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o build/vms_ini_pc_bus.o linked.ld
+-	$(LD) -m elf_i386 -T linked.ld -o $@ build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o build/vms_ini_pc_bus.o
++build/kernel.elf: build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o build/vms_ini_pc_bus.o linked.ld $(M124_SWI_OBJS)
++	$(LD) -m elf_i386 -T linked.ld -o $@ build/start.o build/vms_vmb_rpb.o build/vms_sysmount.o build/vms_vmbargs.o build/vms_filerwio.o build/vms_sysboot_map.o build/vms_sysboot_read.o build/vms_sysboot_elf.o build/vms_bootio.o build/vms_boot_files11.o build/vms_sysinit_names.o build/vms_initvec.o build/vms_booparam.o build/vms_boot_readprompt.o build/kernel.o build/vms_dcl_exit.o build/vms_dcl_status.o build/vms_dcl_if.o build/vms_dcl_inquire.o build/vms_dcl_on.o build/vms_dcl_intimages.o build/vms_dcl_goto.o build/vms_dcl_readrec.o build/vms_dcl_initial.o build/vms_dcl_command.o build/vms_dcl_descr.o build/vms_login_interact.o build/vms_logincmd.o build/vms_login_fileio.o build/vms_login_uart.o build/vms_hpwd.o build/vms_validate.o build/vms_uaf_v37.o build/vms_logintime.o build/vms_rtc_x86.o build/vms_hpwd_selftest.o build/vms_mutex.o build/vms_mutex_selftest.o build/vms_postef.o build/vms_postef_selftest.o build/vms_astdel.o build/vms_astdel_selftest.o build/vms_ast.o build/vms_condition.o build/vms_pmap.o build/vms_pcb.o build/vms_phys.o build/vms_ramcheck.o build/vms_vmem.o build/vms_event.o build/vms_ata.o build/vms_ata_x86.o build/vms_ne2k.o build/vms_ne2k_x86.o build/vms_decnet.o build/vms_rem_protocol.o build/vms_rem_protocol_selftest.o build/vms_nsp.o build/vms_nsp_link.o build/vms_session.o build/vms_nsp_data.o build/vms_nsp_reliable.o build/vms_mirror.o build/vms_mirror_server.o build/vms_serial.o build/vms_serial_x86.o build/vms_qio.o build/vms_channels.o build/vms_userptr.o build/vms_userio.o build/vms_kstack.o build/arch.o build/arch_asm.o build/vms_exe_gettim.o build/vms_ini_pc_bus.o $(M124_SWI_OBJS)
+ build/kernel.bin: build/kernel.elf
+ 	$(OBJCOPY) -O binary $< $@
+ portdisk.img: build/make_f11_disk build/install_sys_image build/sys.exe build/install_iniloa_image build/iniloa.exe build/install_sysloa386_image build/sysloa386.exe
+@@ -792,8 +792,16 @@ M121_QIO_SRCS=$(wildcard src/vms_qio_*.c)
+ M121_QIO_OBJS=$(patsubst src/%.c,build/%.o,$(M121_QIO_SRCS))
+ M122_NL_DDT_SRCS=$(wildcard src/vms_nl_ddt_*.c)
+ M122_NL_DDT_OBJS=$(patsubst src/%.c,build/%.o,$(M122_NL_DDT_SRCS))
+-M123_IOPOST_SRCS=$(wildcard src/vms_iopost_*.c)
++M123_IOPOST_SRCS=$(filter-out $(M124_SWI_SRCS),$(wildcard src/vms_iopost_*.c))
+ M123_IOPOST_OBJS=$(patsubst src/%.c,build/%.o,$(M123_IOPOST_SRCS))
++M124_SWI_SRCS=$(wildcard src/vms_iopost_swi_*.c)
++M124_SWI_OBJS=$(patsubst src/%.c,build/%.o,$(M124_SWI_SRCS))
++$(M124_SWI_OBJS): build/%.o: src/%.c src/vms_iopost_swi.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: swiopostcheck
++swiopostcheck: $(M124_SWI_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M124_SWI_SRCS) tests/test_iopost_swi_host.c -o build/swiopostcheck
++	./build/swiopostcheck
+ $(M119_CON_OBJS): build/%.o: src/%.c src/vms_con_port.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ .PHONY: conportcheck
+diff --git a/src/arch.c b/src/arch.c
+index adeb871..8fdee5b 100644
+--- a/src/arch.c
++++ b/src/arch.c
+@@ -18,8 +18,10 @@
+ #include "vms_channels.h"
+ #include "vms_exe_gettim.h"
+ #include "vms_logintime.h"
++#include "vms_iopost_swi.h"
++#include "vms_sysboot_elf.h"
+ 
+-extern const uint32_t arch_isr_table[35];
++extern const uint32_t arch_isr_table[36];
+ extern uint32_t port_gdt[];
+ extern void arch_load_tr(void);
+ extern void arch_enter_ring3(void (*entry)(void), void *stack_top, uint32_t parameter);
+@@ -92,6 +94,23 @@ const struct port_exe_systime *arch_exe_systime(void) {
+     return exe_clock_valid ? &exe_system_clock : 0;
+ }
+ 
++/* Source SCBVECTOR.MAR + IOCIOPOST.MAR: a real IA-32 CPL0 software
++ * interrupt, not a pretend VAX PSL or PIC hardware IRQ. */
++static struct port_iopost_swi resident_iopost_irq;
++uint32_t arch_iopost_bind(uint32_t (*callback)(void)){
++    uintptr_t address=(uintptr_t)callback;
++    if(address>UINT32_MAX)return PORT_IOPOST_SW_BAD;
++    return port_iopost_swi_bind(&resident_iopost_irq,callback,
++       (uint32_t)address,PORT_SYS_ELF_START,PORT_SYS_ELF_LIMIT);
++}
++uint32_t arch_iopost_trigger(void){
++    if(!resident_iopost_irq.armed)return PORT_IOPOST_SW_UNBOUND;
++    /* Interrupt gate has DPL0; a ring3 INT 0x90 causes #GP. */
++    __asm__ volatile("int $0x90":::"memory");
++    return port_iopost_swi_check(&resident_iopost_irq,1u,PORT_IOPOST_SW_OK);
++}
++uint32_t arch_iopost_count(void){return resident_iopost_irq.calls;}
++uint32_t arch_iopost_last_status(void){return resident_iopost_irq.last_status;}
+ static volatile uint32_t last_vector;
+ static volatile uint32_t user_cpl_report;
+ static volatile uint32_t user_syscalls;
+@@ -776,6 +795,8 @@ void arch_init(void) {
+     arch_install_gdt();
+     for (unsigned i = 0; i < 34; ++i) gate_set(i, arch_isr_table[i],0);
+     gate_set(128, arch_isr_table[34],3);
++    gate_set(144, arch_isr_table[35],0);
++    port_iopost_swi_init(&resident_iopost_irq);
+     struct descriptor_ptr idtr = {(uint16_t)(sizeof(idt) - 1), (uint32_t)idt};
+     __asm__ volatile("lidt %0" : : "m"(idtr));
+     privilege_init();
+@@ -829,6 +850,17 @@ int arch_trap(struct port_trap_frame *f) {
+             for (;;) __asm__ volatile ("cli; hlt");
+         }
+     }
++    if (f->vector == PORT_IOPOST_SW_VECTOR) {
++        /* DPL0 gate rejects INT 0x90 from a user task in hardware.
++         * Never EOI the 8259 for a software interrupt. */
++        if((f->cs&3u)!=0u ||
++           port_iopost_swi_dispatch(&resident_iopost_irq,f->vector)
++              !=PORT_IOPOST_SW_OK){
++            arch_report_fault(f->vector,f->error,f->eip);
++            for(;;)__asm__ volatile("cli; hlt");
++        }
++        return 0;
++    }
+     if (f->vector == 128) {
+         /* DPL3 syscall gate. Only the user probe can request an EXIT.
+          * Trap frames already live on the TSS-selected kernel stack. */
+diff --git a/src/arch.s b/src/arch.s
+index 5f0b409..4aac82e 100644
+--- a/src/arch.s
++++ b/src/arch.s
+@@ -93,6 +93,7 @@ vector_no_error 31
+ vector_no_error 32     /* PIC IRQ0: PIT */
+ vector_no_error 33     /* PIC IRQ1: keyboard, masked */
+ vector_no_error 128    /* user->kernel syscall gate */
++vector_no_error 144    /* VMS 3.7 software IPL4, native CPL0 only */
+ arch_isr_common:
+     cld
+     pushal
+@@ -766,7 +767,7 @@ arch_probe_ud2:
+ .section .rodata,"a"
+ .align 4
+ arch_isr_table:
+-.irp v,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,128
++.irp v,0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32,33,128,144
+     .long arch_isr_\v
+ .endr
+ .section .note.GNU-stack,"",@progbits
+diff --git a/src/kernel.c b/src/kernel.c
+index 564b5ce..802df65 100644
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -65,6 +65,10 @@ extern uint32_t arch_ram_window_ready(void);
+ extern uint32_t arch_ticks(void);
+ extern int arch_adopt_executive_clock(const struct port_exe_systime *,
+                                      void (*tick)(void));
++extern uint32_t arch_iopost_bind(uint32_t (*)(void));
++extern uint32_t arch_iopost_trigger(void);
++extern uint32_t arch_iopost_count(void);
++extern uint32_t arch_iopost_last_status(void);
+ extern const struct port_exe_systime *arch_exe_systime(void);
+ extern uint32_t arch_last_vector(void);
+ extern void arch_probe_int3(void);
+@@ -3161,34 +3165,51 @@ void kmain(void) {
+         bootstrap_message("INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.");
+         bootstrap_halt();
+     }
+-    bootstrap_message("INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 pending).");
++    bootstrap_message("INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 requested).");
+ 
+-    /* IOCIOPOST.MAR 145-165: remove both reserved kernel end-action
+-     * IRPs from the actual SYS.EXE queue and record their statuses.
+-     * This is not a delivered IPL4 interrupt or a process $QIO AST. */
++    /* IOCIOPOST.MAR 145-165: source IRP post FIFO drains inside a
++     * real CPL0 x86 interrupt gate (SCBVECTOR original slot 0x90).
++     * No process channel IOSB or AST is reported as initialized. */
+     static struct port_sys_exec_result end_result;
+     const struct port_sys_exec_start end_request={
+         .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
+         .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&end_result,
+         .phase=PORT_SYS_EXEC_INIT_IOPOST_END};
+     if(loaded_sys(&end_request)!=PORT_SYS_EXEC_NORMAL ||
+-       end_result.signature!=PORT_SYS_EXEC_IOPOST_END_TAG ||
+-       !end_result.iopost_endlog || !end_result.iopost ||
+-       end_result.iopost_endlog->completed!=2u ||
+-       end_result.iopost_endlog->status[0]!=PORT_SYS85_ENDOFFILE ||
+-       end_result.iopost_endlog->status[1]!=PORT_SYS85_NORMAL ||
+-       end_result.iopost_endlog->irp_va[0]!=(uint32_t)(uintptr_t)post_result.post_irp_bytes ||
+-       end_result.iopost_endlog->irp_va[1]!=
++       end_result.signature!=PORT_SYS_EXEC_IOPOST_BIND_TAG ||
++       !end_result.iopost_isr ||
++       end_result.iopost_remaining!=2u ||
++       (uintptr_t)end_result.iopost_isr<PORT_SYS_ELF_START ||
++       (uintptr_t)end_result.iopost_isr>=PORT_SYS_ELF_LIMIT ||
++       arch_iopost_bind(end_result.iopost_isr)!=1u ||
++       arch_iopost_trigger()!=1u ||
++       arch_iopost_count()!=1u ||
++       arch_iopost_last_status()!=PORT_V37_IOPOST_OK){
++        bootstrap_message("INIT: resident IOCIOPOST native software interrupt failed.");
++        bootstrap_halt();
++    }
++    static struct port_sys_exec_result verify_end_result;
++    const struct port_sys_exec_start verify_end_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&verify_end_result,
++        .phase=PORT_SYS_EXEC_VERIFY_IOPOST_INT};
++    if(loaded_sys(&verify_end_request)!=PORT_SYS_EXEC_NORMAL ||
++       verify_end_result.signature!=PORT_SYS_EXEC_IOPOST_END_TAG ||
++       !verify_end_result.iopost_endlog || !verify_end_result.iopost ||
++       verify_end_result.iopost_endlog->completed!=2u ||
++       verify_end_result.iopost_endlog->status[0]!=PORT_SYS85_ENDOFFILE ||
++       verify_end_result.iopost_endlog->status[1]!=PORT_SYS85_NORMAL ||
++       verify_end_result.iopost_endlog->irp_va[0]!=(uint32_t)(uintptr_t)post_result.post_irp_bytes ||
++       verify_end_result.iopost_endlog->irp_va[1]!=
+            (uint32_t)(uintptr_t)post_result.post_irp_bytes+PORT_V37_IRP_SIZE ||
+-       end_result.iopost_remaining!=0u ||
+-       end_result.iopost!=post_result.iopost ||
+-       end_result.iopost->first!=end_result.iopost->sentinel ||
+-       end_result.iopost->last!=end_result.iopost->sentinel){
++       verify_end_result.iopost_remaining!=0u ||
++       verify_end_result.iopost!=post_result.iopost ||
++       verify_end_result.iopost->first!=verify_end_result.iopost->sentinel ||
++       verify_end_result.iopost->last!=verify_end_result.iopost->sentinel){
+         bootstrap_message("INIT: resident IOCIOPOST source kernel end-action processing failed.");
+         bootstrap_halt();
+     }
+-    bootstrap_message("INIT: SYS.EXE IOCIOPOST removed and recorded two privileged NLA end-action IRPs (process AST absent).");
+-
++    bootstrap_message("INIT: SYS.EXE IOCIOPOST serviced two NLA IRPs through IA-32 CPL0 software INT 0x90 (no process AST).");
+     /* Resident SYS.EXE clock, process queues and SCB setup execute from the
+      * image read through Files-11. This is not a full system startup. */
+     uint64_t native_now=0u;
+diff --git a/src/vms_iopost_swi.h b/src/vms_iopost_swi.h
+new file mode 100644
+index 0000000..a88365e
+--- /dev/null
++++ b/src/vms_iopost_swi.h
+@@ -0,0 +1,23 @@
++#ifndef VMS37_IOPOST_SWI_H
++#define VMS37_IOPOST_SWI_H
++#include <stdint.h>
++/* SCBVECTOR.MAR 109-113 maps software IPL$_IOPOST (4) at VAX
++ * vector byte offset 0x90. Pentium native IDT 0x90 is CPL0-only;
++ * it is NOT a 8259 PIC IRQ and must never send a PIC EOI. */
++enum {PORT_IOPOST_SW_VECTOR=0x90u,PORT_IOPOST_SW_OK=1u,
++      PORT_IOPOST_SW_BAD=2u,PORT_IOPOST_SW_UNBOUND=4u,
++      PORT_IOPOST_SW_BUSY=6u,PORT_IOPOST_SW_CORRUPT=8u};
++typedef uint32_t (*port_iopost_swi_action)(void);
++struct port_iopost_swi {
++    port_iopost_swi_action action;
++    uint32_t guest_entry,lower,upper;
++    uint32_t calls,attempts,last_status;
++    uint8_t in_service,armed;
++};
++void port_iopost_swi_init(struct port_iopost_swi *);
++uint32_t port_iopost_swi_bind(struct port_iopost_swi *,
++    port_iopost_swi_action,uint32_t,uint32_t,uint32_t);
++uint32_t port_iopost_swi_dispatch(struct port_iopost_swi *,unsigned);
++uint32_t port_iopost_swi_check(const struct port_iopost_swi *,
++    uint32_t,uint32_t);
++#endif
+diff --git a/src/vms_iopost_swi_bind.c b/src/vms_iopost_swi_bind.c
+new file mode 100644
+index 0000000..2290795
+--- /dev/null
++++ b/src/vms_iopost_swi_bind.c
+@@ -0,0 +1,16 @@
++#include "vms_iopost_swi.h"
++/* Only a resident supervisor SYS.EXE entry may own the native vector.
++ * Never accept process space, a VAX function pointer, or an alias outside
++ * the image loader's independently verified executable range. */
++uint32_t port_iopost_swi_bind(struct port_iopost_swi *s,
++    port_iopost_swi_action action,uint32_t address,
++    uint32_t lower,uint32_t upper){
++    if(!s||!action||!address||!lower||lower>=upper ||
++       address<lower||address>=upper||s->armed||s->action||
++       s->attempts||s->in_service||s->calls)
++        return PORT_IOPOST_SW_BAD;
++    s->action=action;s->guest_entry=address;
++    s->lower=lower;s->upper=upper;
++    s->armed=1u;
++    return PORT_IOPOST_SW_OK;
++}
+diff --git a/src/vms_iopost_swi_check.c b/src/vms_iopost_swi_check.c
+new file mode 100644
+index 0000000..e638617
+--- /dev/null
++++ b/src/vms_iopost_swi_check.c
+@@ -0,0 +1,12 @@
++#include "vms_iopost_swi.h"
++/* Detect missing, duplicate or improperly nested interrupt handling.
++ * The exact one-shot original kernel-action completion is observable. */
++uint32_t port_iopost_swi_check(const struct port_iopost_swi *s,
++    uint32_t required_calls,uint32_t expected_status){
++    if(!s||!s->action||!s->guest_entry||!s->lower||
++       s->guest_entry<s->lower||s->guest_entry>=s->upper||
++       s->in_service||s->armed||s->calls!=required_calls||
++       s->attempts!=required_calls||s->last_status!=expected_status)
++        return PORT_IOPOST_SW_CORRUPT;
++    return PORT_IOPOST_SW_OK;
++}
+diff --git a/src/vms_iopost_swi_dispatch.c b/src/vms_iopost_swi_dispatch.c
+new file mode 100644
+index 0000000..c219325
+--- /dev/null
++++ b/src/vms_iopost_swi_dispatch.c
+@@ -0,0 +1,23 @@
++#include "vms_iopost_swi.h"
++/* Called ONLY from IA-32 IDT 0x90 (DPL0). The x86 interrupt gate
++ * masks further maskable interrupts while the original REMQUE loop
++ * operates. A failed callback is never converted to SS$_NORMAL. */
++uint32_t port_iopost_swi_dispatch(struct port_iopost_swi *s,
++                                  unsigned interrupt_vector){
++    if(!s||interrupt_vector!=PORT_IOPOST_SW_VECTOR)
++        return PORT_IOPOST_SW_BAD;
++    if(!s->armed||!s->action||!s->guest_entry||
++       s->guest_entry<s->lower||s->guest_entry>=s->upper)
++        return PORT_IOPOST_SW_UNBOUND;
++    if(s->in_service)return PORT_IOPOST_SW_BUSY;
++    s->in_service=1u;
++    ++s->attempts;
++    const uint32_t completed=s->action();
++    s->last_status=completed;
++    ++s->calls;
++    s->in_service=0u;
++    /* The bootstrap callback is intentionally a single-use end action:
++     * later ordinary process I/O requires real CCB/PCB/AST consumers. */
++    s->armed=0u;
++    return completed==PORT_IOPOST_SW_OK ? PORT_IOPOST_SW_OK : PORT_IOPOST_SW_CORRUPT;
++}
+diff --git a/src/vms_iopost_swi_init.c b/src/vms_iopost_swi_init.c
+new file mode 100644
+index 0000000..056ba52
+--- /dev/null
++++ b/src/vms_iopost_swi_init.c
+@@ -0,0 +1,9 @@
++#include "vms_iopost_swi.h"
++/* No fake ISR pre-registration; bootstrap must validate the SYS.EXE
++ * address after the Files-11 image loader has installed it. */
++void port_iopost_swi_init(struct port_iopost_swi *s){
++    if(!s)return;
++    s->action=0;s->guest_entry=0u;s->lower=0u;s->upper=0u;
++    s->calls=0u;s->attempts=0u;s->last_status=0u;
++    s->in_service=0u;s->armed=0u;
++}
+diff --git a/src/vms_sys_executive_entry.c b/src/vms_sys_executive_entry.c
+index 29cf920..909e245 100644
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -90,6 +90,24 @@ static uint32_t executive_post_ready;
+ static uint32_t executive_post_soft_count,executive_post_soft_level;
+ static struct port_v37_iopost_endlog executive_iopost_completed;
+ static uint32_t executive_iopost_end_ready;
++static uint32_t executive_iopost_irq_armed;
++/* Source IOCIOPOST.MAR kernel end-action REMQUE loop, now called by a
++ * real CPL0-only x86 software INT 0x90 interrupt gate. */
++static uint32_t executive_iopost_irq_entry(void){
++    const uintptr_t native_end=(uintptr_t)port_v37_iopost_kernel_end;
++    if(!executive_iopost_irq_armed||executive_iopost_end_ready||
++       !executive_post_ready||executive_post_queue.queued!=2u||
++       native_end<PORT_SYS_ELF_START||native_end>=PORT_SYS_ELF_LIMIT)
++        return PORT_V37_IOPOST_BAD;
++    /* Prevent an accidental nested entry from draining freed IRP links. */
++    executive_iopost_irq_armed=0u;
++    if(port_v37_iopost_drain(&executive_post_queue,PORT_SYS_ELF_START,
++          PORT_SYS_ELF_LIMIT,(uint32_t)native_end,&executive_iopost_completed,2u)
++          !=PORT_V37_IOPOST_OK)
++        return PORT_V37_IOPOST_CORRUPT;
++    executive_iopost_end_ready=1u;
++    return PORT_V37_IOPOST_OK;
++}
+ static void executive_post_mark_softint(void *unused,uint8_t ipl){
+     (void)unused;
+     executive_post_soft_count++;
+@@ -485,27 +503,36 @@ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *p){
+         return PORT_SYS_EXEC_NORMAL;
+     }
+     if(p->phase==PORT_SYS_EXEC_INIT_IOPOST_END){
+-        /* IOCIOPOST.MAR 145-165: REMQUE two source-format packets, then
+-         * JSB a known kernel end action from loaded SYS.EXE code. Original
+-         * sign-bit VAX system-address test becomes supervisor aperture.
+-         * The process PCB/AST and actual IPL$_IOPOST ISR remain unported. */
+-        const uintptr_t native_end=(uintptr_t)port_v37_iopost_kernel_end;
+-        if(!executive_post_ready || !executive_nl_ddt_ready ||
+-           executive_iopost_end_ready || executive_post_queue.queued!=2u ||
+-           executive_post_soft_level!=PORT_V37_IOPOST_IPL ||
+-           executive_post_soft_count!=2u ||
+-           native_end<PORT_SYS_ELF_START || native_end>=PORT_SYS_ELF_LIMIT ||
+-           port_v37_iopost_drain(&executive_post_queue,
+-                PORT_SYS_ELF_START,PORT_SYS_ELF_LIMIT,(uint32_t)native_end,
+-                &executive_iopost_completed,2u)!=PORT_V37_IOPOST_OK ||
+-           executive_iopost_completed.completed!=2u ||
+-           executive_post_queue.queued!=0u ||
+-           executive_iopost_completed.status[0]!=PORT_SYS85_ENDOFFILE ||
+-           executive_iopost_completed.status[1]!=PORT_SYS85_NORMAL ||
+-           executive_iopost_completed.secondary[0]!=0u ||
++        /* Wire the source IOCIOPOST.MAR entry to supervisor x86 IDT 0x90.
++         * Bootstrap may NOT drain the FIFO on its normal function stack. */
++        const uintptr_t address=(uintptr_t)executive_iopost_irq_entry;
++        const uintptr_t kernel_end=(uintptr_t)port_v37_iopost_kernel_end;
++        if(!executive_post_ready||!executive_nl_ddt_ready||
++           executive_iopost_end_ready||executive_iopost_irq_armed||
++           executive_post_queue.queued!=2u||
++           executive_post_soft_level!=PORT_V37_IOPOST_IPL||
++           executive_post_soft_count!=2u||
++           kernel_end<PORT_SYS_ELF_START||kernel_end>=PORT_SYS_ELF_LIMIT||
++           address<PORT_SYS_ELF_START||address>=PORT_SYS_ELF_LIMIT)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_iopost_irq_armed=1u;
++        p->result->iopost_isr=executive_iopost_irq_entry;
++        p->result->iopost_remaining=executive_post_queue.queued;
++        p->result->iopost=&executive_post_queue;
++        p->result->signature=PORT_SYS_EXEC_IOPOST_BIND_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
++    if(p->phase==PORT_SYS_EXEC_VERIFY_IOPOST_INT){
++        /* Proof that the IDT handler really invoked SYS.EXE; until
++         * this phase, there is no recorded IOC completion success. */
++        if(!executive_iopost_end_ready||executive_iopost_irq_armed||
++           executive_post_queue.queued!=0u||
++           executive_iopost_completed.completed!=2u||
++           executive_iopost_completed.status[0]!=PORT_SYS85_ENDOFFILE||
++           executive_iopost_completed.status[1]!=PORT_SYS85_NORMAL||
++           executive_iopost_completed.secondary[0]!=0u||
+            executive_iopost_completed.secondary[1]!=0u)
+             return PORT_SYS_EXEC_BAD_PARAMETERS;
+-        executive_iopost_end_ready=1u;
+         p->result->iopost_endlog=&executive_iopost_completed;
+         p->result->iopost_remaining=executive_post_queue.queued;
+         p->result->iopost=&executive_post_queue;
+diff --git a/src/vms_sys_executive_entry.h b/src/vms_sys_executive_entry.h
+index ae15b21..0d5716d 100644
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -24,7 +24,7 @@
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=21u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=22u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -45,7 +45,9 @@ enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=21u,
+        PORT_SYS_EXEC_INIT_CONPORT=16u,PORT_SYS_EXEC_CON_RESULT_TAG=0x4e4f4350u,
+        PORT_SYS_EXEC_INIT_IOC_LOOKUP=17u,PORT_SYS_EXEC_IOC_RESULT_TAG=0x434f4950u,
+        PORT_SYS_EXEC_INIT_QIO_POST=18u,PORT_SYS_EXEC_POST_RESULT_TAG=0x54534f50u,
+-       PORT_SYS_EXEC_INIT_IOPOST_END=19u,PORT_SYS_EXEC_IOPOST_END_TAG=0x444e4549u };
++       PORT_SYS_EXEC_INIT_IOPOST_END=19u,PORT_SYS_EXEC_IOPOST_END_TAG=0x444e4549u,
++       PORT_SYS_EXEC_VERIFY_IOPOST_INT=20u,
++       PORT_SYS_EXEC_IOPOST_BIND_TAG=0x42494950u };
+ /* The IA-32 privilege-transition stack is the first live counterpart of
+  * INIT.MAR EXE$GL_INTSTK; source VAX IPL stack switching is not present. */
+ /* SYSBOOT passes the genuine Files-11 SYS.EXE extent map through the
+@@ -115,9 +117,10 @@ struct port_sys_exec_result {
+     const uint8_t *post_irp_bytes;
+     uint32_t iopost_softint_count,iopost_softint_level,iopost_ucb_ops;
+     uint32_t (*nl_post)(struct port_v37_qio_request *);
+-    /* Original IOCIOPOST.MAR kernel end-action path only: protected
+-     * bootstrap IRPs, not process IOPOST, IOSB, event flags or ASTs. */
++    /* Original IOCIOPOST.MAR kernel end-action path via a real IA-32
++     * DPL0 software INT 0x90; no process IOSB, event flags or ASTs. */
+     const struct port_v37_iopost_endlog *iopost_endlog;
++    uint32_t (*iopost_isr)(void);
+     uint32_t iopost_remaining;
+     uint32_t logical_table[2];
+     uint8_t lock_max_resource_depth;
+diff --git a/tests/test_iopost_swi_host.c b/tests/test_iopost_swi_host.c
+new file mode 100644
+index 0000000..8204c5d
+--- /dev/null
++++ b/tests/test_iopost_swi_host.c
+@@ -0,0 +1,38 @@
++#include "vms_iopost_swi.h"
++#include <assert.h>
++#include <stdio.h>
++static uint32_t callbacks;
++static struct port_iopost_swi *nested_state;
++static uint32_t good(void){++callbacks;return PORT_IOPOST_SW_OK;}
++static uint32_t bad(void){++callbacks;return PORT_IOPOST_SW_BAD;}
++static uint32_t recursive(void){
++    ++callbacks;
++    assert(port_iopost_swi_dispatch(nested_state,PORT_IOPOST_SW_VECTOR)==PORT_IOPOST_SW_BUSY);
++    return PORT_IOPOST_SW_OK;
++}
++int main(void){
++    struct port_iopost_swi s={0};
++    assert(port_iopost_swi_dispatch(&s,PORT_IOPOST_SW_VECTOR)==PORT_IOPOST_SW_UNBOUND);
++    assert(port_iopost_swi_bind(&s,good,0x320080u,0x320000u,0x380000u)==PORT_IOPOST_SW_OK);
++    assert(port_iopost_swi_bind(&s,good,0x320080u,0x320000u,0x380000u)==PORT_IOPOST_SW_BAD);
++    assert(port_iopost_swi_dispatch(&s,0x80u)==PORT_IOPOST_SW_BAD);
++    assert(callbacks==0u&&s.calls==0u);
++    assert(port_iopost_swi_dispatch(&s,PORT_IOPOST_SW_VECTOR)==PORT_IOPOST_SW_OK);
++    assert(callbacks==1u);
++    assert(port_iopost_swi_dispatch(&s,PORT_IOPOST_SW_VECTOR)==PORT_IOPOST_SW_UNBOUND);
++    assert(port_iopost_swi_check(&s,1u,PORT_IOPOST_SW_OK)==PORT_IOPOST_SW_OK);
++    assert(port_iopost_swi_check(&s,2u,PORT_IOPOST_SW_OK)==PORT_IOPOST_SW_CORRUPT);
++    port_iopost_swi_init(&s);
++    assert(port_iopost_swi_bind(&s,good,0x31ffffu,0x320000u,0x380000u)==PORT_IOPOST_SW_BAD);
++    assert(port_iopost_swi_bind(&s,good,0x380000u,0x320000u,0x380000u)==PORT_IOPOST_SW_BAD);
++    assert(port_iopost_swi_bind(&s,good,0x320100u,0x330000u,0x320000u)==PORT_IOPOST_SW_BAD);
++    assert(port_iopost_swi_bind(&s,bad,0x320080u,0x320000u,0x380000u)==PORT_IOPOST_SW_OK);
++    assert(port_iopost_swi_dispatch(&s,PORT_IOPOST_SW_VECTOR)==PORT_IOPOST_SW_CORRUPT);
++    assert(port_iopost_swi_check(&s,1u,PORT_IOPOST_SW_BAD)==PORT_IOPOST_SW_OK);
++    port_iopost_swi_init(&s);nested_state=&s;
++    assert(port_iopost_swi_bind(&s,recursive,0x320100u,0x320000u,0x380000u)==PORT_IOPOST_SW_OK);
++    assert(port_iopost_swi_dispatch(&s,PORT_IOPOST_SW_VECTOR)==PORT_IOPOST_SW_OK);
++    assert(port_iopost_swi_check(&s,1u,PORT_IOPOST_SW_OK)==PORT_IOPOST_SW_OK);
++    puts("IA-32 supervisor IDT 0x90 native IOCIOPOST single-use queue dispatch PASS");
++    return 0;
++}
+diff --git a/tools/gen_source_coverage.py b/tools/gen_source_coverage.py
+index c0113f3..ef677e8 100644
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2281,8 +2281,9 @@ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ # Read/write process paths, PCB counters, buffer-release, IOSB delivery,
+ # ASTs, paged/swap I/O and real IPL interrupt dispatch remain unresolved.
+ iopost_rows=[
+- (1,144,None,None,'DEC headers, VAX registers, priority table, asynchronous dispatcher and unported original declarations','unresolved'),
+- (145,155,'src/vms_iopost_pop.c','port_v37_iopost_pop','First-in/first-out REMQUE, repair next BLINK and empty sentinel; synchronous invocation not real IPL4 interrupt','partial'),
++ (1,114,None,None,'DEC headers, VAX registers, priority table and original declarations','unresolved'),
++ (115,144,'src/vms_sys_executive_entry.c','executive_iopost_irq_entry','Native supervisor IDT software INT 0x90 invokes real SYS.EXE queue worker; no process AST','partial'),
++ (145,155,'src/vms_iopost_pop.c','port_v37_iopost_pop','First-in/first-out REMQUE and sentinel restoration, now called through x86 CPL0 IDT 0x90','partial'),
+  (156,159,'src/vms_iopost_kernel_end.c','port_v37_iopost_kernel_end','Whitelisted native privileged end action; other VAX branch and kernel ABI unresolved','partial'),
+  (160,165,'src/vms_iopost_service.c','port_v37_iopost_service','Kernel address branch for source IRP PID, IA-32 supervisor aperture replacing VAX high-bit test; PCB lookup unresolved','partial'),
+  (166,1113,None,None,'Source original direct/buffered/paging postprocessing, PCB quotas, kernel AST, IOSB, wakeup, virtual segmentation, error paths, VAX interrupt frame and remainder unported','unresolved')]
+@@ -2296,7 +2297,7 @@ for lo,hi,pc,sym,desc,status in iopost_rows:
+     else:rows.append({'original_lines':[lo,hi],'status':status,'reason':desc})
+ result['files'].append({'original_file':'SYS/SRC/IOCIOPOST.MAR',
+     'original_lines':1113,'sections':rows,
+-    'unresolved_integration':'Only synchronous privileged end-action subset for internal NLA bootstrap IRPs in actual SYS.EXE, not a delivered IPL interrupt or real user I/O/AST. All process postprocessing remains unported.'})
++    'unresolved_integration':'Actual x86 software INT 0x90 dispatches the resident privileged NLA end-action subset. This is not a VAX IPL implementation or a real user I/O/AST. All process postprocessing remains unported.'})
+ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ 
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+diff --git a/tools/qemu_sysboot_m124.py b/tools/qemu_sysboot_m124.py
+new file mode 100644
+index 0000000..4393882
+--- /dev/null
++++ b/tools/qemu_sysboot_m124.py
+@@ -0,0 +1,129 @@
++#!/usr/bin/env python3
++"""One real native IA-32 QEMU boot; verify DPL0 software IPL4 dispatch.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M124: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE linked NL$DDT DDTAB/FUNCTAB to NLA0 (other drivers absent).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE IOC device search resolved NLA0 with native null DDT (others unbound).',
++        b'INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 requested).',
++        b'INIT: SYS.EXE IOCIOPOST serviced two NLA IRPs through IA-32 CPL0 software INT 0x90 (no process AST).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.',
++        b'INIT: resident IOCIOPOST source kernel end-action processing failed.',
++        b'INIT: resident IOCIOPOST native software interrupt failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m124-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,123,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M124: real IA-32 software interrupt 0x90 serviced resident IOC postqueue PASS')
++        return 0
++    print('QEMU M124: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
