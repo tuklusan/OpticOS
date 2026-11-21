@@ -868,7 +868,7 @@ diff --git a/tools/upgrade_disk_image_check_m184.py b/tools/upgrade_disk_image_c
 new file mode 100644
 --- /dev/null
 +++ b/tools/upgrade_disk_image_check_m184.py
-@@ -0,0 +1,32 @@
+@@ -0,0 +1,39 @@
 +#!/usr/bin/env python3
 +"""Upgrade M110's frozen format-1-only image check for an ODS-2 format-2 SYS.EXE.
 +
@@ -901,3 +901,10 @@ new file mode 100644
 +if s.count(old)!=1:
 +    raise SystemExit('M184: expected canonical M110 FH2 map check changed')
 +target.write_text(s.replace(old,new))
++# The separate SYSLOA386/INILOA disk test repeats the same old FH2
++# assumption for all three images; it must accept the larger SYS.EXE too.
++aux=root/'tests/test_sysloa386_disk_image.py'
++a=aux.read_text()
++if a.count(old)!=1:
++    raise SystemExit('M184: expected SYSLOA386 FH2 map test changed')
++aux.write_text(a.replace(old,new))
