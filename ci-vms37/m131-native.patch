@@ -1,0 +1,952 @@
+diff --git a/Makefile b/Makefile
+index b52c468..b82dedb 100644
+--- a/Makefile
++++ b/Makefile
+@@ -806,6 +806,8 @@ M129_DEVLOG_SRCS=$(wildcard src/vms_devlog_*.c)
+ M129_DEVLOG_OBJS=$(patsubst src/%.c,build/%.o,$(M129_DEVLOG_SRCS))
+ M130_DQDDT_SRCS=$(wildcard src/vms_dqddt_*.c)
+ M130_DQDDT_OBJS=$(patsubst src/%.c,build/%.o,$(M130_DQDDT_SRCS))
++M131_RELOC_SRCS=$(wildcard src/vms_relocdrv_*.c)
++M131_RELOC_OBJS=$(patsubst src/%.c,build/%.o,$(M131_RELOC_SRCS))
+ M123_IOPOST_SRCS=$(filter-out $(M124_SWI_SRCS),$(wildcard src/vms_iopost_*.c))
+ M123_IOPOST_OBJS=$(patsubst src/%.c,build/%.o,$(M123_IOPOST_SRCS))
+ $(M124_SWI_OBJS): build/%.o: src/%.c src/vms_iopost_swi.h | build
+@@ -821,8 +823,8 @@ conportcheck: $(M119_CON_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
+ 	./build/conportcheck
+ 
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -846,7 +848,7 @@ build/install_iniloa_image: tools/install_iniloa_image.c src/vms_boot_files11.c
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) $(M129_DEVLOG_SRCS) $(M130_DQDDT_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) $(M129_DEVLOG_SRCS) $(M130_DQDDT_SRCS) $(M131_RELOC_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1237,3 +1239,11 @@ $(M130_DQDDT_OBJS): build/%.o: src/%.c src/vms_dqddt.h | build
+ dqddtcheck: $(M130_DQDDT_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-sanitize-recover=undefined -Isrc $(M130_DQDDT_SRCS) $(M125_DQ_SRCS) src/vms_ini_devicedb.c $(filter-out src/vms_ini_devicedb.c,$(M118_DB_SRCS)) tests/test_dqddt_host.c -o build/dqddtcheck
+ 	./build/dqddtcheck
++
++# M131: original RELOCDRV IOC$INITDRV DPT STORE operations, no DDT bind.
++$(M131_RELOC_OBJS): build/%.o: src/%.c src/vms_relocdrv.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: relocdrvcheck
++relocdrvcheck: $(M131_RELOC_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M131_RELOC_SRCS) $(M130_DQDDT_SRCS) $(M125_DQ_SRCS) $(M118_DB_SRCS) tests/test_relocdrv_host.c -o build/relocdrvcheck
++	./build/relocdrvcheck
+diff --git a/src/kernel.c b/src/kernel.c
+index ac4fed2..85553e5 100644
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3373,6 +3373,35 @@ void kmain(void) {
+     }
+     bootstrap_message("INIT: SYS.EXE staged source DQ DPTAB/DDTAB and 136-byte FUNCTAB (all disk actions unbound).");
+ 
++    /* Source RELOCDRV IOC$INITDRV: DPT_STORE program initializes a
++     * verified copy of original DQA0 DDB/UCB, never the active driver. */
++    static struct port_sys_exec_result relocdrv_result;
++    const struct port_sys_exec_start relocdrv_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&relocdrv_result,
++        .phase=PORT_SYS_EXEC_INIT_RELOCDRV_DQ};
++    if(loaded_sys(&relocdrv_request)!=PORT_SYS_EXEC_NORMAL||
++       relocdrv_result.signature!=PORT_SYS_EXEC_RELOCDRV_DQ_TAG||
++       !relocdrv_result.dq_dpt_initialized||!relocdrv_result.dq_dpt_check||
++       (uintptr_t)relocdrv_result.dq_dpt_initialized<PORT_SYS_ELF_START||
++       (uintptr_t)relocdrv_result.dq_dpt_initialized>
++          PORT_SYS_ELF_LIMIT-sizeof(struct port_relocdrv_dq)||
++       (uintptr_t)relocdrv_result.dq_dpt_check<PORT_SYS_ELF_START||
++       (uintptr_t)relocdrv_result.dq_dpt_check>=PORT_SYS_ELF_LIMIT||
++       relocdrv_result.dq_dpt_check(relocdrv_result.dq_dpt_initialized)!=
++          PORT_RELOCDRV_OK||
++       relocdrv_result.dq_dpt_initialized->source_ddb!=
++          devicedb_result.device_db->ddb[0]||
++       relocdrv_result.dq_dpt_initialized->source_ucb!=
++          devicedb_result.device_db->ucb[0]||
++       relocdrv_result.dq_dpt_initialized->driver_bound||
++       devicedb_result.device_db_bytes[PORT_V37_DDB_BOOT_OFF+12u]!=0u||
++       devicedb_result.device_db_bytes[PORT_V37_UCB_BOOT_OFF+120u]!=0u){
++        bootstrap_message("INIT: resident RELOCDRV original DQ INITDRV table failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE RELOCDRV IOC$INITDRV applied source DQ DPT_STORE to private DQA0 records (DDT/CRB unbound).");
++
+ 
+     /* Source NLDRIVER.MAR DDT/FDT through SYSQIOREQ.MAR 741-749: two original
+      * IRP$L_MEDIA statuses and an IOC$GL_PSBL append in actual loaded
+diff --git a/src/vms_sys_executive_entry.c b/src/vms_sys_executive_entry.c
+index adb9f44..a77b946 100644
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -12,6 +12,7 @@
+ #include "vms_ioc_phys.h"
+ #include "vms_devlog_search.h"
+ #include "vms_dqddt.h"
++#include "vms_relocdrv.h"
+ #include "vms_qio_post.h"
+ #include "vms_nl_ddt.h"
+ #include "vms_iopost_end.h"
+@@ -83,6 +84,10 @@ static uint32_t executive_dq_bootread_ready;
+ /* Source DQDRIVER DDTAB and FUNCTAB are inactive until original IOC/ACP. */
+ static struct port_dqddt_stage executive_dqddt;
+ static uint32_t executive_dqddt_ready;
++/* Source RELOCDRV.MAR INITDRV DQ DPT STORE runs only on private boot
++ * copies until real DQ driver has CRB and interrupts. */
++static struct port_relocdrv_dq executive_relocdrv_dq;
++static uint32_t executive_relocdrv_dq_ready;
+ /* FIN_DATABASE follows a real physical boot-disk home-sector read. These
+  * remain nonpublished LOG records, and the DQ DDT remains absent. */
+ static struct port_ini_fin_result executive_fin_database_result;
+@@ -828,6 +833,36 @@ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *p){
+         p->result->signature=PORT_SYS_EXEC_DQ_DDT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_RELOCDRV_DQ){
++        /* Original RELOCDRV.MAR 103-262: interpret exact DQ DPT_STORE
++         * source program on isolated copies, without a live DQ driver. */
++        if(!executive_dqddt_ready||!executive_dq_fdt_ready||
++           !executive_ioc_logical_ready||!executive_devicedb_ready||
++           executive_relocdrv_dq_ready||
++           port_v37_devices_check(executive_devicedb_bytes.data,
++              sizeof executive_devicedb_bytes.data,
++              (uint32_t)(uintptr_t)executive_devicedb_bytes.data,
++              &executive_devicedb_result)!=PORT_V37_DEV_OK||
++           port_relocdrv_dq_init(&executive_relocdrv_dq,
++              executive_devicedb_bytes.data,
++              sizeof executive_devicedb_bytes.data,
++              &executive_devicedb_result,&executive_dqddt,
++              &executive_dq_fdt)!=PORT_RELOCDRV_OK||
++           port_relocdrv_dq_check(&executive_relocdrv_dq)!=
++              PORT_RELOCDRV_OK||
++           port_relocdrv_dq_footprint(&executive_relocdrv_dq,
++              executive_devicedb_bytes.data,
++              sizeof executive_devicedb_bytes.data)!=PORT_RELOCDRV_OK||
++           port_relocdrv_dq_guard(executive_devicedb_bytes.data,
++              sizeof executive_devicedb_bytes.data,
++              &executive_devicedb_result)!=PORT_RELOCDRV_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_relocdrv_dq_ready=1u;
++        p->result->dq_dpt_initialized=&executive_relocdrv_dq;
++        p->result->dq_dpt_check=port_relocdrv_dq_check;
++        p->result->signature=PORT_SYS_EXEC_RELOCDRV_DQ_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_IOC_LOGICAL){
+         /* IOSUBPAGD.MAR 70$-330$: SYS$DISK and SYS$SYSDEVICE traverse
+          * original bootstrap LOG$TRANSLATE and physical DDB/UCB lists.
+diff --git a/src/vms_sys_executive_entry.h b/src/vms_sys_executive_entry.h
+index 06c059d..4cb88ee 100644
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -17,6 +17,7 @@
+ #include "vms_ini_bootdev_scan.h"
+ #include "vms_dq_fdt.h"
+ #include "vms_dqddt.h"
++#include "vms_relocdrv.h"
+ #include "vms_dq_bootread.h"
+ #include "vms_ini_fin_database.h"
+ #include "vms_log_system.h"
+@@ -30,7 +31,7 @@
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=28u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=29u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -59,7 +60,8 @@ enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=28u,
+        PORT_SYS_EXEC_INIT_FIN_DATABASE=23u,PORT_SYS_EXEC_FIN_DATABASE_TAG=0x42444e46u,
+        PORT_SYS_EXEC_INIT_SYSTEM_LOG=24u,PORT_SYS_EXEC_SYSTEM_LOG_TAG=0x534c474cu,
+        PORT_SYS_EXEC_INIT_IOC_LOGICAL=25u,PORT_SYS_EXEC_IOC_LOGICAL_TAG=0x4c434f49u,
+-       PORT_SYS_EXEC_INIT_DQ_DDT_STAGE=26u,PORT_SYS_EXEC_DQ_DDT_TAG=0x54444451u };
++       PORT_SYS_EXEC_INIT_DQ_DDT_STAGE=26u,PORT_SYS_EXEC_DQ_DDT_TAG=0x54444451u,
++       PORT_SYS_EXEC_INIT_RELOCDRV_DQ=27u,PORT_SYS_EXEC_RELOCDRV_DQ_TAG=0x44524c52u };
+ /* This is an explicitly privileged early-boot disk path. Hardware is real
+  * ATA PIO; the original DQ disk DDT and Files-11 ACP are NOT bound. */
+ struct port_sys_exec_dq_boot_settings {
+@@ -138,6 +140,10 @@ struct port_sys_exec_result {
+     const struct port_dqddt_stage *dq_ddt_stage;
+     uint32_t (*dq_ddt_function)(const struct port_dqddt_stage *,
+         const struct port_dq_fdt *,uint16_t);
++    /* Original RELOCDRV IOC$INITDRV applies exact source DPT_STORE to
++     * isolated DQA0 DDB/UCB copies; no driver/ACP/CRB publication. */
++    const struct port_relocdrv_dq *dq_dpt_initialized;
++    uint32_t (*dq_dpt_check)(const struct port_relocdrv_dq *);
+     /* Prelinked DEVICEDAT DDB/UCB pointer graph; no live driver DDT. */
+     const struct port_v37_device_result *device_db;
+     const uint8_t *device_db_bytes;
+diff --git a/tools/gen_source_coverage.py b/tools/gen_source_coverage.py
+index 5d37a50..baeee8b 100644
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2347,6 +2347,33 @@ for first,last,path,symbol,detail in dq_fdt_rows:
+ result['files'].append({'original_file':'DRIVER/SRC/DQDRIVER.MAR',
+     'original_lines':2189,'sections':dq_fdt_sections,
+     'unresolved_integration':'Resident SYS.EXE stages source DPTAB and 38-byte DDTAB plus exact 136-byte FUNCTAB masks; all native disk action slots remain inactive and DQA0 DDT is zero. One privileged physical READPBLK of ATA Files-11 LBN1 is separate; RB730/ATA controller translation, IOC, CRB, ACP and general I/O remain unported.'})
++# M131: original RELOCDRV.MAR LOCATE/EXECUTE and IOC$INITDRV,
++# limited to bounded source DQ DPT_STORE on isolated DDB/UCB copies.
++# Real CRB/IDB/port/relocation of DQ action pointers remain unresolved.
++relocdrv_rows=[
++ (1,102,None,None,'DEC declarations, DDT relocation address vector and original VAX ABI remain unresolved'),
++ (103,113,'src/vms_relocdrv_dq_init.c','port_relocdrv_dq_init','IOC$INITDRV DQ DPT program executed on resident isolated DQA0 records, never published'),
++ (114,139,None,None,'IOC$REINITDRV driver reload and actual CRB/IDB/UCB dynamic store not yet bound'),
++ (140,162,'src/vms_relocdrv_walk.c','port_relocdrv_walk','Original common INIT/REINIT source structure/opcode loop with exact terminating byte, bounded cap'),
++ (163,190,'src/vms_relocdrv_step.c','port_relocdrv_step','RELOCDRV EXECUTE source dispatch for B/W/D/L/V operations; absolute kernel mapping guarded'),
++ (191,235,'src/vms_relocdrv_fetch.c','port_relocdrv_fetch','Little-endian source immediate and indirect, signed PC-relative DPT and VAX INSV field semantics'),
++ (236,245,None,None,'Original VAX LOCATE stack/documentation not used in IA-32 code'),
++ (246,278,'src/vms_relocdrv_region.c','port_relocdrv_region','Source CRB/DDB/IDB/UCB type dispatch with explicit IA-32 bounds, no unchecked pointer chase'),
++ (279,315,None,None,'Original DDT/FDT driver relocation declarations and VAX high-bit address convention unresolved'),
++ (316,352,None,None,'IOC$RELOC_DDT needs real callable DQ driver dispatch and FDT actions, not linked yet')]
++sections=[]
++for lo,hi,pc,sym,desc in relocdrv_rows:
++    if pc:
++        lineno=line_for_symbol(pc,sym)
++        if lineno is None:missing+=1
++        sections.append({'original_lines':[lo,hi],'status':'partial' if lineno else 'missing',
++          'pc_file':pc,'pc_symbol':sym,'pc_line':lineno,'function':desc})
++    else:sections.append({'original_lines':[lo,hi],'status':'unresolved','reason':desc})
++result['files'].append({'original_file':'SYS/SRC/RELOCDRV.MAR',
++    'original_lines':352,'sections':sections,
++    'unresolved_integration':'Nine DQ DPT_STORE operations are interpreted on isolated resident DQA0 DDB/UCB copies using original source byte opcodes. This does NOT initialize/publish a live driver; original DDT/CRB/IDB, MNTVER, DQ hardware/ACP and DDT relocations remain unported.'})
++assert len({f['original_file'] for f in result['files']})==len(result['files'])
++
+ # M128: LOGNAMSUB.MAR source pin, not a claim of a full logical-name service.
+ # Only the two FIN_DATABASE bootstrap SYSTEM entries have bound native list
+ # records. PROCESS/GROUP tables, LOG$LOCKR, SYSLOGNAM and supercession remain
+diff --git a/src/vms_relocdrv.h b/src/vms_relocdrv.h
+new file mode 100644
+index 0000000..3ff2844
+--- /dev/null
++++ b/src/vms_relocdrv.h
+@@ -0,0 +1,68 @@
++#ifndef VMS37_NATIVE_RELOCDRV_H
++#define VMS37_NATIVE_RELOCDRV_H
++#include <stddef.h>
++#include <stdint.h>
++#include "vms_v37_dyn_tags.h"
++#include "vms_ini_devicedb.h"
++#include "vms_dqddt.h"
++/* SYS/SRC/RELOCDRV.MAR 61-262 / SHRLIB/SYSMAR.MAR DPT_STORE.
++ * An original DPT STORE program executes only against explicitly supplied,
++ * bounded native DDB/UCB/CRB/IDB record regions. Unknown driver structures,
++ * raw pointers and unavailable RB730/MMIO are never dereferenced. */
++enum { PORT_RELOCDRV_OK=1u,PORT_RELOCDRV_BAD=2u,
++       PORT_RELOCDRV_UNBOUND=4u,PORT_RELOCDRV_OVERFLOW=6u,
++       PORT_RELOCDRV_REGION_COUNT=4u,PORT_RELOCDRV_OP_CAP=32u,
++       PORT_RELOCDRV_DQ_INIT_COUNT=9u,PORT_RELOCDRV_DQ_INIT_BYTES=47u,
++       PORT_RELOCDRV_DQ_UCB_BYTES=PORT_V37_BOOT_UCB_SIZE,
++       PORT_RELOCDRV_DQ_DDB_BYTES=PORT_V37_DDB_SIZE,
++       PORT_RELOCDRV_DQ_CURDA=206u,PORT_RELOCDRV_DQ_CHAR=0x1c454008u};
++enum { PORT_RELOCDRV_OP_BYTE=0u,PORT_RELOCDRV_OP_WORD=1u,
++       PORT_RELOCDRV_OP_DISPLACED=2u,PORT_RELOCDRV_OP_LONG=3u,
++       PORT_RELOCDRV_OP_FIELD=4u,PORT_RELOCDRV_OP_INDIRECT=0x80u };
++struct port_relocdrv_region {
++    uint8_t *bytes;size_t bytes_size;uint32_t pc_base;uint8_t structure_type;
++};
++struct port_relocdrv_context {
++    struct port_relocdrv_region region[PORT_RELOCDRV_REGION_COUNT];
++    const uint8_t *readonly_bytes;size_t readonly_size;uint32_t readonly_base;
++    uint32_t dpt_base;
++};
++struct port_relocdrv_op {
++    uint8_t type,offset,opcode,pos,bits;
++    uint32_t raw_value;
++    size_t next;
++};
++struct port_relocdrv_dq {
++    uint8_t ddb[PORT_RELOCDRV_DQ_DDB_BYTES] __attribute__((aligned(4)));
++    uint8_t ucb[PORT_RELOCDRV_DQ_UCB_BYTES] __attribute__((aligned(4)));
++    uint32_t source_ddb,source_ucb;
++    uint32_t applied,ready,driver_bound;
++};
++uint16_t port_relocdrv_read16(const uint8_t *);
++uint32_t port_relocdrv_read32(const uint8_t *);
++void port_relocdrv_write(uint8_t *,unsigned,uint32_t);
++uint32_t port_relocdrv_region(const struct port_relocdrv_context *,
++                             uint8_t,unsigned,uint8_t **);
++uint32_t port_relocdrv_decode(const uint8_t *,size_t,size_t,
++                             struct port_relocdrv_op *);
++uint32_t port_relocdrv_fetch(const struct port_relocdrv_context *,
++                            const struct port_relocdrv_op *,uint32_t *);
++uint32_t port_relocdrv_field(uint8_t *,uint32_t,unsigned,unsigned,int);
++uint32_t port_relocdrv_step(const struct port_relocdrv_context *,
++    const struct port_relocdrv_op *,int);
++uint32_t port_relocdrv_walk(const struct port_relocdrv_context *,
++    const uint8_t *,size_t,int,uint32_t *);
++uint32_t port_relocdrv_isolated(const struct port_relocdrv_context *,
++    const uint8_t *,size_t);
++uint32_t port_relocdrv_apply(const struct port_relocdrv_context *,
++    const uint8_t *,size_t,uint32_t *);
++uint32_t port_relocdrv_dq_table(uint8_t *,size_t,size_t *);
++uint32_t port_relocdrv_dq_guard(const uint8_t *,size_t,
++                               const struct port_v37_device_result *);
++uint32_t port_relocdrv_dq_footprint(const struct port_relocdrv_dq *,
++    const uint8_t *,size_t);
++uint32_t port_relocdrv_dq_check(const struct port_relocdrv_dq *);
++uint32_t port_relocdrv_dq_init(struct port_relocdrv_dq *,
++    const uint8_t *,size_t,const struct port_v37_device_result *,
++    const struct port_dqddt_stage *,const struct port_dq_fdt *);
++#endif
+diff --git a/src/vms_relocdrv_apply.c b/src/vms_relocdrv_apply.c
+new file mode 100644
+index 0000000..f3df334
+--- /dev/null
++++ b/src/vms_relocdrv_apply.c
+@@ -0,0 +1,15 @@
++#include "vms_relocdrv.h"
++/* RELOCDRV INITDRV on native IA-32: a full validation pass prevents any
++ * partial mutation of DDB/UCB when an otherwise valid table later fails. */
++uint32_t port_relocdrv_apply(const struct port_relocdrv_context *c,
++    const uint8_t *table,size_t len,uint32_t *done){
++    if(!done||port_relocdrv_isolated(c,table,len)!=PORT_RELOCDRV_OK)
++        return PORT_RELOCDRV_BAD;
++    uint32_t expected=0,applied=0;
++    const uint32_t valid=port_relocdrv_walk(c,table,len,0,&expected);
++    if(valid!=PORT_RELOCDRV_OK)return valid;
++    const uint32_t result=port_relocdrv_walk(c,table,len,1,&applied);
++    if(result!=PORT_RELOCDRV_OK||applied!=expected)
++        return PORT_RELOCDRV_BAD;
++    *done=applied;return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_decode.c b/src/vms_relocdrv_decode.c
+new file mode 100644
+index 0000000..6c3b7e1
+--- /dev/null
++++ b/src/vms_relocdrv_decode.c
+@@ -0,0 +1,26 @@
++#include "vms_relocdrv.h"
++/* RELOCDRV.MAR EXECUTE / SHRLIB/SYSMAR.MAR DPT_STORE: one exact entry.
++ * Opcode low 7 bits 0=B,1=W,2=D,3=L,4=V; bit7 means indirect. */
++uint32_t port_relocdrv_decode(const uint8_t *table,size_t len,size_t at,
++    struct port_relocdrv_op *out){
++    if(!table||!out||at>=len||table[at]==0u||len-at<3u)
++        return PORT_RELOCDRV_BAD;
++    const uint8_t k=(uint8_t)(table[at+2u]&0x7fu);
++    const int indirect=(table[at+2u]&PORT_RELOCDRV_OP_INDIRECT)!=0;
++    if(k>PORT_RELOCDRV_OP_FIELD)return PORT_RELOCDRV_BAD;
++    const size_t n=indirect?4u:(k==PORT_RELOCDRV_OP_BYTE?1u:
++        (k==PORT_RELOCDRV_OP_WORD||k==PORT_RELOCDRV_OP_DISPLACED?2u:4u));
++    const size_t extra=k==PORT_RELOCDRV_OP_FIELD?2u:0u;
++    if(len-at-3u<n+extra)return PORT_RELOCDRV_BAD;
++    struct port_relocdrv_op op={0};
++    op.type=table[at];op.offset=table[at+1u];op.opcode=table[at+2u];
++    for(unsigned i=0;i<n;i++)op.raw_value|=(uint32_t)table[at+3u+i]<<(i*8u);
++    if(extra){
++        op.pos=table[at+3u+n];op.bits=table[at+4u+n];
++        if(!op.bits||op.bits>32u||op.pos>=32u||
++           (unsigned)op.pos+op.bits>32u)return PORT_RELOCDRV_BAD;
++    }
++    op.next=at+3u+n+extra;
++    *out=op;
++    return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_dq_check.c b/src/vms_relocdrv_dq_check.c
+new file mode 100644
+index 0000000..aeb8c14
+--- /dev/null
++++ b/src/vms_relocdrv_dq_check.c
+@@ -0,0 +1,19 @@
++#include "vms_relocdrv.h"
++/* Source DQ DPT_STORE resulting bytes. Pointer fields remain unbound,
++ * so a diagnostic observation is not a published device driver. */
++uint32_t port_relocdrv_dq_check(const struct port_relocdrv_dq *d){
++    if(!d||!d->ready||d->driver_bound||
++       d->applied!=PORT_RELOCDRV_DQ_INIT_COUNT||
++       !d->source_ddb||!d->source_ucb||
++       d->ddb[16u]!='F'||d->ddb[17u]!='1'||d->ddb[18u]!='1'||
++       d->ddb[19u]!=1u||d->ucb[11u]!=8u||
++       port_relocdrv_read32(d->ucb+52u)!=PORT_RELOCDRV_DQ_CHAR||
++       d->ucb[56u]!=1u||port_relocdrv_read16(d->ucb+58u)!=512u||
++       d->ucb[82u]!=21u||d->ucb[113u]!=8u||
++       port_relocdrv_read32(d->ucb+PORT_RELOCDRV_DQ_CURDA)!=UINT32_MAX||
++       port_relocdrv_read32(d->ddb+12u)!=0u||
++       port_relocdrv_read32(d->ucb+120u)!=0u||
++       port_relocdrv_read32(d->ucb+32u)!=0u)
++        return PORT_RELOCDRV_BAD;
++    return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_dq_footprint.c b/src/vms_relocdrv_dq_footprint.c
+new file mode 100644
+index 0000000..fc20fbd
+--- /dev/null
++++ b/src/vms_relocdrv_dq_footprint.c
+@@ -0,0 +1,23 @@
++#include "vms_relocdrv.h"
++/* Scratch DPT_STORE edits exactly original fields; all others, including
++ * DDT/CRB/queue, remain byte-for-byte unchanged from source DEVICEDAT. */
++static int dq_changed(unsigned off){
++    return (off>=16u&&off<=19u);
++}
++static int ucb_changed(unsigned off){
++    return off==11u||(off>=52u&&off<=59u)||off==82u||off==113u||
++           (off>=PORT_RELOCDRV_DQ_CURDA&&off<PORT_RELOCDRV_DQ_CURDA+4u);
++}
++uint32_t port_relocdrv_dq_footprint(const struct port_relocdrv_dq *d,
++    const uint8_t *original,size_t cap){
++    if(!d||!original||cap<PORT_V37_DEVICE_BYTES)return PORT_RELOCDRV_BAD;
++    for(unsigned i=0;i<PORT_RELOCDRV_DQ_DDB_BYTES;i++){
++        if(!dq_changed(i)&&d->ddb[i]!=original[PORT_V37_DDB_BOOT_OFF+i])
++            return PORT_RELOCDRV_BAD;
++    }
++    for(unsigned i=0;i<PORT_RELOCDRV_DQ_UCB_BYTES;i++){
++        if(!ucb_changed(i)&&d->ucb[i]!=original[PORT_V37_UCB_BOOT_OFF+i])
++            return PORT_RELOCDRV_BAD;
++    }
++    return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_dq_guard.c b/src/vms_relocdrv_dq_guard.c
+new file mode 100644
+index 0000000..da4aa15
+--- /dev/null
++++ b/src/vms_relocdrv_dq_guard.c
+@@ -0,0 +1,17 @@
++#include "vms_relocdrv.h"
++/* A staged original DPT must not make an unimplemented DQA0 available to
++ * user $ASSIGN or IO$_ functions. DDT/CRB bindings remain strictly absent. */
++uint32_t port_relocdrv_dq_guard(const uint8_t *db,size_t cap,
++    const struct port_v37_device_result *info){
++    if(!db||!info||cap<PORT_V37_DEVICE_BYTES||
++       info->incomplete_driver_mask!=7u||info->boot_name_ready!=1u||
++       db[PORT_V37_DDB_BOOT_OFF+12u]||
++       db[PORT_V37_DDB_BOOT_OFF+13u]||
++       db[PORT_V37_DDB_BOOT_OFF+14u]||
++       db[PORT_V37_DDB_BOOT_OFF+15u]||
++       db[PORT_V37_UCB_BOOT_OFF+120u]||
++       db[PORT_V37_UCB_BOOT_OFF+121u]||
++       db[PORT_V37_UCB_BOOT_OFF+122u]||
++       db[PORT_V37_UCB_BOOT_OFF+123u])return PORT_RELOCDRV_UNBOUND;
++    return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_dq_init.c b/src/vms_relocdrv_dq_init.c
+new file mode 100644
+index 0000000..79a3ad9
+--- /dev/null
++++ b/src/vms_relocdrv_dq_init.c
+@@ -0,0 +1,37 @@
++#include "vms_relocdrv.h"
++/* Original IOC$INITDRV for DQ DPT_STORE source subset: copy real DQA0
++ * DDB/UCB to bounded supervisor scratch then execute the 9 init entries.
++ * Do not publish to IOC$GL_DEVLIST or mutate original DQA0 yet. */
++uint32_t port_relocdrv_dq_init(struct port_relocdrv_dq *out,
++    const uint8_t *device,size_t cap,const struct port_v37_device_result *info,
++    const struct port_dqddt_stage *stage,const struct port_dq_fdt *fdt){
++    if(!out||!device||!info||
++       port_relocdrv_dq_guard(device,cap,info)!=PORT_RELOCDRV_OK||
++       port_dqddt_validate(stage,fdt)!=PORT_DQDDT_OK)
++        return PORT_RELOCDRV_BAD;
++    struct port_relocdrv_dq tmp={0};
++    tmp.source_ddb=info->ddb[0];tmp.source_ucb=info->ucb[0];
++    if(!tmp.source_ddb||!tmp.source_ucb)return PORT_RELOCDRV_BAD;
++    for(unsigned i=0;i<PORT_RELOCDRV_DQ_DDB_BYTES;i++)
++        tmp.ddb[i]=device[PORT_V37_DDB_BOOT_OFF+i];
++    for(unsigned i=0;i<PORT_RELOCDRV_DQ_UCB_BYTES;i++)
++        tmp.ucb[i]=device[PORT_V37_UCB_BOOT_OFF+i];
++    uint8_t table[PORT_RELOCDRV_DQ_INIT_BYTES]={0};size_t length=0;
++    if(port_relocdrv_dq_table(table,sizeof table,&length)!=PORT_RELOCDRV_OK)
++        return PORT_RELOCDRV_BAD;
++    struct port_relocdrv_context ctx={0};
++    ctx.region[0]=(struct port_relocdrv_region){tmp.ddb,
++        sizeof tmp.ddb,tmp.source_ddb,PORT_V37_DYN_DDB};
++    ctx.region[1]=(struct port_relocdrv_region){tmp.ucb,
++        sizeof tmp.ucb,tmp.source_ucb,PORT_V37_DYN_UCB};
++    ctx.dpt_base=stage->table_base;
++    uint32_t count=0;
++    if(port_relocdrv_apply(&ctx,table,length,&count)!=PORT_RELOCDRV_OK||
++       count!=PORT_RELOCDRV_DQ_INIT_COUNT)return PORT_RELOCDRV_BAD;
++    tmp.applied=count;tmp.ready=1u;
++    if(port_relocdrv_dq_check(&tmp)!=PORT_RELOCDRV_OK||
++       port_relocdrv_dq_footprint(&tmp,device,cap)!=PORT_RELOCDRV_OK)
++        return PORT_RELOCDRV_BAD;
++    *out=tmp;
++    return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_dq_table.c b/src/vms_relocdrv_dq_table.c
+new file mode 100644
+index 0000000..cb56c0b
+--- /dev/null
++++ b/src/vms_relocdrv_dq_table.c
+@@ -0,0 +1,22 @@
++#include "vms_relocdrv.h"
++/* Exact *data*, not original MACRO code: DQDRIVER.MAR 406-419 DPT_STORE
++ * INIT records. DDB ACPD=F11/PACK; UCB FIPL/DEVCHAR/DEVCLASS/DEVBUFSIZ,
++ * DIPL/ERTMAX/CURDA. Source REINIT requires real CRB/IDB and stays unbound. */
++uint32_t port_relocdrv_dq_table(uint8_t *out,size_t cap,size_t *used){
++    static const uint8_t data[]={
++        PORT_V37_DYN_DDB,16u,PORT_RELOCDRV_OP_LONG,'F','1','1',0u,
++        PORT_V37_DYN_DDB,19u,PORT_RELOCDRV_OP_BYTE,1u,
++        PORT_V37_DYN_UCB,11u,PORT_RELOCDRV_OP_BYTE,8u,
++        PORT_V37_DYN_UCB,52u,PORT_RELOCDRV_OP_LONG,0x08u,0x40u,0x45u,0x1cu,
++        PORT_V37_DYN_UCB,56u,PORT_RELOCDRV_OP_BYTE,1u,
++        PORT_V37_DYN_UCB,58u,PORT_RELOCDRV_OP_WORD,0u,2u,
++        PORT_V37_DYN_UCB,82u,PORT_RELOCDRV_OP_BYTE,21u,
++        PORT_V37_DYN_UCB,113u,PORT_RELOCDRV_OP_BYTE,8u,
++        PORT_V37_DYN_UCB,PORT_RELOCDRV_DQ_CURDA,PORT_RELOCDRV_OP_LONG,
++          0xffu,0xffu,0xffu,0xffu,
++        0u};
++    if(!out||!used||sizeof data!=PORT_RELOCDRV_DQ_INIT_BYTES||
++       cap<sizeof data)return PORT_RELOCDRV_BAD;
++    for(size_t i=0;i<sizeof data;i++)out[i]=data[i];
++    *used=sizeof data;return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_fetch.c b/src/vms_relocdrv_fetch.c
+new file mode 100644
+index 0000000..df49f93
+--- /dev/null
++++ b/src/vms_relocdrv_fetch.c
+@@ -0,0 +1,24 @@
++#include "vms_relocdrv.h"
++/* Original EXECUTE 163-231: direct literal, signed DPT-relative 16-bit
++ * displacement, or indirect longword read from a bounded read-only image. */
++uint32_t port_relocdrv_fetch(const struct port_relocdrv_context *c,
++    const struct port_relocdrv_op *op,uint32_t *out){
++    if(!c||!op||!out)return PORT_RELOCDRV_BAD;
++    const unsigned k=op->opcode&0x7fu;
++    if(k>PORT_RELOCDRV_OP_FIELD)return PORT_RELOCDRV_BAD;
++    uint32_t v=op->raw_value;
++    if(op->opcode&PORT_RELOCDRV_OP_INDIRECT){
++        if(!c->readonly_bytes||!c->readonly_base||
++           v<c->readonly_base||
++           (uint64_t)v-c->readonly_base+4u>c->readonly_size)
++            return PORT_RELOCDRV_UNBOUND;
++        v=port_relocdrv_read32(c->readonly_bytes+(v-c->readonly_base));
++    }else if(k==PORT_RELOCDRV_OP_DISPLACED){
++        if(!c->dpt_base)return PORT_RELOCDRV_UNBOUND;
++        const int32_t d=(int16_t)(uint16_t)v;
++        const int64_t target=(int64_t)c->dpt_base+d;
++        if(target<0||target>UINT32_MAX)return PORT_RELOCDRV_BAD;
++        v=(uint32_t)target;
++    }
++    *out=v;return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_field.c b/src/vms_relocdrv_field.c
+new file mode 100644
+index 0000000..839c8b5
+--- /dev/null
++++ b/src/vms_relocdrv_field.c
+@@ -0,0 +1,16 @@
++#include "vms_relocdrv.h"
++/* RELOCDRV.MAR INSV performs a native four-byte little-endian bitfield
++ * update. Reject cross-boundary masks and shifts before any mutation. */
++uint32_t port_relocdrv_field(uint8_t *dst,uint32_t value,unsigned pos,
++    unsigned bits,int perform){
++    if(!dst||!bits||bits>32u||pos>=32u||pos+bits>32u)
++        return PORT_RELOCDRV_BAD;
++    if(perform){
++        const uint32_t mask=bits==32u?UINT32_MAX:((UINT32_C(1)<<bits)-1u);
++        const uint32_t shifted=mask<<pos;
++        const uint32_t existing=port_relocdrv_read32(dst);
++        port_relocdrv_write(dst,4u,
++            (existing&~shifted)|((value&mask)<<pos));
++    }
++    return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_isolated.c b/src/vms_relocdrv_isolated.c
+new file mode 100644
+index 0000000..74ccf28
+--- /dev/null
++++ b/src/vms_relocdrv_isolated.c
+@@ -0,0 +1,29 @@
++#include "vms_relocdrv.h"
++/* Source DPT initialization must not overwrite its own instruction stream
++ * or its read-only indirection constants during the second commit pass. */
++static int overlaps(uintptr_t a,size_t an,uintptr_t b,size_t bn){
++    if(!an||!bn||a>UINTPTR_MAX-an||b>UINTPTR_MAX-bn)return 1;
++    return a<b+bn&&b<a+an;
++}
++uint32_t port_relocdrv_isolated(const struct port_relocdrv_context *c,
++    const uint8_t *table,size_t len){
++    if(!c||!table||!len)return PORT_RELOCDRV_BAD;
++    for(unsigned i=0;i<PORT_RELOCDRV_REGION_COUNT;i++){
++        const struct port_relocdrv_region *a=&c->region[i];
++        if(!a->structure_type)continue;
++        if(!a->bytes||!a->bytes_size||!a->pc_base||
++           overlaps((uintptr_t)table,len,(uintptr_t)a->bytes,a->bytes_size)||
++           (c->readonly_bytes&&c->readonly_size&&
++            overlaps((uintptr_t)c->readonly_bytes,c->readonly_size,
++                     (uintptr_t)a->bytes,a->bytes_size)))return PORT_RELOCDRV_BAD;
++        for(unsigned j=i+1u;j<PORT_RELOCDRV_REGION_COUNT;j++){
++            const struct port_relocdrv_region *b=&c->region[j];
++            if(b->structure_type&&(!b->bytes||
++               b->structure_type==a->structure_type||
++               overlaps((uintptr_t)a->bytes,a->bytes_size,
++                        (uintptr_t)b->bytes,b->bytes_size)))
++                return PORT_RELOCDRV_BAD;
++        }
++    }
++    return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_read16.c b/src/vms_relocdrv_read16.c
+new file mode 100644
+index 0000000..c2c1804
+--- /dev/null
++++ b/src/vms_relocdrv_read16.c
+@@ -0,0 +1,6 @@
++#include "vms_relocdrv.h"
++/* RELOCDRV.MAR EXECUTE: MOVZWL (R3)+. The decoded source stream has
++ * already been range checked by port_relocdrv_decode. */
++uint16_t port_relocdrv_read16(const uint8_t *p){
++    return (uint16_t)((uint16_t)p[0]|((uint16_t)p[1]<<8u));
++}
+diff --git a/src/vms_relocdrv_read32.c b/src/vms_relocdrv_read32.c
+new file mode 100644
+index 0000000..6e38519
+--- /dev/null
++++ b/src/vms_relocdrv_read32.c
+@@ -0,0 +1,6 @@
++#include "vms_relocdrv.h"
++/* RELOCDRV.MAR EXECUTE: MOVL (R3)+, original little-endian VAX bytes. */
++uint32_t port_relocdrv_read32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8u)|
++        ((uint32_t)p[2]<<16u)|((uint32_t)p[3]<<24u);
++}
+diff --git a/src/vms_relocdrv_region.c b/src/vms_relocdrv_region.c
+new file mode 100644
+index 0000000..d944dae
+--- /dev/null
++++ b/src/vms_relocdrv_region.c
+@@ -0,0 +1,19 @@
++#include "vms_relocdrv.h"
++/* Source LOCATE: CRB,DDB,IDB,UCB. Never chase unchecked VAX pointers,
++ * especially UCB$L_CRB; the caller supplies explicit verified regions. */
++uint32_t port_relocdrv_region(const struct port_relocdrv_context *c,
++    uint8_t type,unsigned length,uint8_t **out){
++    if(!c||!out||!length||length>4u)return PORT_RELOCDRV_BAD;
++    if(type!=PORT_V37_DYN_CRB&&type!=PORT_V37_DYN_DDB&&
++       type!=PORT_V37_DYN_IDB&&type!=PORT_V37_DYN_UCB)
++        return PORT_RELOCDRV_BAD;
++    for(unsigned i=0;i<PORT_RELOCDRV_REGION_COUNT;i++){
++        const struct port_relocdrv_region *r=&c->region[i];
++        if(r->structure_type!=type)continue;
++        if(!r->bytes||r->bytes_size<length||!r->pc_base||
++           (uint64_t)r->pc_base+r->bytes_size>UINT32_MAX)
++            return PORT_RELOCDRV_UNBOUND;
++        *out=r->bytes;return PORT_RELOCDRV_OK;
++    }
++    return PORT_RELOCDRV_UNBOUND;
++}
+diff --git a/src/vms_relocdrv_step.c b/src/vms_relocdrv_step.c
+new file mode 100644
+index 0000000..439ad11
+--- /dev/null
++++ b/src/vms_relocdrv_step.c
+@@ -0,0 +1,28 @@
++#include "vms_relocdrv.h"
++/* Source LOCATE + EXECUTE: one supplied region and one decoded opcode.
++ * Invalid operations never write. No original VAX register emulation. */
++uint32_t port_relocdrv_step(const struct port_relocdrv_context *c,
++    const struct port_relocdrv_op *op,int perform){
++    if(!c||!op)return PORT_RELOCDRV_BAD;
++    const unsigned k=op->opcode&0x7fu;
++    unsigned bytes=k==PORT_RELOCDRV_OP_BYTE?1u:
++       (k==PORT_RELOCDRV_OP_WORD?2u:4u);
++    if(k>PORT_RELOCDRV_OP_FIELD)return PORT_RELOCDRV_BAD;
++    uint8_t *base=0;
++    const uint32_t r=port_relocdrv_region(c,op->type,bytes,&base);
++    if(r!=PORT_RELOCDRV_OK)return r;
++    size_t bound=0;
++    for(unsigned i=0;i<PORT_RELOCDRV_REGION_COUNT;i++)
++        if(c->region[i].structure_type==op->type)
++            bound=c->region[i].bytes_size;
++    if(op->offset>bound||bound-op->offset<bytes)
++        return PORT_RELOCDRV_BAD;
++    uint32_t val=0;
++    const uint32_t resolved=port_relocdrv_fetch(c,op,&val);
++    if(resolved!=PORT_RELOCDRV_OK)return resolved;
++    if(k==PORT_RELOCDRV_OP_FIELD)
++        return port_relocdrv_field(base+op->offset,val,op->pos,
++                                   op->bits,perform);
++    if(perform)port_relocdrv_write(base+op->offset,bytes,val);
++    return PORT_RELOCDRV_OK;
++}
+diff --git a/src/vms_relocdrv_walk.c b/src/vms_relocdrv_walk.c
+new file mode 100644
+index 0000000..4928461
+--- /dev/null
++++ b/src/vms_relocdrv_walk.c
+@@ -0,0 +1,22 @@
++#include "vms_relocdrv.h"
++/* Original IOC$INITDRV reads DPT$W_INITTAB and loops LOCATE/EXECUTE until
++ * the zero structure terminator. Enforce an explicit instruction cap. */
++uint32_t port_relocdrv_walk(const struct port_relocdrv_context *c,
++    const uint8_t *table,size_t len,int perform,uint32_t *done){
++    if(!c||!table||!len||!done)return PORT_RELOCDRV_BAD;
++    size_t at=0;uint32_t count=0;
++    while(at<len){
++        if(!table[at]){
++            if(at+1u!=len)return PORT_RELOCDRV_BAD;
++            *done=count;return PORT_RELOCDRV_OK;
++        }
++        if(count>=PORT_RELOCDRV_OP_CAP)return PORT_RELOCDRV_OVERFLOW;
++        struct port_relocdrv_op op={0};
++        if(port_relocdrv_decode(table,len,at,&op)!=PORT_RELOCDRV_OK)
++            return PORT_RELOCDRV_BAD;
++        const uint32_t r=port_relocdrv_step(c,&op,perform);
++        if(r!=PORT_RELOCDRV_OK)return r;
++        at=op.next;count++;
++    }
++    return PORT_RELOCDRV_BAD;
++}
+diff --git a/src/vms_relocdrv_write.c b/src/vms_relocdrv_write.c
+new file mode 100644
+index 0000000..30e9836
+--- /dev/null
++++ b/src/vms_relocdrv_write.c
+@@ -0,0 +1,5 @@
++#include "vms_relocdrv.h"
++/* RELOCDRV.MAR EXECUTE store byte, word or longword after full preflight. */
++void port_relocdrv_write(uint8_t *p,unsigned n,uint32_t v){
++    for(unsigned i=0;i<n;i++)p[i]=(uint8_t)(v>>(8u*i));
++}
+diff --git a/tests/test_relocdrv_host.c b/tests/test_relocdrv_host.c
+new file mode 100644
+index 0000000..548d5bf
+--- /dev/null
++++ b/tests/test_relocdrv_host.c
+@@ -0,0 +1,88 @@
++#include "vms_relocdrv.h"
++#include <stdio.h>
++#include <string.h>
++#define CHECK(x) do{if(!(x)){fprintf(stderr,"RELOCDRV FAILED line %u: %s\n",\
++    (unsigned)__LINE__,#x);return 1;}}while(0)
++int main(void){
++    enum {DB_BASE=0x00360000u,DDT_BASE=0x00370000u,
++          START=0x00324120u,RET=0x00324104u};
++    uint32_t source_words[PORT_V37_DEVICE_BYTES/4u]={0};
++    uint8_t *source=(uint8_t *)source_words;
++    struct port_v37_device_result info={0};
++    CHECK(port_v37_devices_prelink(source,sizeof source_words,DB_BASE,&info)==PORT_V37_DEV_OK);
++    info.incomplete_driver_mask=7u;info.boot_name_ready=1u;
++    CHECK(port_relocdrv_dq_guard(source,PORT_V37_DEVICE_BYTES,&info)==PORT_RELOCDRV_OK);
++    struct port_dq_fdt fdt={0};
++    struct port_dqddt_stage stage={0};
++    CHECK(port_dq_fdt_build(&fdt,sizeof fdt)==PORT_DQ_FDT_OK);
++    CHECK(port_dqddt_stage_init(&stage,&fdt,DDT_BASE,START,RET)==PORT_DQDDT_OK);
++    uint8_t prior[PORT_V37_DEVICE_BYTES]={0};
++    memcpy(prior,source,sizeof prior);
++    struct port_relocdrv_dq dq={0};
++    CHECK(port_relocdrv_dq_init(&dq,source,PORT_V37_DEVICE_BYTES,&info,&stage,&fdt)==PORT_RELOCDRV_OK);
++    CHECK(port_relocdrv_dq_check(&dq)==PORT_RELOCDRV_OK);
++    CHECK(port_relocdrv_dq_footprint(&dq,source,PORT_V37_DEVICE_BYTES)==PORT_RELOCDRV_OK);
++    CHECK(memcmp(prior,source,sizeof prior)==0); /* not yet published */
++    CHECK(dq.source_ddb==info.ddb[0]&&dq.source_ucb==info.ucb[0]&&dq.applied==9u);
++    uint8_t tab[PORT_RELOCDRV_DQ_INIT_BYTES]={0};size_t used=0;
++    CHECK(port_relocdrv_dq_table(tab,sizeof tab,&used)==PORT_RELOCDRV_OK);
++    CHECK(used==PORT_RELOCDRV_DQ_INIT_BYTES&&tab[0]==PORT_V37_DYN_DDB&&tab[used-1u]==0u);
++    CHECK(port_relocdrv_dq_table(tab,used-1u,&used)==PORT_RELOCDRV_BAD);
++    CHECK(port_relocdrv_dq_guard(source,PORT_V37_DEVICE_BYTES-1u,&info)==PORT_RELOCDRV_UNBOUND);
++    uint32_t original=info.incomplete_driver_mask;
++    info.incomplete_driver_mask=15u;
++    CHECK(port_relocdrv_dq_init(&dq,source,PORT_V37_DEVICE_BYTES,&info,&stage,&fdt)==PORT_RELOCDRV_BAD);
++    info.incomplete_driver_mask=original;
++    uint32_t ddt=port_v37_read32(source+PORT_V37_DDB_BOOT_OFF+12u);
++    port_v37_write32(source+PORT_V37_DDB_BOOT_OFF+12u,0x00370000u);
++    CHECK(port_relocdrv_dq_guard(source,PORT_V37_DEVICE_BYTES,&info)==PORT_RELOCDRV_UNBOUND);
++    port_v37_write32(source+PORT_V37_DDB_BOOT_OFF+12u,ddt);
++    uint8_t ddb[52]={0};uint8_t ucb[252]={0};
++    const uint32_t ro_value=0x1234abcd;
++    uint8_t ro[8]={0};port_relocdrv_write(ro,4u,ro_value);
++    struct port_relocdrv_context c={0};
++    c.region[0]=(struct port_relocdrv_region){ddb,sizeof ddb,0x00360000u,PORT_V37_DYN_DDB};
++    c.region[1]=(struct port_relocdrv_region){ucb,sizeof ucb,0x00361000u,PORT_V37_DYN_UCB};
++    c.readonly_bytes=ro;c.readonly_size=sizeof ro;c.readonly_base=0x00364000u;
++    c.dpt_base=0x00380000u;
++    uint32_t done=0;
++    const uint8_t ops[]={
++       PORT_V37_DYN_DDB,0u,PORT_RELOCDRV_OP_BYTE,0xa5u,
++       PORT_V37_DYN_DDB,2u,PORT_RELOCDRV_OP_WORD,0x34u,0x12u,
++       PORT_V37_DYN_DDB,4u,PORT_RELOCDRV_OP_DISPLACED,0xfcu,0xffu,
++       PORT_V37_DYN_UCB,4u,PORT_RELOCDRV_OP_LONG,0x78u,0x56u,0x34u,0x12u,
++       PORT_V37_DYN_UCB,8u,PORT_RELOCDRV_OP_FIELD,0x0bu,0u,0u,0u,3u,5u,
++       PORT_V37_DYN_UCB,12u,PORT_RELOCDRV_OP_INDIRECT|PORT_RELOCDRV_OP_WORD,
++          0u,0x40u,0x36u,0u,
++       PORT_V37_DYN_UCB,16u,PORT_RELOCDRV_OP_INDIRECT|PORT_RELOCDRV_OP_FIELD,
++          0u,0x40u,0x36u,0u,0u,32u,
++       0u};
++    CHECK(port_relocdrv_apply(&c,ops,sizeof ops,&done)==PORT_RELOCDRV_OK&&done==7u);
++    CHECK(ddb[0]==0xa5u&&port_relocdrv_read16(ddb+2u)==0x1234u);
++    CHECK(port_relocdrv_read32(ddb+4u)==0x0037fffcu);
++    CHECK(port_relocdrv_read32(ucb+4u)==0x12345678u);
++    CHECK(port_relocdrv_read32(ucb+8u)==0x58u);
++    CHECK(port_relocdrv_read16(ucb+12u)==0xabcdu);
++    CHECK(port_relocdrv_read32(ucb+16u)==ro_value);
++    uint8_t before[sizeof ucb];memcpy(before,ucb,sizeof before);
++    const uint8_t malformed[]={PORT_V37_DYN_UCB,9u,PORT_RELOCDRV_OP_BYTE,99u,
++       PORT_V37_DYN_UCB,250u,PORT_RELOCDRV_OP_LONG,1u,2u,3u,4u,0u};
++    CHECK(port_relocdrv_apply(&c,malformed,sizeof malformed,&done)==PORT_RELOCDRV_BAD);
++    CHECK(!memcmp(before,ucb,sizeof before)&&done==7u);
++    const uint8_t bad_tag[]={41u,4u,PORT_RELOCDRV_OP_BYTE,1u,0u};
++    CHECK(port_relocdrv_apply(&c,bad_tag,sizeof bad_tag,&done)==PORT_RELOCDRV_BAD);
++    const uint8_t bad_field[]={PORT_V37_DYN_UCB,0u,PORT_RELOCDRV_OP_FIELD,
++       0xffu,0u,0u,0u,31u,2u,0u};
++    CHECK(port_relocdrv_apply(&c,bad_field,sizeof bad_field,&done)==PORT_RELOCDRV_BAD);
++    const uint8_t bad_indirect[]={PORT_V37_DYN_UCB,1u,
++       PORT_RELOCDRV_OP_INDIRECT,0xffu,0xffu,0xffu,0xffu,0u};
++    CHECK(port_relocdrv_apply(&c,bad_indirect,sizeof bad_indirect,&done)==PORT_RELOCDRV_UNBOUND);
++    CHECK(!memcmp(before,ucb,sizeof before));
++    CHECK(port_relocdrv_apply(&c,ucb,sizeof ucb,&done)==PORT_RELOCDRV_BAD);
++    CHECK(port_relocdrv_field(ucb,1u,32u,1u,1)==PORT_RELOCDRV_BAD);
++    CHECK(port_relocdrv_field(ucb,1u,0u,0u,1)==PORT_RELOCDRV_BAD);
++    const uint8_t empty[]={0u};
++    CHECK(port_relocdrv_apply(&c,empty,sizeof empty,&done)==PORT_RELOCDRV_OK&&done==0u);
++    puts("RELOCDRV.MAR source IOC$INITDRV DPT_STORE interpreter, original DQ defaults and strict no-DDT-bind PASS");
++    return 0;
++}
+diff --git a/tools/qemu_sysboot_m131.py b/tools/qemu_sysboot_m131.py
+new file mode 100644
+index 0000000..8d1ddf3
+--- /dev/null
++++ b/tools/qemu_sysboot_m131.py
+@@ -0,0 +1,143 @@
++#!/usr/bin/env python3
++"""One real native IA-32 QEMU boot; verify DPL0 software IPL4 dispatch.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M131: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE staged DQDRIVER 12 source FDT masks (disk DDT and ACP unbound).',
++        b'INIT: SYS.EXE linked NL$DDT DDTAB/FUNCTAB to NLA0 (other drivers absent).',
++        b'INIT: SYS.EXE DQ READPBLK fetched actual ATA Files-11 LBN1 (disk DDT/ACP not linked).',
++        b'INIT: SYS.EXE FIN_DATABASE staged DQA0 names and resident SYS$DISK/SYS$SYSDEVICE (logical lookup pending).',
++        b'INIT: SYS.EXE LOG$TRANSLATE resolved original SYS$DISK and SYS$SYSDEVICE names (system bootstrap only).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE IOC device search resolved NLA0 with native null DDT (others unbound).',
++        b'INIT: SYS.EXE IOC$SEARCHDEV resolved SYS$DISK/SYS$SYSDEVICE to unbound DQA0 and NLA0 to linked DDT (no $ASSIGN).',
++        b'INIT: SYS.EXE staged source DQ DPTAB/DDTAB and 136-byte FUNCTAB (all disk actions unbound).',
++        b'INIT: SYS.EXE RELOCDRV IOC$INITDRV applied source DQ DPT_STORE to private DQA0 records (DDT/CRB unbound).',
++        b'INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 requested).',
++        b'INIT: SYS.EXE IOCIOPOST serviced two NLA IRPs through IA-32 CPL0 software INT 0x90 (no process AST).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: resident source DQ FDT staging validation failed.',
++        b'INIT: resident DQ physical boot READPBLK failed.',
++        b'INIT: resident FIN_DATABASE source boot DDB/logical record staging failed.',
++        b'INIT: resident source LOGNAMSUB bootstrap translation failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: resident IOC logical to physical boot name lookup failed.',
++        b'INIT: resident DQ DDT source table staging failed.',
++        b'INIT: resident RELOCDRV original DQ INITDRV table failed.',
++        b'INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.',
++        b'INIT: resident IOCIOPOST source kernel end-action processing failed.',
++        b'INIT: resident IOCIOPOST native software interrupt failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m131-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,131,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M131: resident DQ source IOC$INITDRV scratch DPT STORE through native RELOCDRV interpreter PASS')
++        return 0
++    print('QEMU M131: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
