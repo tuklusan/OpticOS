@@ -1,0 +1,901 @@
+diff --git a/Makefile b/Makefile
+index 05db9a0..eac935b 100644
+--- a/Makefile
++++ b/Makefile
+@@ -800,6 +800,8 @@ M126_DQ_READ_SRCS=$(wildcard src/vms_dq_bootread_*.c)
+ M126_DQ_READ_OBJS=$(patsubst src/%.c,build/%.o,$(M126_DQ_READ_SRCS))
+ M127_FIN_SRCS=$(wildcard src/vms_ini_fin_*.c)
+ M127_FIN_OBJS=$(patsubst src/%.c,build/%.o,$(M127_FIN_SRCS))
++M128_LOG_SRCS=$(wildcard src/vms_log_*.c)
++M128_LOG_OBJS=$(patsubst src/%.c,build/%.o,$(M128_LOG_SRCS))
+ M123_IOPOST_SRCS=$(filter-out $(M124_SWI_SRCS),$(wildcard src/vms_iopost_*.c))
+ M123_IOPOST_OBJS=$(patsubst src/%.c,build/%.o,$(M123_IOPOST_SRCS))
+ $(M124_SWI_OBJS): build/%.o: src/%.c src/vms_iopost_swi.h | build
+@@ -815,8 +817,8 @@ conportcheck: $(M119_CON_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
+ 	./build/conportcheck
+ 
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -840,7 +842,7 @@ build/install_iniloa_image: tools/install_iniloa_image.c src/vms_boot_files11.c
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1205,3 +1207,11 @@ $(M127_FIN_OBJS): build/%.o: src/%.c src/vms_ini_fin_database.h | build
+ inifindatabasecheck: $(M127_FIN_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-sanitize-recover=undefined -Isrc $(M127_FIN_SRCS) $(M118_DB_SRCS) src/vms_ini_log_templates.c src/vms_ini_syslog.c tests/test_ini_fin_database_host.c -o build/inifindatabasecheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/inifindatabasecheck
++
++# M128: LOGNAMSUB.MAR LOG$HASH and bounded read-only SYSTEM translation.
++$(M128_LOG_OBJS): build/%.o: src/%.c src/vms_log_system.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: logsystemcheck
++logsystemcheck: $(M128_LOG_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-sanitize-recover=undefined -Isrc $(M128_LOG_SRCS) $(M127_FIN_SRCS) $(M118_DB_SRCS) src/vms_ini_log_templates.c src/vms_ini_syslog.c tests/test_log_system_host.c -o build/logsystemcheck
++	ASAN_OPTIONS=detect_leaks=1 ./build/logsystemcheck
+diff --git a/src/kernel.c b/src/kernel.c
+index fa831a2..ba13ea8 100644
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3217,6 +3217,49 @@ void kmain(void) {
+     }
+     bootstrap_message("INIT: SYS.EXE FIN_DATABASE staged DQA0 names and resident SYS$DISK/SYS$SYSDEVICE (logical lookup pending).");
+ 
++    /* Original LOGNAMSUB.MAR SYSTEM-only bootstrap LOG$HASH and
++     * LOG$TRANSLATE. Two real resident source records, no process/group
++     * tables, no general $TRNLOG, mount, ACP or working disk device. */
++    static struct port_sys_exec_result logsys_result;
++    const struct port_sys_exec_start logsys_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&logsys_result,
++        .phase=PORT_SYS_EXEC_INIT_SYSTEM_LOG};
++    static uint8_t namebuf[24];
++    struct port_log_result name_result={0};
++    if(loaded_sys(&logsys_request)!=PORT_SYS_EXEC_NORMAL||
++       logsys_result.signature!=PORT_SYS_EXEC_SYSTEM_LOG_TAG||
++       !logsys_result.boot_system_log_table||
++       !logsys_result.boot_system_translate||
++       (uintptr_t)logsys_result.boot_system_log_table<PORT_SYS_ELF_START||
++       (uintptr_t)logsys_result.boot_system_log_table>
++           PORT_SYS_ELF_LIMIT-sizeof(struct port_log_system_table)||
++       (uintptr_t)logsys_result.boot_system_translate<PORT_SYS_ELF_START||
++       (uintptr_t)logsys_result.boot_system_translate>=PORT_SYS_ELF_LIMIT||
++       logsys_result.boot_system_log_table->count!=2u||
++       logsys_result.boot_system_log_table->hash_bits!=PORT_LOG_BITS||
++       logsys_result.boot_system_log_table->ready!=1u||
++       logsys_result.boot_system_translate(logsys_result.boot_system_log_table,
++          "SYS$DISK",8u,0u,namebuf,sizeof namebuf,
++          &name_result)!=PORT_LOG_OK||
++       name_result.bytes!=6u||namebuf[0]!='_'||namebuf[1]!='D'||
++       namebuf[2]!='Q'||namebuf[3]!='A'||namebuf[4]!='0'||namebuf[5]!=':'||
++       logsys_result.boot_system_translate(logsys_result.boot_system_log_table,
++          "SYS$SYSDEVICE",13u,0u,namebuf,sizeof namebuf,
++          &name_result)!=PORT_LOG_OK||
++       name_result.bytes!=7u||namebuf[0]!='_'||namebuf[1]!='_'||
++       namebuf[2]!='D'||namebuf[3]!='Q'||namebuf[4]!='A'||
++       namebuf[5]!='0'||namebuf[6]!=':'||
++       logsys_result.boot_system_translate(logsys_result.boot_system_log_table,
++          "_DQA0:",6u,0u,namebuf,sizeof namebuf,
++          &name_result)!=PORT_LOG_NOTRAN||
++       name_result.bytes!=5u||namebuf[0]!='D'||namebuf[1]!='Q'||
++       namebuf[2]!='A'||namebuf[3]!='0'||namebuf[4]!=':'){
++        bootstrap_message("INIT: resident source LOGNAMSUB bootstrap translation failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE LOG$TRANSLATE resolved original SYS$DISK and SYS$SYSDEVICE names (system bootstrap only).");
++
+     /* CONINTDSP.MAR action transitions execute in native SYS.EXE on a
+      * verified OPA0 source-layout copy. No class/port DDT or UART QIO. */
+     static struct port_sys_exec_result con_result;
+diff --git a/src/vms_log_copy_result.c b/src/vms_log_copy_result.c
+new file mode 100644
+index 0000000..3799929
+--- /dev/null
++++ b/src/vms_log_copy_result.c
+@@ -0,0 +1,18 @@
++#include "vms_log_system.h"
++/* LOG$TRANSLATE lines 404-411: length is returned even if buffer too
++ * small. Do NOT partially write, do not silently truncate a logical name. */
++uint32_t port_log_copy_result(const uint8_t *from,size_t needed,
++    uint8_t *to,size_t capacity,uint32_t status,uint32_t source_address,
++    uint8_t access_mode,struct port_log_result *out){
++    if(!from||!to||!out||needed>PORT_LOG_MAX_NAME||
++       (status!=PORT_LOG_OK&&status!=PORT_LOG_NOTRAN))return PORT_LOG_BAD;
++    struct port_log_result result={.status=status,
++        .record_address=source_address,.bytes=(uint16_t)needed,
++        .table=(uint8_t)(status==PORT_LOG_OK?PORT_LOG_SYSTEM:0u),
++        .access_mode=access_mode};
++    if(needed>capacity){result.status=PORT_LOG_OVERFLOW;*out=result;
++        return PORT_LOG_OVERFLOW;}
++    for(size_t i=0u;i<needed;i++)to[i]=from[i];
++    *out=result;
++    return status;
++}
+diff --git a/src/vms_log_hash.c b/src/vms_log_hash.c
+new file mode 100644
+index 0000000..974df09
+--- /dev/null
++++ b/src/vms_log_hash.c
+@@ -0,0 +1,20 @@
++#include "vms_log_system.h"
++/* LOGNAMSUB.MAR LOG$HASH, lines 275-303: VAX little-endian XOR longword,
++ * ROTL 9 for full words, ROTL 13 for remaining bytes, MULL 0x71279461,
++ * ASHQ obtains high hash_bits of low-32-bit multiplication product. */
++static uint32_t rotate(uint32_t x,unsigned n){return (x<<n)|(x>>(32u-n));}
++uint32_t port_log_hash(const uint8_t *name,size_t length,unsigned bits){
++    if(!name||!length||length>PORT_LOG_MAX_NAME||bits>PORT_LOG_BITS)
++        return UINT32_MAX;
++    uint32_t value=(uint32_t)length;
++    size_t i=0u;
++    for(;i+4u<=length;i+=4u){
++        const uint32_t word=(uint32_t)name[i]|
++           ((uint32_t)name[i+1u]<<8)|((uint32_t)name[i+2u]<<16)|
++           ((uint32_t)name[i+3u]<<24);
++        value=rotate(value^word,9u);
++    }
++    for(;i<length;i++)value=rotate(value^name[i],13u);
++    value*=UINT32_C(0x71279461);
++    return bits?value>>(32u-bits):0u;
++}
+diff --git a/src/vms_log_name_compare.c b/src/vms_log_name_compare.c
+new file mode 100644
+index 0000000..ed8d60b
+--- /dev/null
++++ b/src/vms_log_name_compare.c
+@@ -0,0 +1,13 @@
++#include "vms_log_system.h"
++/* Original LOG$SEARCHLOG bucket walks sorted by string length then name.
++ * Return 0=less, 1=equal, 2=greater (unsigned VAX CMPC order). */
++uint32_t port_log_name_compare(const uint8_t *a,size_t na,
++                               const uint8_t *b,size_t nb){
++    if(na<nb)return 0u;
++    if(na>nb)return 2u;
++    for(size_t i=0u;i<na;i++){
++        if(a[i]<b[i])return 0u;
++        if(a[i]>b[i])return 2u;
++    }
++    return 1u;
++}
+diff --git a/src/vms_log_record_valid.c b/src/vms_log_record_valid.c
+new file mode 100644
+index 0000000..49f273f
+--- /dev/null
++++ b/src/vms_log_record_valid.c
+@@ -0,0 +1,15 @@
++#include "vms_log_system.h"
++/* LOGNAMSUB.MAR LOG$SEARCHLOG source record layout from SYSDEF.MDL.
++ * Validate the original ASCIC name and actual staged equivalence bounds.
++ * Do not infer that any translated device is mounted or has a driver. */
++uint32_t port_log_record_valid(const uint8_t *r,size_t n,
++                              const char *name,size_t length){
++    if(!r||!name||!length||length>PORT_LOG_MAX_NAME||
++       n<PORT_LOG_REC_LEN||port_v37_read16(r+8u)!=PORT_LOG_REC_LEN||
++       r[10u]!=PORT_V37_DYN_LOG||r[11u]!=PORT_LOG_SYSTEM||
++       r[20u]!=length||21u+length+1u>PORT_LOG_REC_LEN||
++       r[21u+length]>PORT_LOG_REC_LEN-22u-length||
++       r[20u+length+1u]==0u)return PORT_LOG_BAD;
++    for(size_t i=0;i<length;i++)if(r[21u+i]!=(uint8_t)name[i])return PORT_LOG_BAD;
++    return PORT_LOG_OK;
++}
+diff --git a/src/vms_log_source_addr.c b/src/vms_log_source_addr.c
+new file mode 100644
+index 0000000..a5e276b
+--- /dev/null
++++ b/src/vms_log_source_addr.c
+@@ -0,0 +1,11 @@
++#include "vms_log_system.h"
++/* SYSDEF.MDL stores physical native 32-bit addresses, never host indexes. */
++uint32_t port_log_source_address(const struct port_log_system_table *t,
++    const uint8_t *r,uint32_t *out){
++    if(!t||!r||!out)return PORT_LOG_BAD;
++    for(unsigned i=0u;i<2u;i++)
++        if(t->records[i]==r&&t->record_addr[i]){
++            *out=t->record_addr[i];return PORT_LOG_OK;
++        }
++    return PORT_LOG_BAD;
++}
+diff --git a/src/vms_log_source_record.c b/src/vms_log_source_record.c
+new file mode 100644
+index 0000000..39bdb25
+--- /dev/null
++++ b/src/vms_log_source_record.c
+@@ -0,0 +1,10 @@
++#include "vms_log_system.h"
++/* Never dereference untrusted list pointers; map only the two source
++ * records published after actual SYS.EXE FIN_DATABASE validation. */
++uint8_t *port_log_source_record(const struct port_log_system_table *t,
++                                uint32_t address){
++    if(!t||!address)return 0;
++    for(unsigned i=0u;i<2u;i++)
++        if(t->record_addr[i]==address)return t->records[i];
++    return 0;
++}
+diff --git a/src/vms_log_system.h b/src/vms_log_system.h
+new file mode 100644
+index 0000000..128f2fa
+--- /dev/null
++++ b/src/vms_log_system.h
+@@ -0,0 +1,44 @@
++#ifndef VMS_LOG_SYSTEM_H
++#define VMS_LOG_SYSTEM_H
++#include <stdint.h>
++#include <stddef.h>
++#include "vms_ini_fin_database.h"
++/* Source LOGNAMSUB.MAR LOG$HASH/SEARCHLOG/INSLOGN/TRANSLATE subset.
++ * Resident bootstrap SYSTEM names only; process/group tables, mutexes,
++ * general service entry and system SYSLOGNAM are NOT implemented. */
++enum { PORT_LOG_OK=1u,PORT_LOG_BAD=2u,PORT_LOG_NOTRAN=3u,
++       PORT_LOG_OVERFLOW=4u,PORT_LOG_CYCLE=6u,
++       PORT_LOG_SLOTS=16u,PORT_LOG_BITS=4u,
++       PORT_LOG_SYSTEM=0u,PORT_LOG_MAX_NAME=63u,
++       PORT_LOG_REC_LEN=PORT_INI_LOG_TEMPLATE_BYTES };
++struct port_log_system_table {
++    uint32_t head[PORT_LOG_SLOTS]; /* resident native bucket heads */
++    uint32_t record_addr[2]; /* original 32-bit LOG$L_LTFL addresses */
++    uint8_t *records[2]; /* host/guest native addresses for bounded walking */
++    uint8_t hash_bits,ready;
++    uint16_t count;
++};
++struct port_log_result {
++    uint32_t status,record_address;
++    uint16_t bytes;
++    uint8_t table,access_mode;
++};
++uint32_t port_log_hash(const uint8_t *,size_t,unsigned);
++uint32_t port_log_record_valid(const uint8_t *,size_t,const char *,size_t);
++uint32_t port_log_system_validate(const struct port_log_system_table *,
++    uint8_t *,uint8_t *,size_t);
++uint32_t port_log_name_compare(const uint8_t *,size_t,const uint8_t *,size_t);
++uint32_t port_log_source_address(const struct port_log_system_table *,
++    const uint8_t *,uint32_t *);
++uint8_t *port_log_source_record(const struct port_log_system_table *,uint32_t);
++uint32_t port_log_system_insert(struct port_log_system_table *,unsigned);
++uint32_t port_log_system_init(struct port_log_system_table *,
++    uint8_t *,uint8_t *,size_t,unsigned);
++uint32_t port_log_system_lookup(const struct port_log_system_table *,
++    const uint8_t *,size_t,uint32_t *);
++uint32_t port_log_system_check(const struct port_log_system_table *);
++uint32_t port_log_copy_result(const uint8_t *,size_t,uint8_t *,size_t,
++    uint32_t,uint32_t,uint8_t,struct port_log_result *);
++uint32_t port_log_translate(const struct port_log_system_table *,
++    const char *,size_t,uint32_t,uint8_t *,size_t,struct port_log_result *);
++#endif
+diff --git a/src/vms_log_system_check.c b/src/vms_log_system_check.c
+new file mode 100644
+index 0000000..729e295
+--- /dev/null
++++ b/src/vms_log_system_check.c
+@@ -0,0 +1,31 @@
++#include "vms_log_system.h"
++/* Independently validate every native bucket and both source record links.
++ * No silent cycle, alias, false DDT or system-wide publication permitted. */
++uint32_t port_log_system_check(const struct port_log_system_table *t){
++    if(!t||!t->ready||t->count!=2u||t->hash_bits>PORT_LOG_BITS||
++       !t->records[0]||!t->records[1]||
++       t->record_addr[0]==0u||t->record_addr[1]==0u||
++       t->record_addr[0]==t->record_addr[1])return PORT_LOG_BAD;
++    unsigned seen=0u;
++    for(unsigned slot=0u;slot<PORT_LOG_SLOTS;slot++){
++        uint32_t last=(uint32_t)(uintptr_t)&t->head[slot];
++        uint32_t cur=t->head[slot];
++        unsigned steps=0u;
++        if(slot>=(1u<<t->hash_bits)&&cur)return PORT_LOG_CYCLE;
++        while(cur){
++            if(++steps>2u)return PORT_LOG_CYCLE;
++            uint8_t *r=port_log_source_record(t,cur);
++            if(!r||r[11u]!=PORT_LOG_SYSTEM||r[10u]!=PORT_V37_DYN_LOG||
++               port_v37_read16(r+8u)!=PORT_LOG_REC_LEN||
++               22u+(size_t)r[20u]>PORT_LOG_REC_LEN||
++               port_v37_read32(r+4u)!=last||
++               port_log_hash(r+21u,r[20u],t->hash_bits)!=slot)
++                return PORT_LOG_CYCLE;
++            const unsigned index=(cur==t->record_addr[0])?0u:1u;
++            if((seen&(1u<<index))!=0u)return PORT_LOG_CYCLE;
++            seen|=(1u<<index);
++            last=cur;cur=port_v37_read32(r);
++        }
++    }
++    return seen==3u?PORT_LOG_OK:PORT_LOG_CYCLE;
++}
+diff --git a/src/vms_log_system_init.c b/src/vms_log_system_init.c
+new file mode 100644
+index 0000000..fe95d52
+--- /dev/null
++++ b/src/vms_log_system_init.c
+@@ -0,0 +1,30 @@
++#include "vms_log_system.h"
++/* Publish two FIN_DATABASE records in a private read-only SYSTEM table.
++ * This is only original initial-name lookup, NOT $CRELNM or global LOG$HASH
++ * linkage; real scheduler/mutex/group/process table services remain absent. */
++uint32_t port_log_system_init(struct port_log_system_table *t,
++    uint8_t *disk,uint8_t *sysdev,size_t bytes,unsigned hash_bits){
++    if(hash_bits>PORT_LOG_BITS||
++       port_log_system_validate(t,disk,sysdev,bytes)!=PORT_LOG_OK)
++        return PORT_LOG_BAD;
++    const uint32_t a=(uint32_t)(uintptr_t)disk,b=(uint32_t)(uintptr_t)sysdev;
++    if(!a||!b||a==b)return PORT_LOG_BAD;
++    const unsigned ah=port_log_hash(disk+21u,8u,hash_bits);
++    const unsigned bh=port_log_hash(sysdev+21u,13u,hash_bits);
++    if(ah>=PORT_LOG_SLOTS||bh>=PORT_LOG_SLOTS)return PORT_LOG_BAD;
++    /* No address truncation ambiguity with the two source LOG records. */
++    for(unsigned i=0u;i<(1u<<hash_bits);i++){
++        const uint32_t head=(uint32_t)(uintptr_t)&t->head[i];
++        if(!head||head==a||head==b)return PORT_LOG_BAD;
++    }
++    t->record_addr[0]=a;t->record_addr[1]=b;
++    t->records[0]=disk;t->records[1]=sysdev;
++    t->hash_bits=(uint8_t)hash_bits;
++    if(port_log_system_insert(t,0u)!=PORT_LOG_OK||
++       port_log_system_insert(t,1u)!=PORT_LOG_OK)return PORT_LOG_CYCLE;
++    t->count=2u;t->ready=1u;
++    if(port_log_system_check(t)!=PORT_LOG_OK){
++        t->ready=0u;return PORT_LOG_CYCLE;
++    }
++    return PORT_LOG_OK;
++}
+diff --git a/src/vms_log_system_insert.c b/src/vms_log_system_insert.c
+new file mode 100644
+index 0000000..aa683f1
+--- /dev/null
++++ b/src/vms_log_system_insert.c
+@@ -0,0 +1,33 @@
++#include "vms_log_system.h"
++/* LOG$INSLOGN_LCK: insert in the hash bucket sorted by name length and
++ * unsigned lexical order. LOG$L_LTFL and LOG$L_LTBL are original 32-bit
++ * physical native links; no process or group lock is fabricated. */
++uint32_t port_log_system_insert(struct port_log_system_table *t,unsigned idx){
++    if(!t||idx>=2u||!t->records[idx]||!t->record_addr[idx]||
++       t->hash_bits>PORT_LOG_BITS)return PORT_LOG_BAD;
++    uint8_t *const rec=t->records[idx];const size_t len=rec[20u];
++    const uint32_t bucket=port_log_hash(rec+21u,len,t->hash_bits);
++    if(bucket>=PORT_LOG_SLOTS)return PORT_LOG_BAD;
++    uint32_t *prev=&t->head[bucket];
++    uint32_t prev_addr=(uint32_t)(uintptr_t)prev;
++    uint32_t next=*prev;
++    for(unsigned count=0u;next;count++){
++        if(count>=2u)return PORT_LOG_CYCLE;
++        uint8_t *other=port_log_source_record(t,next);
++        if(!other || other==rec)return PORT_LOG_CYCLE;
++        if(port_log_name_compare(other+21u,other[20u],rec+21u,len)!=0u)
++            break;
++        prev_addr=next;
++        prev=(uint32_t *)(void *)other;
++        next=*prev;
++    }
++    port_v37_write32(rec,next);
++    port_v37_write32(rec+4u,prev_addr);
++    if(next){
++        uint8_t *other=port_log_source_record(t,next);
++        if(!other)return PORT_LOG_CYCLE;
++        port_v37_write32(other+4u,t->record_addr[idx]);
++    }
++    *prev=t->record_addr[idx];
++    return PORT_LOG_OK;
++}
+diff --git a/src/vms_log_system_lookup.c b/src/vms_log_system_lookup.c
+new file mode 100644
+index 0000000..72134fd
+--- /dev/null
++++ b/src/vms_log_system_lookup.c
+@@ -0,0 +1,23 @@
++#include "vms_log_system.h"
++/* LOG$SEARCHLOG: bounded SYSTEM-table source hash-chain search. The VMS
++ * process/group priority and original LOG$LOCKR mutex remain unimplemented. */
++uint32_t port_log_system_lookup(const struct port_log_system_table *t,
++    const uint8_t *name,size_t n,uint32_t *found){
++    if(!t||!t->ready||t->count!=2u||!found||!name||
++       n==0u||n>PORT_LOG_MAX_NAME)return PORT_LOG_BAD;
++    const uint32_t bucket=port_log_hash(name,n,t->hash_bits);
++    if(bucket>=PORT_LOG_SLOTS)return PORT_LOG_BAD;
++    uint32_t record=t->head[bucket];
++    for(unsigned count=0u;record;count++){
++        if(count>=2u)return PORT_LOG_CYCLE;
++        uint8_t *r=port_log_source_record(t,record);
++        if(!r||r[10u]!=PORT_V37_DYN_LOG||r[11u]!=PORT_LOG_SYSTEM||
++           r[20u]>PORT_LOG_MAX_NAME||
++           22u+(size_t)r[20u]>PORT_LOG_REC_LEN)return PORT_LOG_CYCLE;
++        const uint32_t c=port_log_name_compare(r+21u,r[20u],name,n);
++        if(c==1u){*found=record;return PORT_LOG_OK;}
++        if(c==2u)break;
++        record=port_v37_read32(r);
++    }
++    return PORT_LOG_NOTRAN;
++}
+diff --git a/src/vms_log_system_validate.c b/src/vms_log_system_validate.c
+new file mode 100644
+index 0000000..c2afe3b
+--- /dev/null
++++ b/src/vms_log_system_validate.c
+@@ -0,0 +1,31 @@
++#include "vms_log_system.h"
++/* Do not publish a logical name unless both exact source-size records
++ * were filled by FIN_DATABASE, without an active QIO or disk DDT. */
++static int disjoint(const void *a,size_t x,const void *b,size_t y){
++    const uintptr_t p=(uintptr_t)a,q=(uintptr_t)b;
++    return x<=UINTPTR_MAX-p&&y<=UINTPTR_MAX-q&&
++           (p+x<=q||q+y<=p);
++}
++static int exact(const uint8_t *r,size_t at,const char *s,unsigned n){
++    if(r[at-1u]!=n)return 0;
++    for(unsigned i=0u;i<n;i++)if(r[at+i]!=(uint8_t)s[i])return 0;
++    return 1;
++}
++uint32_t port_log_system_validate(const struct port_log_system_table *t,
++     uint8_t *disk,uint8_t *sysdev,size_t bytes){
++    if(!t||!disk||!sysdev||bytes<PORT_LOG_REC_LEN||t->ready||t->count||
++       !disjoint(t,sizeof *t,disk,PORT_LOG_REC_LEN)||
++       !disjoint(t,sizeof *t,sysdev,PORT_LOG_REC_LEN)||
++       !disjoint(disk,PORT_LOG_REC_LEN,sysdev,PORT_LOG_REC_LEN))return PORT_LOG_BAD;
++    for(unsigned i=0u;i<PORT_LOG_SLOTS;i++)if(t->head[i])return PORT_LOG_BAD;
++    if(port_log_record_valid(disk,bytes,"SYS$DISK",8u)!=PORT_LOG_OK||
++       port_log_record_valid(sysdev,bytes,"SYS$SYSDEVICE",13u)!=PORT_LOG_OK||
++       port_v37_read32(disk)!=0u||port_v37_read32(disk+4u)!=0u||
++       port_v37_read32(sysdev)!=0u||port_v37_read32(sysdev+4u)!=0u||
++       !exact(disk,30u,"_DQA0:",6u)||
++       !exact(sysdev,35u,"__DQA0:",7u)||
++       port_v37_read16(disk+12u)!=1u||port_v37_read16(sysdev+12u)!=1u||
++       port_v37_read16(disk+14u)!=1u||port_v37_read16(sysdev+14u)!=1u||
++       port_v37_read32(disk+16u)||port_v37_read32(sysdev+16u))return PORT_LOG_BAD;
++    return PORT_LOG_OK;
++}
+diff --git a/src/vms_log_translate.c b/src/vms_log_translate.c
+new file mode 100644
+index 0000000..60a8b57
+--- /dev/null
++++ b/src/vms_log_translate.c
+@@ -0,0 +1,32 @@
++#include "vms_log_system.h"
++/* LOGNAMSUB.MAR LOG$TRANSLATE 373-420: a leading underscore bypasses
++ * lookup and removes exactly one escape character. Otherwise search
++ * source SYSTEM logicals only; process/group tables are absent. */
++uint32_t port_log_translate(const struct port_log_system_table *t,
++    const char *text,size_t length,uint32_t disable_mask,
++    uint8_t *outbuf,size_t capacity,struct port_log_result *out){
++    if(!t||!text||!outbuf||!out||length==0u||
++       length>PORT_LOG_MAX_NAME||!t->ready||t->count!=2u||
++       port_log_system_check(t)!=PORT_LOG_OK)return PORT_LOG_BAD;
++    const uint8_t *name=(const uint8_t *)text;
++    if(name[0]=='_')
++        return port_log_copy_result(name+1u,length-1u,outbuf,capacity,
++                  PORT_LOG_NOTRAN,0u,0u,out);
++    if(disable_mask&1u)
++        return port_log_copy_result(name,length,outbuf,capacity,
++                  PORT_LOG_NOTRAN,0u,0u,out);
++    uint32_t address=0u;
++    const uint32_t status=port_log_system_lookup(t,name,length,&address);
++    if(status==PORT_LOG_NOTRAN)
++        return port_log_copy_result(name,length,outbuf,capacity,
++                  PORT_LOG_NOTRAN,0u,0u,out);
++    if(status!=PORT_LOG_OK)return status;
++    const uint8_t *const r=port_log_source_record(t,address);
++    if(!r||port_v37_read16(r+8u)!=PORT_LOG_REC_LEN||
++       22u+(size_t)r[20u]>PORT_LOG_REC_LEN)return PORT_LOG_CYCLE;
++    const unsigned offset=21u+r[20u];
++    const unsigned n=r[offset];
++    if(offset+1u+n>PORT_LOG_REC_LEN)return PORT_LOG_CYCLE;
++    return port_log_copy_result(r+offset+1u,n,outbuf,capacity,
++                 PORT_LOG_OK,address,r[14u],out);
++}
+diff --git a/src/vms_sys_executive_entry.c b/src/vms_sys_executive_entry.c
+index 59adfdc..78ab378 100644
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -82,6 +82,9 @@ static uint32_t executive_dq_bootread_ready;
+  * remain nonpublished LOG records, and the DQ DDT remains absent. */
+ static struct port_ini_fin_result executive_fin_database_result;
+ static uint32_t executive_fin_database_ready;
++/* LOGNAMSUB private native source SYSTEM boot-name table only. */
++static struct port_log_system_table executive_boot_system_log;
++static uint32_t executive_boot_system_log_ready;
+ static struct port_ini_bootdev_result executive_bootdev_scan;
+ static uint32_t executive_bootdev_scan_ready;
+ /* DEVICEDAT.MAR prelinked BOOT/OPA/MBA/NLA DDB and UCB backing. */
+@@ -625,6 +628,55 @@ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *p){
+         p->result->signature=PORT_SYS_EXEC_FIN_DATABASE_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_SYSTEM_LOG){
++        /* LOGNAMSUB.MAR LOG$HASH/INSLOGN/SEARCHLOG/TRANSLATE stage:
++         * original source counters and 32-bit native record links, but only
++         * the two verified FIN_DATABASE system bootstrap names are safe.
++         * The real multi-table $TRNLOG, mutex and process/group tables
++         * are still absent, and no DQ disk driver is bound. */
++        if(!executive_fin_database_ready||!executive_syslog_ready||
++           !executive_devicedb_ready||!executive_dq_bootread_ready||
++           executive_boot_system_log_ready||
++           executive_devicedb_result.boot_name_ready!=1u||
++           executive_devicedb_result.incomplete_driver_mask!=7u||
++           executive_syslog.sizes[0]!=PORT_LOG_REC_LEN||
++           executive_syslog.sizes[1]!=PORT_LOG_REC_LEN||
++           !executive_syslog.records[0]||!executive_syslog.records[1])
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        if(port_log_system_init(&executive_boot_system_log,
++               (uint8_t *)(uintptr_t)executive_syslog.records[0],
++               (uint8_t *)(uintptr_t)executive_syslog.records[1],
++               PORT_LOG_REC_LEN,PORT_LOG_BITS)!=PORT_LOG_OK||
++           port_log_system_check(&executive_boot_system_log)!=PORT_LOG_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        uint8_t translated[16]={0};struct port_log_result result={0};
++        if(port_log_translate(&executive_boot_system_log,
++               "SYS$DISK",8u,0u,translated,sizeof translated,&result)!=PORT_LOG_OK||
++           result.bytes!=6u||result.record_address!=
++               executive_boot_system_log.record_addr[0]||
++           translated[0]!='_'||translated[1]!='D'||
++           translated[2]!='Q'||translated[3]!='A'||
++           translated[4]!='0'||translated[5]!=':'||
++           port_log_translate(&executive_boot_system_log,
++               "SYS$SYSDEVICE",13u,0u,translated,sizeof translated,
++               &result)!=PORT_LOG_OK||
++           result.bytes!=7u||result.record_address!=
++               executive_boot_system_log.record_addr[1]||
++           translated[0]!='_'||translated[1]!='_'||translated[2]!='D'||
++           translated[3]!='Q'||translated[4]!='A'||
++           translated[5]!='0'||translated[6]!=':'||
++           port_log_translate(&executive_boot_system_log,
++               "_DQA0:",6u,0u,translated,sizeof translated,
++               &result)!=PORT_LOG_NOTRAN||
++           result.bytes!=5u||translated[0]!='D'||translated[1]!='Q'||
++           translated[2]!='A'||translated[3]!='0'||translated[4]!=':')
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_boot_system_log_ready=1u;
++        p->result->boot_system_log_table=&executive_boot_system_log;
++        p->result->boot_system_translate=port_log_translate;
++        p->result->signature=PORT_SYS_EXEC_SYSTEM_LOG_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_IOPOST_END){
+         /* Wire the source IOCIOPOST.MAR entry to supervisor x86 IDT 0x90.
+          * Bootstrap may NOT drain the FIFO on its normal function stack. */
+diff --git a/src/vms_sys_executive_entry.h b/src/vms_sys_executive_entry.h
+index 391f7d0..9660291 100644
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -18,6 +18,7 @@
+ #include "vms_dq_fdt.h"
+ #include "vms_dq_bootread.h"
+ #include "vms_ini_fin_database.h"
++#include "vms_log_system.h"
+ #include "vms_ini_devicedb.h"
+ #include "vms_con_port.h"
+ #include "vms_ioc_phys.h"
+@@ -27,7 +28,7 @@
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=25u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=26u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -53,7 +54,8 @@ enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=25u,
+        PORT_SYS_EXEC_IOPOST_BIND_TAG=0x42494950u,
+        PORT_SYS_EXEC_INIT_DQ_FDT=21u, PORT_SYS_EXEC_DQ_RESULT_TAG=0x54465144u,
+        PORT_SYS_EXEC_INIT_DQ_BOOTREAD=22u, PORT_SYS_EXEC_DQ_BOOTREAD_TAG=0x44425144u,
+-       PORT_SYS_EXEC_INIT_FIN_DATABASE=23u,PORT_SYS_EXEC_FIN_DATABASE_TAG=0x42444e46u };
++       PORT_SYS_EXEC_INIT_FIN_DATABASE=23u,PORT_SYS_EXEC_FIN_DATABASE_TAG=0x42444e46u,
++       PORT_SYS_EXEC_INIT_SYSTEM_LOG=24u,PORT_SYS_EXEC_SYSTEM_LOG_TAG=0x534c474cu };
+ /* This is an explicitly privileged early-boot disk path. Hardware is real
+  * ATA PIO; the original DQ disk DDT and Files-11 ACP are NOT bound. */
+ struct port_sys_exec_dq_boot_settings {
+@@ -117,6 +119,10 @@ struct port_sys_exec_result {
+     const uint16_t *dq_bootread_sector;
+     /* Original INIT.MAR FIN_DATABASE storage stage; no LOG$TRANSLATE. */
+     const struct port_ini_fin_result *boot_device_names;
++    /* Original LOGNAMSUB.MAR limited bootstrap SYSTEM names only. */
++    const struct port_log_system_table *boot_system_log_table;
++    uint32_t (*boot_system_translate)(const struct port_log_system_table *,
++        const char *,size_t,uint32_t,uint8_t *,size_t,struct port_log_result *);
+     /* Prelinked DEVICEDAT DDB/UCB pointer graph; no live driver DDT. */
+     const struct port_v37_device_result *device_db;
+     const uint8_t *device_db_bytes;
+diff --git a/tests/test_log_system_host.c b/tests/test_log_system_host.c
+new file mode 100644
+index 0000000..4eba89f
+--- /dev/null
++++ b/tests/test_log_system_host.c
+@@ -0,0 +1,117 @@
++#include <stdio.h>
++#include <stdint.h>
++#include <string.h>
++#include "vms_log_system.h"
++#define CHECK(x) do {if(!(x)){fprintf(stderr,"LOGNAMSUB failed line %d: %s\n",__LINE__,#x);return 1;}}while(0)
++struct fixture {
++    uint32_t storage[PORT_V37_DEVICE_BYTES/4u];
++    struct port_v37_device_result device;
++    uint8_t disk[PORT_INI_LOG_TEMPLATE_BYTES];
++    uint8_t sys[PORT_INI_LOG_TEMPLATE_BYTES];
++    struct port_ini_fin_result fin;
++    struct port_log_system_table table;
++};
++static int prepare(struct fixture *f){
++    memset(f,0,sizeof *f);
++    const uint32_t base=(uint32_t)(uintptr_t)f->storage;
++    CHECK(port_v37_devices_prelink((uint8_t *)f->storage,sizeof f->storage,
++           base,&f->device)==PORT_V37_DEV_OK);
++    const uint32_t null_ddt=0x00111000u;
++    port_v37_write32((uint8_t *)f->storage+PORT_V37_DDB_NL_OFF+12u,null_ddt);
++    port_v37_write32((uint8_t *)f->storage+PORT_V37_UCB_NL_OFF+120u,null_ddt);
++    f->device.bound_nl_ddt=null_ddt;
++    f->device.incomplete_driver_mask=7u;
++    port_ini_log_templates(f->disk,f->sys);
++    struct port_ini_fin_settings q={.device_bytes=(uint8_t *)f->storage,
++        .device_size=sizeof f->storage,.device_base=base,
++        .device_info=&f->device,.disk_log=f->disk,.sysdevice_log=f->sys,
++        .disk_log_size=sizeof f->disk,.sysdevice_log_size=sizeof f->sys,
++        .unit=0u,.concealed=1u,.adapter_is_ata=1u};
++    CHECK(port_ini_fin_database(&q,&f->fin)==PORT_FINDB_OK);
++    CHECK(port_ini_fin_check(&q,&f->fin)==PORT_FINDB_OK);
++    return 0;
++}
++static int direct(void){
++    CHECK(port_log_hash((const uint8_t *)"SYS$DISK",8u,4u)==12u);
++    CHECK(port_log_hash((const uint8_t *)"SYS$SYSDEVICE",13u,4u)==13u);
++    CHECK(port_log_hash((const uint8_t *)"SYS$DISK",8u,0u)==0u);
++    CHECK(port_log_hash((const uint8_t *)"SYS$DISK",8u,2u)==3u);
++    CHECK(port_log_hash((const uint8_t *)"SYS$SYSDEVICE",13u,2u)==3u);
++    CHECK(port_log_hash((const uint8_t *)"SYS$DISK",8u,5u)==UINT32_MAX);
++    CHECK(port_log_hash((const uint8_t *)"SYS$DISK",0u,4u)==UINT32_MAX);
++    CHECK(port_log_name_compare((const uint8_t *)"S",1u,(const uint8_t *)"SYS",3u)==0u);
++    CHECK(port_log_name_compare((const uint8_t *)"SYS",3u,(const uint8_t *)"S",1u)==2u);
++    CHECK(port_log_name_compare((const uint8_t *)"SYS",3u,(const uint8_t *)"SYS",3u)==1u);
++    struct fixture f;
++    CHECK(!prepare(&f));
++    CHECK(port_log_system_validate(&f.table,f.disk,f.sys,sizeof f.disk)==PORT_LOG_OK);
++    CHECK(port_log_system_init(&f.table,f.disk,f.sys,sizeof f.disk,4u)==PORT_LOG_OK);
++    CHECK(port_log_system_check(&f.table)==PORT_LOG_OK);
++    CHECK(f.table.head[12u]==(uint32_t)(uintptr_t)f.disk);
++    CHECK(f.table.head[13u]==(uint32_t)(uintptr_t)f.sys);
++    CHECK(port_v37_read32(f.disk)==0u && port_v37_read32(f.sys)==0u);
++    CHECK(port_v37_read32(f.disk+4u)==(uint32_t)(uintptr_t)&f.table.head[12u]);
++    CHECK(port_v37_read32(f.sys+4u)==(uint32_t)(uintptr_t)&f.table.head[13u]);
++    uint32_t address=0xabcdefu;
++    CHECK(port_log_system_lookup(&f.table,(const uint8_t *)"SYS$DISK",8u,&address)==PORT_LOG_OK);
++    CHECK(address==(uint32_t)(uintptr_t)f.disk);
++    CHECK(port_log_system_lookup(&f.table,(const uint8_t *)"SYS$MISSING",11u,&address)==PORT_LOG_NOTRAN);
++    CHECK(address==(uint32_t)(uintptr_t)f.disk);
++    uint8_t output[32]={0};struct port_log_result result={0};
++    CHECK(port_log_translate(&f.table,"SYS$DISK",8u,0u,output,sizeof output,&result)==PORT_LOG_OK);
++    CHECK(result.bytes==6u&&result.table==0u&&result.record_address==(uint32_t)(uintptr_t)f.disk);
++    CHECK(!memcmp(output,"_DQA0:",6u));
++    memset(output,0,sizeof output);
++    CHECK(port_log_translate(&f.table,"SYS$SYSDEVICE",13u,0u,output,sizeof output,&result)==PORT_LOG_OK);
++    CHECK(result.bytes==7u&&!memcmp(output,"__DQA0:",7u));
++    CHECK(port_log_translate(&f.table,"SYS$DISK",8u,1u,output,sizeof output,&result)==PORT_LOG_NOTRAN);
++    CHECK(result.bytes==8u&&!memcmp(output,"SYS$DISK",8u));
++    CHECK(port_log_translate(&f.table,"_DQA0:",6u,0u,output,sizeof output,&result)==PORT_LOG_NOTRAN);
++    CHECK(result.bytes==5u&&!memcmp(output,"DQA0:",5u));
++    memset(output,0xa5,sizeof output);
++    CHECK(port_log_translate(&f.table,"SYS$DISK",8u,0u,output,3u,&result)==PORT_LOG_OVERFLOW);
++    CHECK(result.bytes==6u&&output[0]==0xa5&&output[3]==0xa5);
++    CHECK(port_log_translate(&f.table,"",0u,0u,output,sizeof output,&result)==PORT_LOG_BAD);
++    CHECK(port_log_translate(&f.table,"SYS$DISK",8u,0u,output,sizeof output,0)==PORT_LOG_BAD);
++    port_v37_write32(f.disk,(uint32_t)(uintptr_t)f.disk); /* malicious cycle */
++    CHECK(port_log_system_check(&f.table)==PORT_LOG_CYCLE);
++    CHECK(port_log_translate(&f.table,"SYS$DISK",8u,0u,output,sizeof output,&result)==PORT_LOG_BAD);
++    port_v37_write32(f.disk,0u);
++    f.disk[20u]=47u; /* invalid ASCIC offset, must not read beyond 48 B */
++    CHECK(port_log_system_check(&f.table)==PORT_LOG_CYCLE);
++    CHECK(port_log_translate(&f.table,"SYS$DISK",8u,0u,output,sizeof output,&result)==PORT_LOG_BAD);
++    return 0;
++}
++static int collision(void){
++    struct fixture f;CHECK(!prepare(&f));
++    CHECK(port_log_system_init(&f.table,f.disk,f.sys,sizeof f.disk,0u)==PORT_LOG_OK);
++    CHECK(port_log_system_check(&f.table)==PORT_LOG_OK);
++    CHECK(f.table.head[0u]==(uint32_t)(uintptr_t)f.disk);
++    CHECK(port_v37_read32(f.disk)==(uint32_t)(uintptr_t)f.sys);
++    CHECK(port_v37_read32(f.sys+4u)==(uint32_t)(uintptr_t)f.disk);
++    uint8_t out[9]={0};struct port_log_result r={0};
++    CHECK(port_log_translate(&f.table,"SYS$SYSDEVICE",13u,0u,out,sizeof out,&r)==PORT_LOG_OK);
++    CHECK(!memcmp(out,"__DQA0:",7u));
++    CHECK(port_log_translate(&f.table,"SYS$DISK",8u,0u,out,sizeof out,&r)==PORT_LOG_OK);
++    CHECK(!memcmp(out,"_DQA0:",6u));
++    return 0;
++}
++static int rejection(void){
++    struct fixture f;CHECK(!prepare(&f));
++    f.sys[10u]=0u;
++    CHECK(port_log_system_init(&f.table,f.disk,f.sys,sizeof f.disk,4u)==PORT_LOG_BAD);
++    CHECK(!f.table.ready&&!f.table.count&&!port_v37_read32(f.disk));
++    CHECK(!prepare(&f));
++    f.disk[29u]=27u;
++    CHECK(port_log_system_init(&f.table,f.disk,f.sys,sizeof f.disk,4u)==PORT_LOG_BAD);
++    CHECK(!f.table.ready&&!f.table.count);
++    CHECK(!prepare(&f));
++    CHECK(port_log_system_init(&f.table,f.disk,f.sys,sizeof f.disk,5u)==PORT_LOG_BAD);
++    CHECK(!f.table.ready);
++    return 0;
++}
++int main(void){
++    CHECK(!direct());CHECK(!collision());CHECK(!rejection());
++    puts("LOGNAMSUB.MAR source SYSTEM LOG$HASH/SEARCHLOG/TRANSLATE initial names and overflow guards PASS");
++    return 0;
++}
+diff --git a/tools/gen_source_coverage.py b/tools/gen_source_coverage.py
+index 406a0b8..b1a49ee 100644
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2344,6 +2344,30 @@ for first,last,path,symbol,detail in dq_fdt_rows:
+ result['files'].append({'original_file':'DRIVER/SRC/DQDRIVER.MAR',
+     'original_lines':2189,'sections':dq_fdt_sections,
+     'unresolved_integration':'Resident SYS.EXE stages source FDT masks and performs one privileged physical READPBLK of real ATA Files-11 home LBN1; DQ DDT, RB730/ATA full translation, IOC, CRB, Files-11 ACP and general I/O remain unbound.'})
++# M128: LOGNAMSUB.MAR source pin, not a claim of a full logical-name service.
++# Only the two FIN_DATABASE bootstrap SYSTEM entries have bound native list
++# records. PROCESS/GROUP tables, LOG$LOCKR, SYSLOGNAM and supercession remain
++# unresolved; original LOG$HASH and bounded SYSTEM search/translate are partial.
++lognam_sections=[]
++for first,last,path,sym,why in [
++ (1,128,None,None,'Original module prologue, LOG$DELETE, supersession and deallocation unresolved'),
++ (129,162,'src/vms_log_system_insert.c','port_log_system_insert','Original LOG$INSLOGN_LCK link sorting for two boot SYSTEM LOG records only; no supersede or runtime insertion'),
++ (163,243,None,None,'Original LOG$LOCKR/LOCKW/UNLOCK mutex and GROUP/PROCESS table synchronization unimplemented'),
++ (244,276,'src/vms_log_system_lookup.c','port_log_system_lookup','Source LOG$SEARCHLOG bucket search limited to two resident SYSTEM boot names; no PCB access mode'),
++ (277,295,None,None,'Remaining SEARCHLOG status and hash calling convention require later full service binding'),
++ (296,320,'src/vms_log_hash.c','port_log_hash','Original little-endian XOR, ROTL and MULL hash high bits with caller-selected short table exponent'),
++ (321,372,None,None,'Original descriptor probing, access-mode and caller output protocol not fully implemented'),
++ (373,411,'src/vms_log_translate.c','port_log_translate','Source leading underscore escape, NOTRAN fallback and bounded two-record SYSTEM resolution; no PROCESS/GROUP tables'),
++ (412,424,None,None,'Original LOG$UNLOCK, measurement and native return convention remain unresolved')]:
++    if path is None:lognam_sections.append({'original_lines':[first,last],'status':'unresolved','reason':why})
++    else:
++        ln=line_for_symbol(path,sym)
++        if ln is None:missing+=1
++        lognam_sections.append({'original_lines':[first,last],'status':'partial' if ln else 'missing',
++           'pc_file':path,'pc_symbol':sym,'pc_line':ln,'function':why})
++result['files'].append({'original_file':'SYS/SRC/LOGNAMSUB.MAR',
++    'original_lines':424,'sections':lognam_sections,
++    'unresolved_integration':'Private bounded two-entry resident SYSTEM bootstrap table can resolve SYS$DISK/SYS$SYSDEVICE. Original LOG$LOCKR, SYSLOGNAM, PROCESS/GROUP tables, dynamic create/delete, access control, and disk DDT/ACP are absent.'})
+ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ 
+ (ROOT / 'source-coverage.json').write_text(json.dumps(result, indent=2) + '\n')
+diff --git a/tools/qemu_sysboot_m128.py b/tools/qemu_sysboot_m128.py
+new file mode 100755
+index 0000000..3d3ad59
+--- /dev/null
++++ b/tools/qemu_sysboot_m128.py
+@@ -0,0 +1,137 @@
++#!/usr/bin/env python3
++"""One real native IA-32 QEMU boot; verify DPL0 software IPL4 dispatch.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M128: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE staged DQDRIVER 12 source FDT masks (disk DDT and ACP unbound).',
++        b'INIT: SYS.EXE linked NL$DDT DDTAB/FUNCTAB to NLA0 (other drivers absent).',
++        b'INIT: SYS.EXE DQ READPBLK fetched actual ATA Files-11 LBN1 (disk DDT/ACP not linked).',
++        b'INIT: SYS.EXE FIN_DATABASE staged DQA0 names and resident SYS$DISK/SYS$SYSDEVICE (logical lookup pending).',
++        b'INIT: SYS.EXE LOG$TRANSLATE resolved original SYS$DISK and SYS$SYSDEVICE names (system bootstrap only).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE IOC device search resolved NLA0 with native null DDT (others unbound).',
++        b'INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 requested).',
++        b'INIT: SYS.EXE IOCIOPOST serviced two NLA IRPs through IA-32 CPL0 software INT 0x90 (no process AST).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: resident source DQ FDT staging validation failed.',
++        b'INIT: resident DQ physical boot READPBLK failed.',
++        b'INIT: resident FIN_DATABASE source boot DDB/logical record staging failed.',
++        b'INIT: resident source LOGNAMSUB bootstrap translation failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.',
++        b'INIT: resident IOCIOPOST source kernel end-action processing failed.',
++        b'INIT: resident IOCIOPOST native software interrupt failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m128-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,128,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M128: resident source LOG$TRANSLATE resolved two bootstrap system names after actual ATA read PASS')
++        return 0
++    print('QEMU M128: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
