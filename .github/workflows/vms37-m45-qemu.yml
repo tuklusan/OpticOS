@@ -1,4 +1,4 @@
-name: VMS37 native IA-32 M137 resident FIL$MOUNT INDEXF.SYS FH2 on native ATA
+name: VMS37 native IA-32 M138 resident FIL$READVBN MFD FID 4 from INDEXF.SYS
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M137
+      - name: Rebuild pinned native source through M138
         shell: bash
         run: |
           set -euo pipefail
@@ -81,12 +81,13 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m135-native.patch
           patch --batch -p1 < ../ci-vms37/m136-native.patch
           patch --batch -p1 < ../ci-vms37/m137-native.patch
+          patch --batch -p1 < ../ci-vms37/m138-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           # Replay the 46 exact SHA-256-verified current guest-layout fixtures, not stale M89 copies.
           python3 tools/m110_sync_test_fixtures.py
           make -j2 all
-          make dqindexcheck dqphysicalcheck ddtreloccheck ddtreloccasescheck relocdrvcheck dqddtcheck devlogcheck logsystemcheck inifindatabasecheck dqbootreadcheck dqfdtcheck swiopostcheck iopostendcheck nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
+          make dqmfdcheck dqindexcheck dqphysicalcheck ddtreloccheck ddtreloccasescheck relocdrvcheck dqddtcheck devlogcheck logsystemcheck inifindatabasecheck dqbootreadcheck dqfdtcheck swiopostcheck iopostendcheck nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
           make rtl85check rtl107check rtl108check rtl109check rtl110check rtl111check rtl112check rtl113check sourcerangecheck m21bootcheck
           # Run the full historical guest-layout/host test suite, not only the modern smoke subset.
           make test
@@ -99,27 +100,27 @@ jobs:
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Regress real QEMU resident M137 INDEXF.SYS FH2 third physical IRP
+      - name: Regress real QEMU M138 indexed MFD FID4 fourth physical IRP
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m137.py
-      - name: Capture recoverable M137 source, build and resume
+          python3 tools/qemu_sysboot_m138.py
+      - name: Capture recoverable M138 source, build and resume
         if: success()
         shell: bash
         run: |
           set -euo pipefail
           cat > resume.md <<'EOF'
-          # Native VAX/VMS 3.7 IA-32 M137 checkpoint
+          # Native VAX/VMS 3.7 IA-32 M138 checkpoint
 
-          INCOMPLETE. M137 reads and validates INDEXF.SYS FH2 from physical ATA using a third resident SYS.EXE IRP after real LBN1/LBN0 reads; original DQ DDT and ACP remain unbound. Genuine SYSTEM login,
+          INCOMPLETE. M138 reads INDEXF.SYS FH2 then resolves source Files-11 MFD FID 4,4,0 via retrieval-pointer map and fourth physical ATA IRP. DQA0 DDT/ACP still unbound. Genuine SYSTEM login,
           DCL, DECnet Phase IV and SET HOST 0 are not implemented.
 
           Branch: tuklusan/OpticOS vms37-x86-qemu-m45-ci
-          Native tree: vms37-native-x86-m89 (all patches M90-M137 applied)
+          Native tree: vms37-native-x86-m89 (all patches M90-M138 applied)
           Rebuild: make -j2 all && make relocdrvcheck
-          Guest regression: python3 tools/qemu_sysboot_m137.py
+          Guest regression: python3 tools/qemu_sysboot_m138.py
           All QEMU boot traces are partial INIT only, never a complete VMS boot.
           Original DEC source is not distributed with this archive.
           EOF
@@ -128,7 +129,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m137-recoverable-source-build
+          name: vms37-m138-recoverable-source-build
           path: |
             vms37-native-x86-m89/
             resume.md
@@ -138,7 +139,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m137-ci-m137-guest-serial
+          name: vms37-m138-ci-m138-guest-serial
           path: |
-            vms37-native-x86-m89/qemu-m137-serial.log
+            vms37-native-x86-m89/qemu-m138-serial.log
           if-no-files-found: warn
