@@ -377,7 +377,7 @@ index 0000000..aeb8c14
 +}
 diff --git a/src/vms_relocdrv_dq_footprint.c b/src/vms_relocdrv_dq_footprint.c
 new file mode 100644
-index 0000000..fc20fbd
+index 0000000..edf8d08
 --- /dev/null
 +++ b/src/vms_relocdrv_dq_footprint.c
 @@ -0,0 +1,23 @@
@@ -388,7 +388,7 @@ index 0000000..fc20fbd
 +    return (off>=16u&&off<=19u);
 +}
 +static int ucb_changed(unsigned off){
-+    return off==11u||(off>=52u&&off<=59u)||off==82u||off==113u||
++    return off==11u||(off>=52u&&off<=56u)||(off>=58u&&off<=59u)||off==82u||off==113u||
 +           (off>=PORT_RELOCDRV_DQ_CURDA&&off<PORT_RELOCDRV_DQ_CURDA+4u);
 +}
 +uint32_t port_relocdrv_dq_footprint(const struct port_relocdrv_dq *d,
@@ -709,10 +709,10 @@ index 0000000..30e9836
 +}
 diff --git a/tests/test_relocdrv_host.c b/tests/test_relocdrv_host.c
 new file mode 100644
-index 0000000..548d5bf
+index 0000000..d3eb641
 --- /dev/null
 +++ b/tests/test_relocdrv_host.c
-@@ -0,0 +1,88 @@
+@@ -0,0 +1,91 @@
 +#include "vms_relocdrv.h"
 +#include <stdio.h>
 +#include <string.h>
@@ -737,6 +737,9 @@ index 0000000..548d5bf
 +    CHECK(port_relocdrv_dq_init(&dq,source,PORT_V37_DEVICE_BYTES,&info,&stage,&fdt)==PORT_RELOCDRV_OK);
 +    CHECK(port_relocdrv_dq_check(&dq)==PORT_RELOCDRV_OK);
 +    CHECK(port_relocdrv_dq_footprint(&dq,source,PORT_V37_DEVICE_BYTES)==PORT_RELOCDRV_OK);
++    uint8_t preserved_devtype=dq.ucb[57u];dq.ucb[57u]^=1u;
++    CHECK(port_relocdrv_dq_footprint(&dq,source,PORT_V37_DEVICE_BYTES)==PORT_RELOCDRV_BAD);
++    dq.ucb[57u]=preserved_devtype;
 +    CHECK(memcmp(prior,source,sizeof prior)==0); /* not yet published */
 +    CHECK(dq.source_ddb==info.ddb[0]&&dq.source_ucb==info.ucb[0]&&dq.applied==9u);
 +    uint8_t tab[PORT_RELOCDRV_DQ_INIT_BYTES]={0};size_t used=0;
