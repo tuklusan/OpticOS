@@ -94,11 +94,11 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m168-native.patch
           patch --batch -p1 < ../ci-vms37/m176-native.patch
           patch --batch -p1 < ../ci-vms37/m184-native.patch
-          python3 tools/upgrade_disk_image_check_m184.py
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           # Replay the 46 exact SHA-256-verified current guest-layout fixtures, not stale M89 copies.
           python3 tools/m110_sync_test_fixtures.py
+          python3 tools/upgrade_disk_image_check_m184.py
           make -j2 all
           make f11ioccheck dqretrycheck dqprivateioccheck f11cursorcheck f11chaincheck f11chainextcheck f11chainboundscheck f11chainshortcheck f11bootpathcheck f11bootdircheck f11bootfragcheck f11rangecheck dqauxcheck dqdirblockscheck dqimagecheck dqdircheck dqmfdcheck dqindexcheck dqphysicalcheck ddtreloccheck ddtreloccasescheck relocdrvcheck dqddtcheck devlogcheck logsystemcheck inifindatabasecheck dqbootreadcheck dqfdtcheck swiopostcheck iopostendcheck nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
           make rtl85check rtl107check rtl108check rtl109check rtl110check rtl111check rtl112check rtl113check sourcerangecheck m21bootcheck
