@@ -1,4 +1,4 @@
-name: VMS37 native IA-32 M124 real IA-32 CPL0 IDT 0x90 software IOC post interrupt
+name: VMS37 native IA-32 M125 DQDRIVER original 12 FDT mask tables staged in SYS.EXE
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M124
+      - name: Rebuild pinned native source through M125
         shell: bash
         run: |
           set -euo pipefail
@@ -68,12 +68,13 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m122-native.patch
           patch --batch -p1 < ../ci-vms37/m123-native.patch
           patch --batch -p1 < ../ci-vms37/m124-native.patch
+          patch --batch -p1 < ../ci-vms37/m125-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           # Replay the 46 exact SHA-256-verified current guest-layout fixtures, not stale M89 copies.
           python3 tools/m110_sync_test_fixtures.py
           make -j2 all
-          make swiopostcheck iopostendcheck nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
+          make dqfdtcheck swiopostcheck iopostendcheck nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
           make rtl85check rtl107check rtl108check rtl109check rtl110check rtl111check rtl112check rtl113check sourcerangecheck m21bootcheck
           # Run the full historical guest-layout/host test suite, not only the modern smoke subset.
           make test
@@ -86,17 +87,17 @@ jobs:
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Regress real QEMU M124 native INT 0x90 on resident SYS.EXE
+      - name: Regress real QEMU M125 DQDRIVER source FDT staging
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m124.py
+          python3 tools/qemu_sysboot_m125.py
       - name: Preserve actual guest COM1 transcript
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m124-ci-m124-guest-serial
+          name: vms37-m125-ci-m125-guest-serial
           path: |
-            vms37-native-x86-m89/qemu-m124-serial.log
+            vms37-native-x86-m89/qemu-m125-serial.log
           if-no-files-found: warn
