@@ -998,3 +998,44 @@ diff --git a/tests/test_ioc_cancel_0.c b/tests/test_ioc_cancel_0.c
 +#include "dq_ioc_test_common.h"
 +/* M168: cancel scenario 0, original source private IOC behavior. */
 +int test_ioc_cancel_0(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ assert(port_dq_ioc_cancel(&q,1u)==PORT_DQ_IOC_NOTFOUND);
++ return 1;
++}
+diff --git a/tests/test_ioc_cancel_1.c b/tests/test_ioc_cancel_1.c
+--- /dev/null
++++ b/tests/test_ioc_cancel_1.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M168: cancel scenario 1, original source private IOC behavior. */
++int test_ioc_cancel_1(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};assert(port_dq_ioc_prepare(&q,1u,4u,b,512u)==PORT_DQ_IOC_OK);assert(port_dq_ioc_cancel(&q,1u)==PORT_DQ_IOC_OK);assert(port_dq_ioc_validate(&q)==PORT_DQ_IOC_OK);
++ return 1;
++}
+diff --git a/tests/test_ioc_cancel_2.c b/tests/test_ioc_cancel_2.c
+--- /dev/null
++++ b/tests/test_ioc_cancel_2.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M168: cancel scenario 2, original source private IOC behavior. */
++int test_ioc_cancel_2(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,1u,4u,b);assert(port_dq_ioc_cancel(&q,1u)==PORT_DQ_IOC_OK&&q.submitted==0u);
++ return 1;
++}
+diff --git a/tests/test_ioc_cancel_3.c b/tests/test_ioc_cancel_3.c
+--- /dev/null
++++ b/tests/test_ioc_cancel_3.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M168: cancel scenario 3, original source private IOC behavior. */
++int test_ioc_cancel_3(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,1u,4u,b);uint32_t tag=0;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK);assert(port_dq_ioc_cancel(&q,1u)==PORT_DQ_IOC_BUSY);
++ return 1;
++}
