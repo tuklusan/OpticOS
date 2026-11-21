@@ -1,0 +1,685 @@
+diff --git a/Makefile b/Makefile
+index 9277702..b52c468 100644
+--- a/Makefile
++++ b/Makefile
+@@ -804,6 +804,8 @@ M128_LOG_SRCS=$(wildcard src/vms_log_*.c)
+ M128_LOG_OBJS=$(patsubst src/%.c,build/%.o,$(M128_LOG_SRCS))
+ M129_DEVLOG_SRCS=$(wildcard src/vms_devlog_*.c)
+ M129_DEVLOG_OBJS=$(patsubst src/%.c,build/%.o,$(M129_DEVLOG_SRCS))
++M130_DQDDT_SRCS=$(wildcard src/vms_dqddt_*.c)
++M130_DQDDT_OBJS=$(patsubst src/%.c,build/%.o,$(M130_DQDDT_SRCS))
+ M123_IOPOST_SRCS=$(filter-out $(M124_SWI_SRCS),$(wildcard src/vms_iopost_*.c))
+ M123_IOPOST_OBJS=$(patsubst src/%.c,build/%.o,$(M123_IOPOST_SRCS))
+ $(M124_SWI_OBJS): build/%.o: src/%.c src/vms_iopost_swi.h | build
+@@ -819,8 +821,8 @@ conportcheck: $(M119_CON_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
+ 	./build/conportcheck
+ 
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -844,7 +846,7 @@ build/install_iniloa_image: tools/install_iniloa_image.c src/vms_boot_files11.c
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) $(M129_DEVLOG_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) $(M129_DEVLOG_SRCS) $(M130_DQDDT_SRCS) src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+@@ -1226,3 +1228,12 @@ $(M129_DEVLOG_OBJS): build/%.o: src/%.c src/vms_devlog_search.h | build
+ devlogcheck: $(M129_DEVLOG_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-omit-frame-pointer -Isrc $(M129_DEVLOG_SRCS) $(M128_LOG_SRCS) $(M127_FIN_SRCS) $(M120_IOC_SRCS) $(M118_DB_SRCS) src/vms_ini_log_templates.c src/vms_ini_syslog.c tests/test_devlog_search_host.c -o build/devlogcheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/devlogcheck
++
++# M130: source DQ DPTAB/DDTAB and 136-byte original FUNCTAB staging.
++# Real DQ IOC handler, DQ_REGDUMP, IOC$MNTVER and ACP are unported.
++$(M130_DQDDT_OBJS): build/%.o: src/%.c src/vms_dqddt.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: dqddtcheck
++dqddtcheck: $(M130_DQDDT_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-sanitize-recover=undefined -Isrc $(M130_DQDDT_SRCS) $(M125_DQ_SRCS) src/vms_ini_devicedb.c $(filter-out src/vms_ini_devicedb.c,$(M118_DB_SRCS)) tests/test_dqddt_host.c -o build/dqddtcheck
++	./build/dqddtcheck
+diff --git a/src/kernel.c b/src/kernel.c
+index 26a768d..ac4fed2 100644
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3338,6 +3338,41 @@ void kmain(void) {
+     }
+     bootstrap_message("INIT: SYS.EXE IOC$SEARCHDEV resolved SYS$DISK/SYS$SYSDEVICE to unbound DQA0 and NLA0 to linked DDT (no $ASSIGN).");
+ 
++    /* Source DQDRIVER.MAR DPTAB/DDTAB/FUNCTAB: native supervisor table
++     * layout staging only, no DQA0 DDT binding or Files-11 ACP. */
++    static struct port_sys_exec_result dq_ddt_result;
++    const struct port_sys_exec_start dq_ddt_request={
++        .signature=PORT_SYS_EXEC_SIGNATURE,.version=PORT_SYS_EXEC_VERSION,
++        .pcb_type=PORT_SYS_EXEC_PCB_KIND,.result=&dq_ddt_result,
++        .phase=PORT_SYS_EXEC_INIT_DQ_DDT_STAGE};
++    if(loaded_sys(&dq_ddt_request)!=PORT_SYS_EXEC_NORMAL||
++       dq_ddt_result.signature!=PORT_SYS_EXEC_DQ_DDT_TAG||
++       !dq_ddt_result.dq_ddt_stage||!dq_ddt_result.dq_ddt_function||
++       (uintptr_t)dq_ddt_result.dq_ddt_stage<PORT_SYS_ELF_START||
++       (uintptr_t)dq_ddt_result.dq_ddt_stage>
++           PORT_SYS_ELF_LIMIT-sizeof(struct port_dqddt_stage)||
++       (uintptr_t)dq_ddt_result.dq_ddt_function<PORT_SYS_ELF_START||
++       (uintptr_t)dq_ddt_result.dq_ddt_function>=PORT_SYS_ELF_LIMIT||
++       !dq_ddt_result.dq_ddt_stage->ready||
++       dq_ddt_result.dq_ddt_stage->driver_bound||
++       dq_ddt_result.dq_ddt_stage->table_base!=
++         (uint32_t)(uintptr_t)dq_ddt_result.dq_ddt_stage->image||
++       (dq_ddt_result.dq_ddt_stage->image[36u] !=
++            (uint8_t)PORT_DQDDT_FDT_BYTES ||
++        dq_ddt_result.dq_ddt_stage->image[37u]!=0u)||
++       dq_ddt_result.dq_ddt_function(dq_ddt_result.dq_ddt_stage,
++          dq_result.dq_source_fdt,PORT_DQ_READPBLK)!=PORT_DQDDT_UNBOUND||
++       dq_ddt_result.dq_ddt_function(dq_ddt_result.dq_ddt_stage,
++          dq_result.dq_source_fdt,PORT_DQ_WRITELBLK)!=PORT_DQDDT_UNBOUND||
++       (devicedb_result.device_db_bytes[PORT_V37_DDB_BOOT_OFF+12u]!=0u||
++        devicedb_result.device_db_bytes[PORT_V37_DDB_BOOT_OFF+13u]!=0u||
++        devicedb_result.device_db_bytes[PORT_V37_DDB_BOOT_OFF+14u]!=0u||
++        devicedb_result.device_db_bytes[PORT_V37_DDB_BOOT_OFF+15u]!=0u)){
++        bootstrap_message("INIT: resident DQ DDT source table staging failed.");
++        bootstrap_halt();
++    }
++    bootstrap_message("INIT: SYS.EXE staged source DQ DPTAB/DDTAB and 136-byte FUNCTAB (all disk actions unbound).");
++
+ 
+     /* Source NLDRIVER.MAR DDT/FDT through SYSQIOREQ.MAR 741-749: two original
+      * IRP$L_MEDIA statuses and an IOC$GL_PSBL append in actual loaded
+diff --git a/src/vms_sys_executive_entry.c b/src/vms_sys_executive_entry.c
+index cae53cb..adb9f44 100644
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -11,6 +11,7 @@
+ #include "vms_con_port.h"
+ #include "vms_ioc_phys.h"
+ #include "vms_devlog_search.h"
++#include "vms_dqddt.h"
+ #include "vms_qio_post.h"
+ #include "vms_nl_ddt.h"
+ #include "vms_iopost_end.h"
+@@ -79,6 +80,9 @@ static union {uint32_t align;uint8_t bytes[PORT_V37_IRP_SIZE];} executive_dq_boo
+ static union {uint32_t align;uint16_t words[256];} executive_dq_boot_sector;
+ static struct port_dq_bootread_result executive_dq_bootread_result;
+ static uint32_t executive_dq_bootread_ready;
++/* Source DQDRIVER DDTAB and FUNCTAB are inactive until original IOC/ACP. */
++static struct port_dqddt_stage executive_dqddt;
++static uint32_t executive_dqddt_ready;
+ /* FIN_DATABASE follows a real physical boot-disk home-sector read. These
+  * remain nonpublished LOG records, and the DQ DDT remains absent. */
+ static struct port_ini_fin_result executive_fin_database_result;
+@@ -788,6 +792,42 @@ uint32_t port_sys_executive_entry(const struct port_sys_exec_start *p){
+         p->result->signature=PORT_SYS_EXEC_POST_RESULT_TAG;
+         return PORT_SYS_EXEC_NORMAL;
+     }
++    if(p->phase==PORT_SYS_EXEC_INIT_DQ_DDT_STAGE){
++        /* DQDRIVER.MAR 392-465, 496-592; SHRLIB/SYSMAR.MAR DDTAB.
++         * Stage only. This is not a bound PC disk DDT or an ACP/QIO. */
++        if(!executive_ioc_logical_ready||!executive_dq_fdt_ready||
++           !executive_dq_bootread_ready||!executive_fin_database_ready||
++           !executive_boot_system_log_ready||executive_dqddt_ready||
++           executive_devicedb_result.incomplete_driver_mask!=7u||
++           port_v37_read32(executive_devicedb_bytes.data+
++               PORT_V37_DDB_BOOT_OFF+12u)!=0u||
++           port_v37_read32(executive_devicedb_bytes.data+
++               PORT_V37_UCB_BOOT_OFF+120u)!=0u)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        const uint32_t base=(uint32_t)(uintptr_t)executive_dqddt.image;
++        const uint32_t start=(uint32_t)(uintptr_t)port_dq_bootread_execute;
++        const uint32_t ret=(uint32_t)(uintptr_t)port_v37_nl_ioc_return;
++        if(port_dqddt_stage_init(&executive_dqddt,&executive_dq_fdt,
++               base,start,ret)!=PORT_DQDDT_OK||
++           port_dqddt_validate(&executive_dqddt,&executive_dq_fdt)!=
++               PORT_DQDDT_OK||
++           port_dqddt_function(&executive_dqddt,&executive_dq_fdt,
++               PORT_DQ_READPBLK)!=PORT_DQDDT_UNBOUND||
++           port_dqddt_function(&executive_dqddt,&executive_dq_fdt,
++               PORT_DQ_WRITELBLK)!=PORT_DQDDT_UNBOUND||
++           port_dqddt_function(&executive_dqddt,&executive_dq_fdt,
++               63u)!=PORT_DQDDT_BAD||
++           port_v37_read32(executive_devicedb_bytes.data+
++               PORT_V37_DDB_BOOT_OFF+12u)!=0u||
++           port_v37_read32(executive_devicedb_bytes.data+
++               PORT_V37_UCB_BOOT_OFF+120u)!=0u)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        executive_dqddt_ready=1u;
++        p->result->dq_ddt_stage=&executive_dqddt;
++        p->result->dq_ddt_function=port_dqddt_function;
++        p->result->signature=PORT_SYS_EXEC_DQ_DDT_TAG;
++        return PORT_SYS_EXEC_NORMAL;
++    }
+     if(p->phase==PORT_SYS_EXEC_INIT_IOC_LOGICAL){
+         /* IOSUBPAGD.MAR 70$-330$: SYS$DISK and SYS$SYSDEVICE traverse
+          * original bootstrap LOG$TRANSLATE and physical DDB/UCB lists.
+diff --git a/src/vms_sys_executive_entry.h b/src/vms_sys_executive_entry.h
+index a323417..06c059d 100644
+--- a/src/vms_sys_executive_entry.h
++++ b/src/vms_sys_executive_entry.h
+@@ -16,6 +16,7 @@
+ #include "vms_ini_dpt_templates.h"
+ #include "vms_ini_bootdev_scan.h"
+ #include "vms_dq_fdt.h"
++#include "vms_dqddt.h"
+ #include "vms_dq_bootread.h"
+ #include "vms_ini_fin_database.h"
+ #include "vms_log_system.h"
+@@ -29,7 +30,7 @@
+ #include "vms_sys85.h"
+ /* The resident SYS.EXE entry carries INIT.MAR's CPU-code vector binding
+  * and subsequent source-ordered initialization as separate phases. */
+-enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=27u,
++enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=28u,
+        PORT_SYS_EXEC_NORMAL=1u,PORT_SYS_EXEC_BAD_PARAMETERS=2u,
+        PORT_SYS_EXEC_RESULT_TAG=0x58455359u,PORT_SYS_EXEC_PCB_KIND=1u,
+        PORT_SYS_EXEC_LINK_SYSLOA=1u,PORT_SYS_EXEC_INIT_RESIDENT=2u,
+@@ -57,7 +58,8 @@ enum { PORT_SYS_EXEC_SIGNATURE=0x37334d56u,PORT_SYS_EXEC_VERSION=27u,
+        PORT_SYS_EXEC_INIT_DQ_BOOTREAD=22u, PORT_SYS_EXEC_DQ_BOOTREAD_TAG=0x44425144u,
+        PORT_SYS_EXEC_INIT_FIN_DATABASE=23u,PORT_SYS_EXEC_FIN_DATABASE_TAG=0x42444e46u,
+        PORT_SYS_EXEC_INIT_SYSTEM_LOG=24u,PORT_SYS_EXEC_SYSTEM_LOG_TAG=0x534c474cu,
+-       PORT_SYS_EXEC_INIT_IOC_LOGICAL=25u,PORT_SYS_EXEC_IOC_LOGICAL_TAG=0x4c434f49u };
++       PORT_SYS_EXEC_INIT_IOC_LOGICAL=25u,PORT_SYS_EXEC_IOC_LOGICAL_TAG=0x4c434f49u,
++       PORT_SYS_EXEC_INIT_DQ_DDT_STAGE=26u,PORT_SYS_EXEC_DQ_DDT_TAG=0x54444451u };
+ /* This is an explicitly privileged early-boot disk path. Hardware is real
+  * ATA PIO; the original DQ disk DDT and Files-11 ACP are NOT bound. */
+ struct port_sys_exec_dq_boot_settings {
+@@ -131,6 +133,11 @@ struct port_sys_exec_result {
+     uint32_t (*ioc_logical_search)(const struct port_log_system_table *,
+         const uint8_t *,size_t,uint32_t,const struct port_v37_device_result *,
+         const char *,size_t,unsigned,struct port_devlog_trace *);
++    /* Source DQDRIVER DPTAB/DDTAB and exact 136-byte FUNCTAB staged in
++     * resident SYS.EXE. All ten action destinations unbound; DQA0 DDT=0. */
++    const struct port_dqddt_stage *dq_ddt_stage;
++    uint32_t (*dq_ddt_function)(const struct port_dqddt_stage *,
++        const struct port_dq_fdt *,uint16_t);
+     /* Prelinked DEVICEDAT DDB/UCB pointer graph; no live driver DDT. */
+     const struct port_v37_device_result *device_db;
+     const uint8_t *device_db_bytes;
+diff --git a/tools/gen_source_coverage.py b/tools/gen_source_coverage.py
+index a710c67..5d37a50 100644
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2309,7 +2309,10 @@ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ # rows identify source ACP/EXE action classes. All action addresses,
+ # physical RB730 transfers, CRB, class driver, Files-11 ACP remain missing.
+ dq_fdt_rows=[
+- (1,495,None,None,'Original RB730 driver DPTAB/DDTAB/interrupts and hardware model are unresolved'),
++ (1,391,None,None,'Original RB730 declarations and hardware definitions unresolved'),
++ (392,437,'src/vms_dqddt_stage_init.c','port_dqddt_stage_init','DPTAB source unit defaults staged only; original UBA/CRB device initialization absent'),
++ (438,471,'src/vms_dqddt_fill_header.c','port_dqddt_fill_header','Original DDTAB 38-byte header and source FUNCTAB offset, unresolved native regdump and MNTVER left zero'),
++ (472,495,None,None,'Original RB730 hardware FTAB and GENF controller actions unresolved'),
+  (496,525,'src/vms_dq_fdt_legal.c','port_dq_fdt_legal','Original legal IO$_ function code bitmap (27 bits), not dispatch'),
+  (526,545,'src/vms_dq_fdt_buffered.c','port_dq_fdt_buffered','Original buffered I/O bitmap (18 bits)'),
+  (546,551,'src/vms_dq_fdt_read.c','port_dq_fdt_read','Source ACP$READBLK logical, physical, virtual and header read mask'),
+@@ -2343,7 +2346,7 @@ for first,last,path,symbol,detail in dq_fdt_rows:
+              'pc_file':path,'pc_symbol':symbol,'pc_line':line,'function':detail})
+ result['files'].append({'original_file':'DRIVER/SRC/DQDRIVER.MAR',
+     'original_lines':2189,'sections':dq_fdt_sections,
+-    'unresolved_integration':'Resident SYS.EXE stages source FDT masks and performs one privileged physical READPBLK of real ATA Files-11 home LBN1; DQ DDT, RB730/ATA full translation, IOC, CRB, Files-11 ACP and general I/O remain unbound.'})
++    'unresolved_integration':'Resident SYS.EXE stages source DPTAB and 38-byte DDTAB plus exact 136-byte FUNCTAB masks; all native disk action slots remain inactive and DQA0 DDT is zero. One privileged physical READPBLK of ATA Files-11 LBN1 is separate; RB730/ATA controller translation, IOC, CRB, ACP and general I/O remain unported.'})
+ # M128: LOGNAMSUB.MAR source pin, not a claim of a full logical-name service.
+ # Only the two FIN_DATABASE bootstrap SYSTEM entries have bound native list
+ # records. PROCESS/GROUP tables, LOG$LOCKR, SYSLOGNAM and supercession remain
+diff --git a/src/vms_dqddt.h b/src/vms_dqddt.h
+new file mode 100644
+index 0000000..aed0732
+--- /dev/null
++++ b/src/vms_dqddt.h
+@@ -0,0 +1,39 @@
++#ifndef VMS37_NATIVE_DQDDT_H
++#define VMS37_NATIVE_DQDDT_H
++#include <stdint.h>
++#include <stddef.h>
++#include "vms_dq_fdt.h"
++/* Original DRIVER/SRC/DQDRIVER.MAR DPTAB 392-436, DDTAB 438-465,
++ * FUNCTAB 496-592 and SHRLIB/SYSMAR.MAR DDTAB/GENRADDR macro.
++ * Only the source-layout table *stage* is usable: the PC ATA READPBLK
++ * adapter does not implement VAX DQ_STARTIO register ABI; all DDT actions
++ * (other than exact masks) remain unbound. Never expose as IOC live driver. */
++enum {PORT_DQDDT_OK=1u,PORT_DQDDT_BAD=2u,PORT_DQDDT_UNBOUND=4u,
++      PORT_DQDDT_HEADER_BYTES=40u,PORT_DQDDT_DDT_BYTES=38u,
++      PORT_DQDDT_FDT_BYTES=136u,PORT_DQDDT_IMAGE_BYTES=176u,
++      PORT_DQDDT_SOURCE_DIAG_BYTES=84u,
++      PORT_DQDDT_ACTIONS=10u};
++struct port_dqddt_prologue {
++    uint16_t max_units,default_units,buffer_bytes;
++    uint8_t fork_ipl,device_ipl,retry_max,svp_required;
++};
++struct port_dqddt_stage {
++    struct port_dqddt_prologue dpt;
++    uint8_t image[PORT_DQDDT_IMAGE_BYTES] __attribute__((aligned(4)));
++    uint32_t table_base,native_start_pc,ioc_return_pc;
++    uint8_t ready,driver_bound,reserved[2];
++};
++uint32_t port_dqddt_preflight(const struct port_dqddt_stage *,
++    const struct port_dq_fdt *,uint32_t,uint32_t,uint32_t);
++uint32_t port_dqddt_fill_header(uint8_t *,size_t,uint32_t,uint32_t,uint32_t);
++uint32_t port_dqddt_fill_fdt(uint8_t *,size_t,const struct port_dq_fdt *);
++uint32_t port_dqddt_stage_init(struct port_dqddt_stage *,
++    const struct port_dq_fdt *,uint32_t,uint32_t,uint32_t);
++uint32_t port_dqddt_validate(const struct port_dqddt_stage *,
++    const struct port_dq_fdt *);
++uint32_t port_dqddt_function(const struct port_dqddt_stage *,
++    const struct port_dq_fdt *,uint16_t);
++uint32_t port_dqddt_entry_offset(unsigned);
++uint32_t port_dqddt_fdt_check(const struct port_dqddt_stage *,
++    const struct port_dq_fdt *);
++#endif
+diff --git a/src/vms_dqddt_entry_offset.c b/src/vms_dqddt_entry_offset.c
+new file mode 100644
+index 0000000..75341ee
+--- /dev/null
++++ b/src/vms_dqddt_entry_offset.c
+@@ -0,0 +1,8 @@
++#include "vms_dqddt.h"
++/* FUNCTAB emits two 32-bit mask words per row; the ten nonempty ACTION
++ * entries additionally reserve one GENRADDR longword. */
++uint32_t port_dqddt_entry_offset(unsigned row){
++    if(row>=PORT_DQ_FDT_ROWS)return UINT32_MAX;
++    if(row<2u)return PORT_DQDDT_HEADER_BYTES+8u*row;
++    return PORT_DQDDT_HEADER_BYTES+16u+12u*(row-2u);
++}
+diff --git a/src/vms_dqddt_fdt_check.c b/src/vms_dqddt_fdt_check.c
+new file mode 100644
+index 0000000..477eae3
+--- /dev/null
++++ b/src/vms_dqddt_fdt_check.c
+@@ -0,0 +1,23 @@
++#include "vms_dqddt.h"
++#include "vms_ini_devicedb.h"
++/* All original masks and all ten absent GENRADDR handler slots must be
++ * checked, not merely legal/read/write mask samples. */
++uint32_t port_dqddt_fdt_check(const struct port_dqddt_stage *s,
++    const struct port_dq_fdt *fdt){
++    if(!s||port_dq_fdt_validate(fdt,sizeof(*fdt))!=PORT_DQ_FDT_OK)
++        return PORT_DQDDT_BAD;
++    for(unsigned i=0;i<PORT_DQ_FDT_ROWS;i++){
++        const uint32_t off=port_dqddt_entry_offset(i);
++        if(off<PORT_DQDDT_HEADER_BYTES||off>PORT_DQDDT_IMAGE_BYTES-8u||
++           port_v37_read32(s->image+off)!=(uint32_t)fdt->mask[i]||
++           port_v37_read32(s->image+off+4u)!=(uint32_t)(fdt->mask[i]>>32u))
++            return PORT_DQDDT_BAD;
++        if(i>=2u&&port_v37_read32(s->image+off+8u)!=0u)
++            return PORT_DQDDT_BAD;
++    }
++    if(port_dqddt_entry_offset(PORT_DQ_FDT_ROWS-1u)+12u!=
++       PORT_DQDDT_IMAGE_BYTES||
++       port_dqddt_entry_offset(PORT_DQ_FDT_ROWS)!=UINT32_MAX)
++        return PORT_DQDDT_BAD;
++    return PORT_DQDDT_OK;
++}
+diff --git a/src/vms_dqddt_fill_fdt.c b/src/vms_dqddt_fill_fdt.c
+new file mode 100644
+index 0000000..02cb71b
+--- /dev/null
++++ b/src/vms_dqddt_fill_fdt.c
+@@ -0,0 +1,25 @@
++#include "vms_dqddt.h"
++#include "vms_ini_devicedb.h"
++/* Original FUNCTAB macro from SHRLIB/SYSMAR.MAR: two little-endian mask
++ * words, optional GENRADDR ACTION slot. Native action slots are zero,
++ * never the address of a fake ACP, so table is not executable yet. */
++uint32_t port_dqddt_fill_fdt(uint8_t *out,size_t n,
++    const struct port_dq_fdt *fdt){
++    if(!out||n<PORT_DQDDT_IMAGE_BYTES||
++       port_dq_fdt_validate(fdt,sizeof(*fdt))!=PORT_DQ_FDT_OK)
++        return PORT_DQDDT_BAD;
++    for(unsigned i=PORT_DQDDT_HEADER_BYTES;i<PORT_DQDDT_IMAGE_BYTES;i++)out[i]=0u;
++    for(unsigned row=0;row<PORT_DQ_FDT_ROWS;row++){
++        const uint64_t mask=fdt->mask[row];
++        const uint32_t at=port_dqddt_entry_offset(row);
++        if(at==UINT32_MAX||at>PORT_DQDDT_IMAGE_BYTES-8u)
++            return PORT_DQDDT_BAD;
++        port_v37_write32(out+at,(uint32_t)mask);
++        port_v37_write32(out+at+4u,(uint32_t)(mask>>32u));
++        if(row>=2u){
++            if(at>PORT_DQDDT_IMAGE_BYTES-12u)return PORT_DQDDT_BAD;
++            port_v37_write32(out+at+8u,0u);
++        }
++    }
++    return PORT_DQDDT_OK;
++}
+diff --git a/src/vms_dqddt_fill_header.c b/src/vms_dqddt_fill_header.c
+new file mode 100644
+index 0000000..f0dc1ee
+--- /dev/null
++++ b/src/vms_dqddt_fill_header.c
+@@ -0,0 +1,25 @@
++#include "vms_dqddt.h"
++#include "vms_ini_devicedb.h"
++/* DDTAB GENRADDR: START address is relative to DDT, zero function
++ * defaults expand to absolute IOC$RETURN. DQ_REGDUMP, IOC$MNTVER and
++ * error logger offsets remain zero because no valid native handler. */
++uint32_t port_dqddt_fill_header(uint8_t *out,size_t n,uint32_t base,
++    uint32_t native_start,uint32_t ioc_return){
++    if(!out||n<PORT_DQDDT_HEADER_BYTES||!base||(base&3u)||
++       base>UINT32_MAX-PORT_DQDDT_IMAGE_BYTES||
++       !native_start||!ioc_return)return PORT_DQDDT_BAD;
++    for(unsigned i=0;i<PORT_DQDDT_HEADER_BYTES;i++)out[i]=0u;
++    port_v37_write32(out+0u,native_start-base);
++    port_v37_write32(out+4u,ioc_return);
++    port_v37_write32(out+8u,PORT_DQDDT_HEADER_BYTES);
++    port_v37_write32(out+12u,ioc_return);
++    /* Original DQ_REGDUMP unavailable: leave zero and fail closed. */
++    port_v37_write16(out+20u,PORT_DQDDT_SOURCE_DIAG_BYTES);
++    /* Original device error logger buffer needs EMB source layout. */
++    port_v37_write16(out+22u,0u);
++    port_v37_write32(out+24u,ioc_return);
++    port_v37_write32(out+28u,ioc_return);
++    port_v37_write32(out+32u,0u); /* IOC$MNTVER unresolved */
++    port_v37_write16(out+36u,PORT_DQDDT_FDT_BYTES);
++    return PORT_DQDDT_OK;
++}
+diff --git a/src/vms_dqddt_function.c b/src/vms_dqddt_function.c
+new file mode 100644
+index 0000000..8c7fd7b
+--- /dev/null
++++ b/src/vms_dqddt_function.c
+@@ -0,0 +1,10 @@
++#include "vms_dqddt.h"
++/* A source legal function mask is not an executable DDT/ACP action.
++ * Reject all $QIO uses until corresponding native register ABI exists. */
++uint32_t port_dqddt_function(const struct port_dqddt_stage *s,
++    const struct port_dq_fdt *fdt,uint16_t f){
++    if(port_dqddt_validate(s,fdt)!=PORT_DQDDT_OK)return PORT_DQDDT_BAD;
++    const uint32_t k=port_dq_fdt_dispatch(fdt,sizeof(*fdt),f);
++    if(k==PORT_DQ_FDT_ILLEGAL)return PORT_DQDDT_BAD;
++    return PORT_DQDDT_UNBOUND;
++}
+diff --git a/src/vms_dqddt_preflight.c b/src/vms_dqddt_preflight.c
+new file mode 100644
+index 0000000..85f9102
+--- /dev/null
++++ b/src/vms_dqddt_preflight.c
+@@ -0,0 +1,15 @@
++#include "vms_dqddt.h"
++/* No DDT publication or interrupt-owned CRB before source DQ STARTIO and
++ * ACP handlers exist. Stage must live at a distinct aligned PC address. */
++uint32_t port_dqddt_preflight(const struct port_dqddt_stage *s,
++    const struct port_dq_fdt *fdt,uint32_t base,uint32_t start,uint32_t ret){
++    if(!s||!base||(base&3u)||!start||!ret||
++       base>UINT32_MAX-PORT_DQDDT_IMAGE_BYTES||
++       !((uint64_t)start<(uint64_t)base ||
++         (uint64_t)start>=(uint64_t)base+PORT_DQDDT_IMAGE_BYTES)||
++       !((uint64_t)ret<(uint64_t)base ||
++         (uint64_t)ret>=(uint64_t)base+PORT_DQDDT_IMAGE_BYTES)||
++       port_dq_fdt_validate(fdt,sizeof(*fdt))!=PORT_DQ_FDT_OK)
++        return PORT_DQDDT_BAD;
++    return PORT_DQDDT_OK;
++}
+diff --git a/src/vms_dqddt_stage_init.c b/src/vms_dqddt_stage_init.c
+new file mode 100644
+index 0000000..262ccf3
+--- /dev/null
++++ b/src/vms_dqddt_stage_init.c
+@@ -0,0 +1,20 @@
++#include "vms_dqddt.h"
++/* DPTAB defaults come straight from DQDRIVER.MAR 392-436; the
++ * additional original UCB/SVP/error paths are still unresolved. */
++uint32_t port_dqddt_stage_init(struct port_dqddt_stage *s,
++    const struct port_dq_fdt *fdt,uint32_t base,uint32_t start,uint32_t ret){
++    if(port_dqddt_preflight(s,fdt,base,start,ret)!=PORT_DQDDT_OK)
++        return PORT_DQDDT_BAD;
++    struct port_dqddt_stage tmp={0};
++    tmp.dpt.max_units=4u;tmp.dpt.default_units=4u;
++    tmp.dpt.buffer_bytes=512u;tmp.dpt.fork_ipl=8u;
++    tmp.dpt.device_ipl=21u;tmp.dpt.retry_max=8u;
++    tmp.dpt.svp_required=1u;
++    if(port_dqddt_fill_header(tmp.image,sizeof tmp.image,base,start,ret)!=PORT_DQDDT_OK||
++       port_dqddt_fill_fdt(tmp.image,sizeof tmp.image,fdt)!=PORT_DQDDT_OK)
++        return PORT_DQDDT_BAD;
++    tmp.table_base=base;tmp.native_start_pc=start;tmp.ioc_return_pc=ret;
++    tmp.ready=1u;tmp.driver_bound=0u;
++    *s=tmp;
++    return PORT_DQDDT_OK;
++}
+diff --git a/src/vms_dqddt_validate.c b/src/vms_dqddt_validate.c
+new file mode 100644
+index 0000000..c940a25
+--- /dev/null
++++ b/src/vms_dqddt_validate.c
+@@ -0,0 +1,29 @@
++#include "vms_dqddt.h"
++#include "vms_ini_devicedb.h"
++/* Only a complete source-sized DDT staging proof, NOT a usable DQ driver. */
++uint32_t port_dqddt_validate(const struct port_dqddt_stage *s,
++    const struct port_dq_fdt *fdt){
++    if(!s||!s->ready||s->driver_bound||s->reserved[0]||s->reserved[1]||
++       port_dqddt_preflight(s,fdt,s->table_base,
++          s->native_start_pc,s->ioc_return_pc)!=PORT_DQDDT_OK||
++       s->dpt.max_units!=4u||s->dpt.default_units!=4u||
++       s->dpt.buffer_bytes!=512u||s->dpt.fork_ipl!=8u||
++       s->dpt.device_ipl!=21u||s->dpt.retry_max!=8u||
++       s->dpt.svp_required!=1u)return PORT_DQDDT_BAD;
++    const uint8_t *b=s->image;
++    if(port_v37_read32(b)!=(s->native_start_pc-s->table_base)||
++       port_v37_read32(b+4u)!=s->ioc_return_pc||
++       port_v37_read32(b+8u)!=PORT_DQDDT_HEADER_BYTES||
++       port_v37_read32(b+12u)!=s->ioc_return_pc||
++       port_v37_read32(b+16u)!=0u||
++       port_v37_read16(b+20u)!=PORT_DQDDT_SOURCE_DIAG_BYTES||
++       port_v37_read16(b+22u)!=0u||
++       port_v37_read32(b+24u)!=s->ioc_return_pc||
++       port_v37_read32(b+28u)!=s->ioc_return_pc||
++       port_v37_read32(b+32u)!=0u||
++       port_v37_read16(b+36u)!=PORT_DQDDT_FDT_BYTES||
++       b[38u]!=0u||b[39u]!=0u||
++       port_dqddt_fdt_check(s,fdt)!=PORT_DQDDT_OK)
++        return PORT_DQDDT_BAD;
++    return PORT_DQDDT_OK;
++}
+diff --git a/tests/test_dqddt_host.c b/tests/test_dqddt_host.c
+new file mode 100644
+index 0000000..5206495
+--- /dev/null
++++ b/tests/test_dqddt_host.c
+@@ -0,0 +1,59 @@
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#include "vms_dqddt.h"
++#include "vms_ini_devicedb.h"
++#define CHECK(x) do {if(!(x)){fprintf(stderr,"DQ DDT failed line %u: %s\n",(unsigned)__LINE__,#x);return 1;}}while(0)
++int main(void){
++    enum {BASE=0x00370000u,START=0x00324120u,RET=0x00324104u};
++    struct port_dq_fdt fdt={0};
++    CHECK(port_dq_fdt_build(&fdt,sizeof fdt)==PORT_DQ_FDT_OK);
++    struct port_dqddt_stage d={0};
++    CHECK(port_dqddt_stage_init(&d,&fdt,BASE,START,RET)==PORT_DQDDT_OK);
++    CHECK(d.table_base==BASE&&d.native_start_pc==START&&d.ioc_return_pc==RET);
++    CHECK(port_dqddt_validate(&d,&fdt)==PORT_DQDDT_OK);
++    CHECK(port_v37_read32(d.image)==(uint32_t)(START-BASE));
++    CHECK(port_v37_read32(d.image+4u)==RET);
++    CHECK(port_v37_read32(d.image+8u)==PORT_DQDDT_HEADER_BYTES);
++    CHECK(port_v37_read16(d.image+20u)==84u);
++    CHECK(port_v37_read16(d.image+36u)==136u);
++    CHECK(port_dqddt_entry_offset(0u)==40u&&port_dqddt_entry_offset(1u)==48u);
++    CHECK(port_dqddt_entry_offset(2u)==56u&&port_dqddt_entry_offset(11u)==164u);
++    CHECK(port_dqddt_entry_offset(12u)==UINT32_MAX);
++    CHECK(port_v37_read32(d.image+port_dqddt_entry_offset(2u))==(uint32_t)fdt.mask[2u]);
++    CHECK(port_v37_read32(d.image+port_dqddt_entry_offset(2u)+4u)==(uint32_t)(fdt.mask[2u]>>32u));
++    CHECK(port_dqddt_function(&d,&fdt,PORT_DQ_READPBLK)==PORT_DQDDT_UNBOUND);
++    CHECK(port_dqddt_function(&d,&fdt,PORT_DQ_WRITELBLK)==PORT_DQDDT_UNBOUND);
++    CHECK(port_dqddt_function(&d,&fdt,PORT_DQ_READVBLK)==PORT_DQDDT_UNBOUND);
++    CHECK(port_dqddt_function(&d,&fdt,63u)==PORT_DQDDT_BAD);
++    CHECK(port_dqddt_function(&d,&fdt,UINT16_MAX)==PORT_DQDDT_BAD);
++    for(unsigned i=0;i<PORT_DQ_FDT_ROWS;i++){
++        uint32_t pos=port_dqddt_entry_offset(i);
++        uint8_t old=d.image[pos];d.image[pos]^=1u;
++        CHECK(port_dqddt_validate(&d,&fdt)==PORT_DQDDT_BAD);
++        d.image[pos]=old;
++        if(i>=2u){old=d.image[pos+8u];d.image[pos+8u]=1u;
++            CHECK(port_dqddt_validate(&d,&fdt)==PORT_DQDDT_BAD);
++            d.image[pos+8u]=old;}
++    }
++    CHECK(port_dqddt_validate(&d,&fdt)==PORT_DQDDT_OK);
++    d.image[20u]=0u;
++    CHECK(port_dqddt_validate(&d,&fdt)==PORT_DQDDT_BAD);
++    d.image[20u]=PORT_DQDDT_SOURCE_DIAG_BYTES;
++    d.image[32u]=1u;
++    CHECK(port_dqddt_validate(&d,&fdt)==PORT_DQDDT_BAD);
++    d.image[32u]=0u;
++    d.driver_bound=1u;
++    CHECK(port_dqddt_validate(&d,&fdt)==PORT_DQDDT_BAD);
++    d.driver_bound=0u;
++    CHECK(port_dqddt_validate(&d,&fdt)==PORT_DQDDT_OK);
++    struct port_dqddt_stage before=d;
++    CHECK(port_dqddt_stage_init(&d,&fdt,BASE+1u,START,RET)==PORT_DQDDT_BAD);
++    CHECK(!memcmp(&before,&d,sizeof d));
++    CHECK(port_dqddt_stage_init(&d,&fdt,BASE,BASE+4u,RET)==PORT_DQDDT_BAD);
++    CHECK(!memcmp(&before,&d,sizeof d));
++    CHECK(port_dqddt_stage_init(&d,&fdt,BASE,START,BASE+8u)==PORT_DQDDT_BAD);
++    CHECK(!memcmp(&before,&d,sizeof d));
++    puts("DQDRIVER.MAR source DPTAB/DDTAB and 136-byte FUNCTAB stage, all ten actions unbound PASS");
++    return 0;
++}
+diff --git a/tools/qemu_sysboot_m130.py b/tools/qemu_sysboot_m130.py
+new file mode 100644
+index 0000000..2021c5c
+--- /dev/null
++++ b/tools/qemu_sysboot_m130.py
+@@ -0,0 +1,141 @@
++#!/usr/bin/env python3
++"""One real native IA-32 QEMU boot; verify DPL0 software IPL4 dispatch.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M130: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE staged DQDRIVER 12 source FDT masks (disk DDT and ACP unbound).',
++        b'INIT: SYS.EXE linked NL$DDT DDTAB/FUNCTAB to NLA0 (other drivers absent).',
++        b'INIT: SYS.EXE DQ READPBLK fetched actual ATA Files-11 LBN1 (disk DDT/ACP not linked).',
++        b'INIT: SYS.EXE FIN_DATABASE staged DQA0 names and resident SYS$DISK/SYS$SYSDEVICE (logical lookup pending).',
++        b'INIT: SYS.EXE LOG$TRANSLATE resolved original SYS$DISK and SYS$SYSDEVICE names (system bootstrap only).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE IOC device search resolved NLA0 with native null DDT (others unbound).',
++        b'INIT: SYS.EXE IOC$SEARCHDEV resolved SYS$DISK/SYS$SYSDEVICE to unbound DQA0 and NLA0 to linked DDT (no $ASSIGN).',
++        b'INIT: SYS.EXE staged source DQ DPTAB/DDTAB and 136-byte FUNCTAB (all disk actions unbound).',
++        b'INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 requested).',
++        b'INIT: SYS.EXE IOCIOPOST serviced two NLA IRPs through IA-32 CPL0 software INT 0x90 (no process AST).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: resident source DQ FDT staging validation failed.',
++        b'INIT: resident DQ physical boot READPBLK failed.',
++        b'INIT: resident FIN_DATABASE source boot DDB/logical record staging failed.',
++        b'INIT: resident source LOGNAMSUB bootstrap translation failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: resident IOC logical to physical boot name lookup failed.',
++        b'INIT: resident DQ DDT source table staging failed.',
++        b'INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.',
++        b'INIT: resident IOCIOPOST source kernel end-action processing failed.',
++        b'INIT: resident IOCIOPOST native software interrupt failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m130-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,130,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M130: resident staged DQDRIVER DDTAB/FUNCTAB with disk actions unbound PASS')
++        return 0
++    print('QEMU M130: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
