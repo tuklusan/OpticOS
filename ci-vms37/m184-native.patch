@@ -343,6 +343,30 @@ diff --git a/src/vms_sys_executive_entry.c b/src/vms_sys_executive_entry.c
             .file_number=executive_sysexecutable_fid.number,
             .file_sequence=executive_sysexecutable_fid.sequence,
             .elf_segments=elf_segments,.elf_type=2u};
+diff --git a/tests/test_disk_image.py b/tests/test_disk_image.py
+--- a/tests/test_disk_image.py
++++ b/tests/test_disk_image.py
+@@ -22,9 +22,17 @@
+     assert b[:2]==b'\x26\x41'
+     assert word(b,8)==fid and word(b,10)==fid
+     assert checksum(b,510)==word(b,510)
+-    assert b[58]==2 # one format-1 extent, as installed by native image tools
+-    first=word(b,132)
+-    blocks=1+(word(b,130)&0xff)
++    # The native SYS.EXE can outgrow format-1's 256-block limit.
++    # Decode the original Files-11 ODS-2 format-1 or format-2
++    # retrieval pointer, and reject malformed map sizes and formats.
++    if b[58]==2:
++        assert (word(b,130)>>14)==1
++        first=word(b,132)|(((word(b,130)>>8)&0x3f)<<16)
++        blocks=1+(word(b,130)&0xff)
++    else:
++        assert b[58]==3 and (word(b,130)>>14)==2
++        first=unpack_from('<I',b,132)[0]
++        blocks=1+(word(b,130)&0x3fff)
+     assert 0<first<TOTAL and first+blocks<=TOTAL
+     return first,blocks
+ 
 diff --git a/tests/test_f11_ioc_cases.h b/tests/test_f11_ioc_cases.h
 new file mode 100644
 --- /dev/null
