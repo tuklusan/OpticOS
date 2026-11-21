@@ -1,0 +1,1000 @@
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -923,6 +923,16 @@
+ f11chainshortcheck: | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc src/vms_f11_chain_lbn.c src/vms_f11_chain_read.c tests/test_f11_chain_shortio.c -o build/f11chainshortcheck
+ 	./build/f11chainshortcheck
++# M161-M168: eight source DQ_STARTIO/IOCIOPOST physical request functions.
++# Device queue is private, with actual native ATA callback, not $QIO.
++M168_IOC_SRCS=$(wildcard src/vms_dq_ioc_*.c)
++M168_IOC_OBJS=$(patsubst src/%.c,build/%.o,$(M168_IOC_SRCS))
++$(M168_IOC_OBJS): build/%.o: src/%.c src/vms_dq_ioc.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: dqprivateioccheck
++dqprivateioccheck: $(M168_IOC_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc -Itests $(M168_IOC_SRCS) $(wildcard tests/test_ioc_*_[0123].c) tests/test_ioc_main.c -o build/dqprivateioccheck
++	./build/dqprivateioccheck
+ # M153-M160: eight source FIL$READVBN cursor functions on verified FH2
+ # extent chains, read-only privileged boot stage (not an ACP or channel).
+ M160_CURSOR_SRCS=$(wildcard src/vms_f11_cursor_*.c)
+@@ -933,8 +943,8 @@
+ f11cursorcheck: $(M160_CURSOR_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc -Itests $(M160_CURSOR_SRCS) src/vms_f11_chain_lbn.c tests/test_cursor_*.c tests/test_f11_cursor_main.c -o build/f11cursorcheck
+ 	./build/f11cursorcheck
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) $(M134_DDTRELOC_OBJS) $(M137_INDEX_OBJS) $(M138_MFD_OBJS) $(M139_DIR_OBJS) $(M140_IMAGE_OBJS) $(M144_AUX_OBJS) $(M146_RANGE_OBJS) $(M149_BOOTPATH_OBJS) $(M149_BOOTDIR_OBJS) $(M152_CHAIN_OBJS) $(M160_CURSOR_OBJS) build/vms_boot_files11.o build/vms_bootio.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) $(M134_DDTRELOC_OBJS) $(M137_INDEX_OBJS) $(M138_MFD_OBJS) $(M139_DIR_OBJS) $(M140_IMAGE_OBJS) $(M144_AUX_OBJS) $(M146_RANGE_OBJS) $(M149_BOOTPATH_OBJS) $(M149_BOOTDIR_OBJS) $(M152_CHAIN_OBJS) $(M160_CURSOR_OBJS) build/vms_boot_files11.o build/vms_bootio.o build/executive-partial.o
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) $(M134_DDTRELOC_OBJS) $(M137_INDEX_OBJS) $(M138_MFD_OBJS) $(M139_DIR_OBJS) $(M140_IMAGE_OBJS) $(M144_AUX_OBJS) $(M146_RANGE_OBJS) $(M149_BOOTPATH_OBJS) $(M149_BOOTDIR_OBJS) $(M152_CHAIN_OBJS) $(M160_CURSOR_OBJS) $(M168_IOC_OBJS) build/vms_boot_files11.o build/vms_bootio.o build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) $(M134_DDTRELOC_OBJS) $(M137_INDEX_OBJS) $(M138_MFD_OBJS) $(M139_DIR_OBJS) $(M140_IMAGE_OBJS) $(M144_AUX_OBJS) $(M146_RANGE_OBJS) $(M149_BOOTPATH_OBJS) $(M149_BOOTDIR_OBJS) $(M152_CHAIN_OBJS) $(M160_CURSOR_OBJS) $(M168_IOC_OBJS) build/vms_boot_files11.o build/vms_bootio.o build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -958,7 +968,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) $(M129_DEVLOG_SRCS) $(M130_DQDDT_SRCS) $(M131_RELOC_SRCS) $(M134_DDTRELOC_SRCS) $(M137_INDEX_SRCS) $(M138_MFD_SRCS) $(M139_DIR_SRCS) $(M140_IMAGE_SRCS) $(M144_AUX_SRCS) $(M146_RANGE_SRCS) $(M149_BOOTPATH_SRCS) $(M149_BOOTDIR_SRCS) $(M152_CHAIN_SRCS) $(M160_CURSOR_SRCS) src/vms_boot_files11.c src/vms_bootio.c src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) $(M129_DEVLOG_SRCS) $(M130_DQDDT_SRCS) $(M131_RELOC_SRCS) $(M134_DDTRELOC_SRCS) $(M137_INDEX_SRCS) $(M138_MFD_SRCS) $(M139_DIR_SRCS) $(M140_IMAGE_SRCS) $(M144_AUX_SRCS) $(M146_RANGE_SRCS) $(M149_BOOTPATH_SRCS) $(M149_BOOTDIR_SRCS) $(M152_CHAIN_SRCS) $(M160_CURSOR_SRCS) $(M168_IOC_SRCS) src/vms_boot_files11.c src/vms_bootio.c src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+diff --git a/src/vms_sys_executive_entry.c b/src/vms_sys_executive_entry.c
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -24,6 +24,7 @@
+ #include "vms_f11_bootdir.h"
+ #include "vms_f11_chain.h"
+ #include "vms_f11_cursor.h"
++#include "vms_dq_ioc.h"
+ #include "vms_qio_post.h"
+ #include "vms_nl_ddt.h"
+ #include "vms_iopost_end.h"
+@@ -128,6 +129,12 @@
+ static union {uint32_t align;uint16_t words[256];} executive_dq_image_data;
+ static struct port_dq_bootread_result executive_dq_image_io[2];
+ static struct port_dq_image_result executive_dq_image_probe;
++/* M161-M168: source DQ_STARTIO/IOCIOPOST request queue is private.
++ * Its actual physical callback remains the privileged ATA IRP adapter;
++ * no public IOC DQA0 unit is published by this stage. */
++static struct port_dq_ioc_queue executive_dq_private_ioc;
++static uint8_t executive_ioc_private_sectors[3][512] __attribute__((aligned(4)));
++
+ static uint32_t executive_dq_image_ready;
+ /* Tenth read checks disk text against bytes already resident in SYS.EXE. */
+ static union {uint32_t align;uint8_t bytes[PORT_V37_IRP_SIZE];} executive_dq_text_irp;
+@@ -1140,6 +1147,49 @@
+            cursor.reads!=4u||cursorctx.reads!=4u)
+             return PORT_SYS_EXEC_BAD_PARAMETERS;
+         completed+=cursorctx.reads;
++        /* M161-M168: source DQ_STARTIO and IOCIOPOST queue ownership,
++         * actual read callback, exact FIFO, and completion checks over
++         * three separate real Files-11 sectors of loaded SYS.EXE text.
++         * This is not a live DQA0 DDT nor user $QIO/ACP. */
++        struct executive_f11_context iocctx={dq,completed,0u,
++            executive_devicedb_result.ucb[0]};
++        if(port_dq_ioc_init(&executive_dq_private_ioc,
++             executive_f11_native_sector,&iocctx)!=PORT_DQ_IOC_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        for(uint32_t i=0;i<3u;i++){
++            uint32_t lbn=0u;
++            if(port_f11_chain_lbn(&executive_f11_chain,
++                 (text_offset>>9)+1u+i,&lbn)!=PORT_F11_CHAIN_OK||
++               port_dq_ioc_prepare(&executive_dq_private_ioc,
++                 0xd100u+i,lbn,executive_ioc_private_sectors[i],512u)
++                    !=PORT_DQ_IOC_OK||
++               port_dq_ioc_enqueue(&executive_dq_private_ioc,0xd100u+i)
++                    !=PORT_DQ_IOC_OK)
++                return PORT_SYS_EXEC_BAD_PARAMETERS;
++        }
++        if(port_dq_ioc_validate(&executive_dq_private_ioc)!=PORT_DQ_IOC_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        for(uint32_t i=0;i<3u;i++){
++            uint32_t tag=0u;
++            if(port_dq_ioc_start(&executive_dq_private_ioc,&tag)
++                    !=PORT_DQ_IOC_OK||tag!=0xd100u+i||
++               port_dq_ioc_transfer(&executive_dq_private_ioc)
++                    !=PORT_DQ_IOC_OK||
++               port_dq_ioc_complete(&executive_dq_private_ioc,&tag)
++                    !=PORT_DQ_IOC_OK||tag!=0xd100u+i)
++                return PORT_SYS_EXEC_BAD_PARAMETERS;
++            for(uint32_t j=0;j<512u;j++)
++                if(executive_ioc_private_sectors[i][j]!=
++                      ((const uint8_t *)(uintptr_t)(text_va+i*512u))[j])
++                    return PORT_SYS_EXEC_BAD_PARAMETERS;
++        }
++        if(port_dq_ioc_validate(&executive_dq_private_ioc)!=PORT_DQ_IOC_OK||
++           executive_dq_private_ioc.completed!=3u||
++           executive_dq_private_ioc.failed!=0u||
++           executive_dq_private_ioc.reads!=3u||iocctx.reads!=3u||
++           executive_dq_private_ioc.active!=PORT_DQ_IOC_DEPTH)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        completed+=iocctx.reads;
+         executive_f11_bootpath_ready=1u;
+         executive_dq_image_probe=(struct port_dq_image_result){
+            .header_lbn=image_header_lbn,.data_lbn=image_data_lbn,
+@@ -1156,6 +1206,7 @@
+            .chain_bytes_verified=chain_done,.chain_irps=chainctx.reads,
+            .chain_headers_verified=executive_f11_chain.headers,
+            .cursor_bytes_verified=cursor_matched,.cursor_irps=cursor.reads,
++           .private_ioc_reads=iocctx.reads,.private_ioc_bytes=1536u,
+            .file_number=executive_sysexecutable_fid.number,
+            .file_sequence=executive_sysexecutable_fid.sequence,
+            .elf_segments=elf_segments,.elf_type=2u};
+diff --git a/src/vms_dq_imageprobe.h b/src/vms_dq_imageprobe.h
+--- a/src/vms_dq_imageprobe.h
++++ b/src/vms_dq_imageprobe.h
+@@ -17,6 +17,7 @@
+     uint32_t chain_bytes_verified,chain_irps,chain_headers_verified;
+     uint16_t file_number,file_sequence,elf_segments,elf_type;
+     uint32_t cursor_bytes_verified,cursor_irps;
++    uint32_t private_ioc_reads,private_ioc_bytes;
+ };
+ uint32_t port_dq_image_header_lbn(const uint8_t home[512],
+     const uint8_t index[512],const struct port_dq_dir_fid *,uint32_t *lbn);
+diff --git a/src/kernel.c b/src/kernel.c
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3258,13 +3258,16 @@
+        dq_bootread_result.dq_image_probe->chain_headers_verified!=1u||
+        dq_bootread_result.dq_image_probe->cursor_bytes_verified!=901u||
+        dq_bootread_result.dq_image_probe->cursor_irps!=4u||
++       dq_bootread_result.dq_image_probe->private_ioc_reads!=3u||
++       dq_bootread_result.dq_image_probe->private_ioc_bytes!=1536u||
+        dq_bootread_result.dq_image_probe->irp_count!=13u+
+              dq_bootread_result.dq_image_probe->text_sectors_verified+
+              dq_bootread_result.dq_image_probe->aux_sectors_verified+
+              dq_bootread_result.dq_image_probe->range_irps+
+              dq_bootread_result.dq_image_probe->path_irps+
+              dq_bootread_result.dq_image_probe->chain_irps+
+-             dq_bootread_result.dq_image_probe->cursor_irps+2u||
++             dq_bootread_result.dq_image_probe->cursor_irps+
++             dq_bootread_result.dq_image_probe->private_ioc_reads+2u||
+        dq_bootread_result.dq_image_probe->text_va!=PORT_SYS_ELF_START||
+        dq_bootread_result.dq_image_probe->text_file_offset!=4096u||
+        dq_bootread_result.dq_image_probe->text_bytes_verified!=dq_bootread_result.dq_image_probe->text_elf_filesz||
+@@ -3286,6 +3289,7 @@
+     bootstrap_message("INIT: SYS.EXE native FIL$FINDFILID enumerated real SYSEXE.DIR image FIDs via ATA (ACP unbound).");
+     bootstrap_message("INIT: SYS.EXE FIL$RDCHKFILHDR collected source FH2 extent chain and verified 777 bytes via ATA (ACP unbound).");
+     bootstrap_message("INIT: SYS.EXE FIL$READVBN cursor compared 901 resident bytes through four physical ATA IRPs (ACP unbound).");
++    bootstrap_message("INIT: SYS.EXE source DQ_STARTIO private IOC queue completed three FIFO ATA IRPs with real resident text (DDT and ACP unbound).");
+ 
+     /* Original INIT.MAR FIX_DRV_NAME/FIN_DATABASE (1500-1559): after
+      * the actual Files-11 boot home read, populate source-compatible DQA
+diff --git a/tools/qemu_sysboot_m168.py b/tools/qemu_sysboot_m168.py
+--- /dev/null
++++ b/tools/qemu_sysboot_m168.py
+@@ -0,0 +1,164 @@
++#!/usr/bin/env python3
++"""One real native IA-32 QEMU boot; verify DPL0 software IPL4 dispatch.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M168: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE staged DQDRIVER 12 source FDT masks (disk DDT and ACP unbound).',
++        b'INIT: SYS.EXE linked NL$DDT DDTAB/FUNCTAB to NLA0 (other drivers absent).',
++        b'INIT: SYS.EXE DQ READPBLK fetched actual ATA Files-11 LBN1 (disk DDT/ACP not linked).',
++        b'INIT: SYS.EXE DQ READPBLK fetched real ATA LBN0 in second privileged IRP (no public QIO).',
++        b'INIT: SYS.EXE DQ READPBLK verified real ATA INDEXF.SYS FH2 in third privileged IRP (ACP unbound).',
++        b'INIT: SYS.EXE DQ READPBLK verified real ATA MFD FID 4,4,0 via INDEXF.SYS extent map (ACP unbound).',
++        b'INIT: SYS.EXE native FIL$FINDFILID traversed real MFD and SYSEXE.DIR to SYS.EXE FID 11 (ACP unbound).',
++        b'INIT: SYS.EXE FIL$READVBN verified real ATA SYS.EXE FH2 and native ELF32 via IRPs 8 and 9 (activation pending).',
++        b'INIT: SYS.EXE FIL$READVBN verified complete native executable PT_LOAD text against resident SYS.EXE (activation pending).',
++        b'INIT: SYS.EXE verified native SYSLOA386.EXE and INILOA.EXE text from real Files-11 ATA sectors (ACP unbound).',
++        b'INIT: SYS.EXE FIL$READVBN verified unaligned 1024-byte range through three real ATA IRPs (ACP unbound).',
++        b'INIT: SYS.EXE native FIL$FINDFILID reopened SYS.EXE through real MFD/SYSEXE/FH2 and verified 768 text bytes (ACP unbound).',
++        b'INIT: SYS.EXE native FIL$FINDFILID enumerated real SYSEXE.DIR image FIDs via ATA (ACP unbound).',
++        b'INIT: SYS.EXE FIL$RDCHKFILHDR collected source FH2 extent chain and verified 777 bytes via ATA (ACP unbound).',
++        b'INIT: SYS.EXE FIL$READVBN cursor compared 901 resident bytes through four physical ATA IRPs (ACP unbound).',
++        b'INIT: SYS.EXE source DQ_STARTIO private IOC queue completed three FIFO ATA IRPs with real resident text (DDT and ACP unbound).',
++        b'INIT: SYS.EXE FIN_DATABASE staged DQA0 names and resident SYS$DISK/SYS$SYSDEVICE (logical lookup pending).',
++        b'INIT: SYS.EXE LOG$TRANSLATE resolved original SYS$DISK and SYS$SYSDEVICE names (system bootstrap only).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE IOC device search resolved NLA0 with native null DDT (others unbound).',
++        b'INIT: SYS.EXE IOC$SEARCHDEV resolved SYS$DISK/SYS$SYSDEVICE to unbound DQA0 and NLA0 to linked DDT (no $ASSIGN).',
++        b'INIT: SYS.EXE staged source DQ DPTAB/DDTAB and 136-byte FUNCTAB (all disk actions unbound).',
++        b'INIT: SYS.EXE RELOCDRV IOC$INITDRV applied source DQ DPT_STORE to private DQA0 records (DDT/CRB unbound).',
++        b'INIT: resident IOC$RELOC_DDT source DDT/FDT relocation verified (private only; DQA0 unbound).',
++        b'INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 requested).',
++        b'INIT: SYS.EXE IOCIOPOST serviced two NLA IRPs through IA-32 CPL0 software INT 0x90 (no process AST).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: resident source DQ FDT staging validation failed.',
++        b'INIT: resident DQ physical boot READPBLK failed.',
++        b'INIT: resident DQ physical LBN0 READPBLK failed.',
++        b'INIT: resident SYS.EXE INDEXF.SYS physical FH2 read failed.',
++        b'INIT: resident SYS.EXE MFD FH2 indexed physical read failed.',
++        b'INIT: resident SYS.EXE Files-11 MFD/SYSEXE directory traversal failed.',
++        b'INIT: resident SYS.EXE physical ELF32 source probe failed.',
++        b'INIT: resident native auxiliary disk text verification failed.',
++        b'INIT: resident FIN_DATABASE source boot DDB/logical record staging failed.',
++        b'INIT: resident source LOGNAMSUB bootstrap translation failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: resident IOC logical to physical boot name lookup failed.',
++        b'INIT: resident DQ DDT source table staging failed.',
++        b'INIT: resident RELOCDRV original DQ INITDRV table failed.',
++        b'INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.',
++        b'INIT: resident private IOC$RELOC_DDT failed.',
++        b'INIT: resident IOCIOPOST source kernel end-action processing failed.',
++        b'INIT: resident IOCIOPOST native software interrupt failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m168-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,160,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M168: resident source DDT/FDT relocation in private SYS.EXE memory PASS')
++        return 0
++    print('QEMU M168: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
+diff --git a/src/vms_dq_ioc.h b/src/vms_dq_ioc.h
+--- /dev/null
++++ b/src/vms_dq_ioc.h
+@@ -0,0 +1,41 @@
++#ifndef VMS37_NATIVE_DQ_IOC_H
++#define VMS37_NATIVE_DQ_IOC_H
++#include <stdint.h>
++#include <stddef.h>
++/* DRIVER/SRC/DQDRIVER.MAR DQ_STARTIO/PREPROCESS/FDISPATCH/FUNCXT
++ * and SYS/SRC/IOCIOPOST.MAR I/O packet queue and completion ordering.
++ * Bounded, private supervisor physical READPBLK bridge. No public $QIO,
++ * DDT publishing, process AST, ACP, cancellation of a running IRP, or IRQ. */
++#define PORT_DQ_IOC_DEPTH 8u
++enum { PORT_DQ_IOC_OK=1u,PORT_DQ_IOC_BAD=2u,
++       PORT_DQ_IOC_FULL=4u,PORT_DQ_IOC_BUSY=6u,
++       PORT_DQ_IOC_NOTFOUND=8u,PORT_DQ_IOC_IO=10u,
++       PORT_DQ_IOC_CORRUPT=12u };
++enum { PORT_DQ_IOC_EMPTY=0u,PORT_DQ_IOC_PREPARED=1u,
++       PORT_DQ_IOC_QUEUED=2u,PORT_DQ_IOC_ACTIVE=3u,
++       PORT_DQ_IOC_FINISHED=4u,PORT_DQ_IOC_FAILED=5u };
++typedef uint32_t (*port_dq_ioc_sector_fn)(void *,uint32_t,uint8_t [512]);
++struct port_dq_ioc_packet {
++    uint32_t tag,lbn,order;
++    uint8_t *destination;
++    uint8_t state;
++    uint8_t reserved[3];
++    uint8_t sector[512];
++};
++struct port_dq_ioc_queue {
++    struct port_dq_ioc_packet packets[PORT_DQ_IOC_DEPTH];
++    port_dq_ioc_sector_fn read_sector;
++    void *context;
++    uint32_t order,submitted,completed,failed,reads,active;
++};
++uint32_t port_dq_ioc_init(struct port_dq_ioc_queue *,
++                           port_dq_ioc_sector_fn,void *);
++uint32_t port_dq_ioc_validate(const struct port_dq_ioc_queue *);
++uint32_t port_dq_ioc_prepare(struct port_dq_ioc_queue *,
++                           uint32_t,uint32_t,uint8_t *,size_t);
++uint32_t port_dq_ioc_enqueue(struct port_dq_ioc_queue *,uint32_t);
++uint32_t port_dq_ioc_start(struct port_dq_ioc_queue *,uint32_t *);
++uint32_t port_dq_ioc_transfer(struct port_dq_ioc_queue *);
++uint32_t port_dq_ioc_complete(struct port_dq_ioc_queue *,uint32_t *);
++uint32_t port_dq_ioc_cancel(struct port_dq_ioc_queue *,uint32_t);
++#endif
+diff --git a/src/vms_dq_ioc_init.c b/src/vms_dq_ioc_init.c
+--- /dev/null
++++ b/src/vms_dq_ioc_init.c
+@@ -0,0 +1,11 @@
++#include "vms_dq_ioc.h"
++/* M161: construct an empty IOC physical-device queue in supervisor RAM.
++ * Never publishes the private device or binds the source DDT. */
++uint32_t port_dq_ioc_init(struct port_dq_ioc_queue *q,
++                         port_dq_ioc_sector_fn fn,void *context){
++    if(!q||!fn)return PORT_DQ_IOC_BAD;
++    *q=(struct port_dq_ioc_queue){0};
++    q->read_sector=fn;q->context=context;
++    q->active=PORT_DQ_IOC_DEPTH;
++    return PORT_DQ_IOC_OK;
++}
+diff --git a/src/vms_dq_ioc_validate.c b/src/vms_dq_ioc_validate.c
+--- /dev/null
++++ b/src/vms_dq_ioc_validate.c
+@@ -0,0 +1,25 @@
++#include "vms_dq_ioc.h"
++/* M162: validate in-memory IOC ownership and single active IRP invariant. */
++uint32_t port_dq_ioc_validate(const struct port_dq_ioc_queue *q){
++    if(!q||!q->read_sector||q->active>PORT_DQ_IOC_DEPTH||
++       q->completed+q->failed>q->submitted)return PORT_DQ_IOC_BAD;
++    unsigned active=0u;
++    for(unsigned i=0;i<PORT_DQ_IOC_DEPTH;i++){
++        const struct port_dq_ioc_packet *p=&q->packets[i];
++        if(p->state>PORT_DQ_IOC_FAILED)return PORT_DQ_IOC_CORRUPT;
++        if(p->state==PORT_DQ_IOC_EMPTY)continue;
++        if(!p->tag||!p->destination||p->lbn>=0x10000000u||
++           !p->order)return PORT_DQ_IOC_CORRUPT;
++        active+=p->state==PORT_DQ_IOC_ACTIVE;
++        for(unsigned j=i+1;j<PORT_DQ_IOC_DEPTH;j++){
++            const struct port_dq_ioc_packet *other=&q->packets[j];
++            if(other->state!=PORT_DQ_IOC_EMPTY&&
++               (other->tag==p->tag||other->order==p->order))
++                return PORT_DQ_IOC_CORRUPT;
++        }
++    }
++    if(active>1u|| (q->active==PORT_DQ_IOC_DEPTH)!=(active==0u)||
++       (active&&q->packets[q->active].state!=PORT_DQ_IOC_ACTIVE))
++        return PORT_DQ_IOC_CORRUPT;
++    return PORT_DQ_IOC_OK;
++}
+diff --git a/src/vms_dq_ioc_prepare.c b/src/vms_dq_ioc_prepare.c
+--- /dev/null
++++ b/src/vms_dq_ioc_prepare.c
+@@ -0,0 +1,19 @@
++#include "vms_dq_ioc.h"
++/* M163: DQ PREPROCESS, physical media field and request ID preflight. */
++uint32_t port_dq_ioc_prepare(struct port_dq_ioc_queue *q,uint32_t tag,
++                            uint32_t lbn,uint8_t *dst,size_t capacity){
++    if(!q||!q->read_sector||!tag||!dst||capacity<512u||
++       lbn>=0x10000000u||q->order==UINT32_MAX)return PORT_DQ_IOC_BAD;
++    unsigned free_at=PORT_DQ_IOC_DEPTH;
++    for(unsigned i=0;i<PORT_DQ_IOC_DEPTH;i++){
++        if(q->packets[i].state==PORT_DQ_IOC_EMPTY){
++            if(free_at==PORT_DQ_IOC_DEPTH)free_at=i;
++        }else if(q->packets[i].tag==tag)return PORT_DQ_IOC_BUSY;
++    }
++    if(free_at==PORT_DQ_IOC_DEPTH)return PORT_DQ_IOC_FULL;
++    struct port_dq_ioc_packet *p=&q->packets[free_at];
++    *p=(struct port_dq_ioc_packet){0};
++    p->tag=tag;p->lbn=lbn;p->destination=dst;
++    p->order=++q->order;p->state=PORT_DQ_IOC_PREPARED;
++    return PORT_DQ_IOC_OK;
++}
+diff --git a/src/vms_dq_ioc_enqueue.c b/src/vms_dq_ioc_enqueue.c
+--- /dev/null
++++ b/src/vms_dq_ioc_enqueue.c
+@@ -0,0 +1,14 @@
++#include "vms_dq_ioc.h"
++/* M164: source EXE$INSIOQ/IOC post queue order, no AST or user IRP. */
++uint32_t port_dq_ioc_enqueue(struct port_dq_ioc_queue *q,uint32_t tag){
++    if(!q||!tag)return PORT_DQ_IOC_BAD;
++    for(unsigned i=0;i<PORT_DQ_IOC_DEPTH;i++){
++        struct port_dq_ioc_packet *p=&q->packets[i];
++        if(p->state!=PORT_DQ_IOC_EMPTY&&p->tag==tag){
++            if(p->state!=PORT_DQ_IOC_PREPARED)return PORT_DQ_IOC_BUSY;
++            p->state=PORT_DQ_IOC_QUEUED;q->submitted++;
++            return PORT_DQ_IOC_OK;
++        }
++    }
++    return PORT_DQ_IOC_NOTFOUND;
++}
+diff --git a/src/vms_dq_ioc_start.c b/src/vms_dq_ioc_start.c
+--- /dev/null
++++ b/src/vms_dq_ioc_start.c
+@@ -0,0 +1,17 @@
++#include "vms_dq_ioc.h"
++/* M165: dispatch oldest queued IRP to original DQ_STARTIO state. */
++uint32_t port_dq_ioc_start(struct port_dq_ioc_queue *q,uint32_t *tag){
++    if(!q||!tag||!q->read_sector)return PORT_DQ_IOC_BAD;
++    if(q->active!=PORT_DQ_IOC_DEPTH)return PORT_DQ_IOC_BUSY;
++    unsigned chosen=PORT_DQ_IOC_DEPTH;uint32_t order=UINT32_MAX;
++    for(unsigned i=0;i<PORT_DQ_IOC_DEPTH;i++){
++        const struct port_dq_ioc_packet *p=&q->packets[i];
++        if(p->state==PORT_DQ_IOC_QUEUED&&p->order<order){
++            chosen=i;order=p->order;
++        }
++    }
++    if(chosen==PORT_DQ_IOC_DEPTH)return PORT_DQ_IOC_NOTFOUND;
++    q->packets[chosen].state=PORT_DQ_IOC_ACTIVE;
++    q->active=chosen;*tag=q->packets[chosen].tag;
++    return PORT_DQ_IOC_OK;
++}
+diff --git a/src/vms_dq_ioc_transfer.c b/src/vms_dq_ioc_transfer.c
+--- /dev/null
++++ b/src/vms_dq_ioc_transfer.c
+@@ -0,0 +1,16 @@
++#include "vms_dq_ioc.h"
++/* M166: physical DQ read dispatch via real registered ATA callback.
++ * Scratch sector is never published on failed hardware transfer. */
++uint32_t port_dq_ioc_transfer(struct port_dq_ioc_queue *q){
++    if(!q||!q->read_sector)return PORT_DQ_IOC_BAD;
++    if(q->active>=PORT_DQ_IOC_DEPTH)return PORT_DQ_IOC_NOTFOUND;
++    struct port_dq_ioc_packet *p=&q->packets[q->active];
++    if(p->state!=PORT_DQ_IOC_ACTIVE)return PORT_DQ_IOC_CORRUPT;
++    uint8_t scratch[512];
++    const uint32_t st=q->read_sector(q->context,p->lbn,scratch);
++    q->reads++;
++    if(st!=1u){p->state=PORT_DQ_IOC_FAILED;return PORT_DQ_IOC_IO;}
++    for(unsigned i=0;i<512u;i++)p->sector[i]=scratch[i];
++    p->state=PORT_DQ_IOC_FINISHED;
++    return PORT_DQ_IOC_OK;
++}
+diff --git a/src/vms_dq_ioc_complete.c b/src/vms_dq_ioc_complete.c
+--- /dev/null
++++ b/src/vms_dq_ioc_complete.c
+@@ -0,0 +1,19 @@
++#include "vms_dq_ioc.h"
++/* M167: source DQ FUNCXT/REQCOM: deliver exactly one final status.
++ * The caller's destination is mutated only after successful physical IO. */
++uint32_t port_dq_ioc_complete(struct port_dq_ioc_queue *q,uint32_t *tag){
++    if(!q||!tag||q->active>=PORT_DQ_IOC_DEPTH)
++        return PORT_DQ_IOC_BAD;
++    struct port_dq_ioc_packet *p=&q->packets[q->active];
++    if(p->state!=PORT_DQ_IOC_FINISHED&&p->state!=PORT_DQ_IOC_FAILED)
++        return PORT_DQ_IOC_BUSY;
++    const uint32_t st=p->state==PORT_DQ_IOC_FINISHED?
++        PORT_DQ_IOC_OK:PORT_DQ_IOC_IO;
++    *tag=p->tag;
++    if(st==PORT_DQ_IOC_OK){
++        for(unsigned i=0;i<512u;i++)p->destination[i]=p->sector[i];
++        q->completed++;
++    }else q->failed++;
++    *p=(struct port_dq_ioc_packet){0};q->active=PORT_DQ_IOC_DEPTH;
++    return st;
++}
+diff --git a/src/vms_dq_ioc_cancel.c b/src/vms_dq_ioc_cancel.c
+--- /dev/null
++++ b/src/vms_dq_ioc_cancel.c
+@@ -0,0 +1,18 @@
++#include "vms_dq_ioc.h"
++/* M168: remove an unissued IRP; reject cancellation after DQ_STARTIO. */
++uint32_t port_dq_ioc_cancel(struct port_dq_ioc_queue *q,uint32_t tag){
++    if(!q||!tag)return PORT_DQ_IOC_BAD;
++    for(unsigned i=0;i<PORT_DQ_IOC_DEPTH;i++){
++        struct port_dq_ioc_packet *p=&q->packets[i];
++        if(p->state!=PORT_DQ_IOC_EMPTY&&p->tag==tag){
++            if(p->state!=PORT_DQ_IOC_PREPARED&&
++               p->state!=PORT_DQ_IOC_QUEUED)return PORT_DQ_IOC_BUSY;
++            if(p->state==PORT_DQ_IOC_QUEUED){
++                if(!q->submitted)return PORT_DQ_IOC_CORRUPT;
++                q->submitted--; /* cancelled before device ownership */
++            }
++            *p=(struct port_dq_ioc_packet){0};return PORT_DQ_IOC_OK;
++        }
++    }
++    return PORT_DQ_IOC_NOTFOUND;
++}
+diff --git a/tests/dq_ioc_test_common.h b/tests/dq_ioc_test_common.h
+--- /dev/null
++++ b/tests/dq_ioc_test_common.h
+@@ -0,0 +1,34 @@
++#ifndef VMS37_DQ_IOC_TEST_COMMON_H
++#define VMS37_DQ_IOC_TEST_COMMON_H
++#include "vms_dq_ioc.h"
++#include <stdint.h>
++#include <stddef.h>
++#include <assert.h>
++#include <string.h>
++struct dq_ioc_fixture { uint32_t count,fail_at,base; };
++static uint32_t dq_ioc_test_read(void *c,uint32_t lbn,uint8_t out[512]){
++ struct dq_ioc_fixture *f=c;
++ ++f->count;
++ if(f->fail_at&&f->count>=f->fail_at)return 0u;
++ for(unsigned i=0;i<512;i++)out[i]=(uint8_t)(lbn+i+f->base);
++ return PORT_DQ_IOC_OK;
++}
++static inline void dq_ioc_test_setup(struct port_dq_ioc_queue *q,
++                             struct dq_ioc_fixture *f){
++ *f=(struct dq_ioc_fixture){0};
++ assert(port_dq_ioc_init(q,dq_ioc_test_read,f)==PORT_DQ_IOC_OK);
++}
++static inline void dq_ioc_test_add(struct port_dq_ioc_queue *q,
++                           unsigned tag,unsigned lbn,uint8_t out[512]){
++ assert(port_dq_ioc_prepare(q,tag,lbn,out,512u)==PORT_DQ_IOC_OK);
++ assert(port_dq_ioc_enqueue(q,tag)==PORT_DQ_IOC_OK);
++}
++static inline void dq_ioc_test_run(struct port_dq_ioc_queue *q,uint32_t expected){
++ uint32_t tag=0;
++ assert(port_dq_ioc_start(q,&tag)==PORT_DQ_IOC_OK);
++ assert(tag==expected);
++ assert(port_dq_ioc_transfer(q)==PORT_DQ_IOC_OK);
++ assert(port_dq_ioc_complete(q,&tag)==PORT_DQ_IOC_OK);
++ assert(tag==expected);
++}
++#endif
+diff --git a/tests/test_ioc_main.c b/tests/test_ioc_main.c
+--- /dev/null
++++ b/tests/test_ioc_main.c
+@@ -0,0 +1,69 @@
++#include <stdio.h>
++#include <assert.h>
++int test_ioc_init_0(void);
++int test_ioc_init_1(void);
++int test_ioc_init_2(void);
++int test_ioc_init_3(void);
++int test_ioc_validate_0(void);
++int test_ioc_validate_1(void);
++int test_ioc_validate_2(void);
++int test_ioc_validate_3(void);
++int test_ioc_prepare_0(void);
++int test_ioc_prepare_1(void);
++int test_ioc_prepare_2(void);
++int test_ioc_prepare_3(void);
++int test_ioc_enqueue_0(void);
++int test_ioc_enqueue_1(void);
++int test_ioc_enqueue_2(void);
++int test_ioc_enqueue_3(void);
++int test_ioc_start_0(void);
++int test_ioc_start_1(void);
++int test_ioc_start_2(void);
++int test_ioc_start_3(void);
++int test_ioc_transfer_0(void);
++int test_ioc_transfer_1(void);
++int test_ioc_transfer_2(void);
++int test_ioc_transfer_3(void);
++int test_ioc_complete_0(void);
++int test_ioc_complete_1(void);
++int test_ioc_complete_2(void);
++int test_ioc_complete_3(void);
++int test_ioc_cancel_0(void);
++int test_ioc_cancel_1(void);
++int test_ioc_cancel_2(void);
++int test_ioc_cancel_3(void);
++int main(void){
++ assert(test_ioc_init_0());
++ assert(test_ioc_init_1());
++ assert(test_ioc_init_2());
++ assert(test_ioc_init_3());
++ assert(test_ioc_validate_0());
++ assert(test_ioc_validate_1());
++ assert(test_ioc_validate_2());
++ assert(test_ioc_validate_3());
++ assert(test_ioc_prepare_0());
++ assert(test_ioc_prepare_1());
++ assert(test_ioc_prepare_2());
++ assert(test_ioc_prepare_3());
++ assert(test_ioc_enqueue_0());
++ assert(test_ioc_enqueue_1());
++ assert(test_ioc_enqueue_2());
++ assert(test_ioc_enqueue_3());
++ assert(test_ioc_start_0());
++ assert(test_ioc_start_1());
++ assert(test_ioc_start_2());
++ assert(test_ioc_start_3());
++ assert(test_ioc_transfer_0());
++ assert(test_ioc_transfer_1());
++ assert(test_ioc_transfer_2());
++ assert(test_ioc_transfer_3());
++ assert(test_ioc_complete_0());
++ assert(test_ioc_complete_1());
++ assert(test_ioc_complete_2());
++ assert(test_ioc_complete_3());
++ assert(test_ioc_cancel_0());
++ assert(test_ioc_cancel_1());
++ assert(test_ioc_cancel_2());
++ assert(test_ioc_cancel_3());
++ puts("DQ source-private IOC queued ATA IRP: 32 distinct regressions PASS");return 0;
++}
+diff --git a/tests/test_ioc_init_0.c b/tests/test_ioc_init_0.c
+--- /dev/null
++++ b/tests/test_ioc_init_0.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M161: init scenario 0, original source private IOC behavior. */
++int test_ioc_init_0(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ assert(port_dq_ioc_init(0,dq_ioc_test_read,0)==PORT_DQ_IOC_BAD);
++ return 1;
++}
+diff --git a/tests/test_ioc_init_1.c b/tests/test_ioc_init_1.c
+--- /dev/null
++++ b/tests/test_ioc_init_1.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M161: init scenario 1, original source private IOC behavior. */
++int test_ioc_init_1(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ assert(port_dq_ioc_init(&q,0,&f)==PORT_DQ_IOC_BAD);
++ return 1;
++}
+diff --git a/tests/test_ioc_init_2.c b/tests/test_ioc_init_2.c
+--- /dev/null
++++ b/tests/test_ioc_init_2.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M161: init scenario 2, original source private IOC behavior. */
++int test_ioc_init_2(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ assert(q.active==PORT_DQ_IOC_DEPTH&&port_dq_ioc_validate(&q)==PORT_DQ_IOC_OK);
++ return 1;
++}
+diff --git a/tests/test_ioc_init_3.c b/tests/test_ioc_init_3.c
+--- /dev/null
++++ b/tests/test_ioc_init_3.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M161: init scenario 3, original source private IOC behavior. */
++int test_ioc_init_3(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,1u,3u,b);assert(port_dq_ioc_init(&q,dq_ioc_test_read,&f)==PORT_DQ_IOC_OK);assert(q.submitted==0u&&q.active==PORT_DQ_IOC_DEPTH);
++ return 1;
++}
+diff --git a/tests/test_ioc_validate_0.c b/tests/test_ioc_validate_0.c
+--- /dev/null
++++ b/tests/test_ioc_validate_0.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M162: validate scenario 0, original source private IOC behavior. */
++int test_ioc_validate_0(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ assert(port_dq_ioc_validate(0)==PORT_DQ_IOC_BAD);
++ return 1;
++}
+diff --git a/tests/test_ioc_validate_1.c b/tests/test_ioc_validate_1.c
+--- /dev/null
++++ b/tests/test_ioc_validate_1.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M162: validate scenario 1, original source private IOC behavior. */
++int test_ioc_validate_1(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ q.active=9u;assert(port_dq_ioc_validate(&q)==PORT_DQ_IOC_BAD);
++ return 1;
++}
+diff --git a/tests/test_ioc_validate_2.c b/tests/test_ioc_validate_2.c
+--- /dev/null
++++ b/tests/test_ioc_validate_2.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M162: validate scenario 2, original source private IOC behavior. */
++int test_ioc_validate_2(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ q.active=0u;assert(port_dq_ioc_validate(&q)==PORT_DQ_IOC_CORRUPT);
++ return 1;
++}
+diff --git a/tests/test_ioc_validate_3.c b/tests/test_ioc_validate_3.c
+--- /dev/null
++++ b/tests/test_ioc_validate_3.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M162: validate scenario 3, original source private IOC behavior. */
++int test_ioc_validate_3(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,1u,4u,b);q.packets[0].lbn=0x10000000u;assert(port_dq_ioc_validate(&q)==PORT_DQ_IOC_CORRUPT);
++ return 1;
++}
+diff --git a/tests/test_ioc_prepare_0.c b/tests/test_ioc_prepare_0.c
+--- /dev/null
++++ b/tests/test_ioc_prepare_0.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M163: prepare scenario 0, original source private IOC behavior. */
++int test_ioc_prepare_0(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};assert(port_dq_ioc_prepare(&q,0u,1u,b,512u)==PORT_DQ_IOC_BAD);
++ return 1;
++}
+diff --git a/tests/test_ioc_prepare_1.c b/tests/test_ioc_prepare_1.c
+--- /dev/null
++++ b/tests/test_ioc_prepare_1.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M163: prepare scenario 1, original source private IOC behavior. */
++int test_ioc_prepare_1(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};assert(port_dq_ioc_prepare(&q,1u,0x10000000u,b,512u)==PORT_DQ_IOC_BAD);
++ return 1;
++}
+diff --git a/tests/test_ioc_prepare_2.c b/tests/test_ioc_prepare_2.c
+--- /dev/null
++++ b/tests/test_ioc_prepare_2.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M163: prepare scenario 2, original source private IOC behavior. */
++int test_ioc_prepare_2(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};assert(port_dq_ioc_prepare(&q,1u,5u,b,511u)==PORT_DQ_IOC_BAD);assert(q.order==0u);
++ return 1;
++}
+diff --git a/tests/test_ioc_prepare_3.c b/tests/test_ioc_prepare_3.c
+--- /dev/null
++++ b/tests/test_ioc_prepare_3.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M163: prepare scenario 3, original source private IOC behavior. */
++int test_ioc_prepare_3(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[9][512]={{0}};for(unsigned i=0;i<8;i++)assert(port_dq_ioc_prepare(&q,i+1u,i,b[i],512u)==PORT_DQ_IOC_OK);assert(port_dq_ioc_prepare(&q,9u,8u,b[8],512u)==PORT_DQ_IOC_FULL);assert(port_dq_ioc_prepare(&q,1u,2u,b[8],512u)==PORT_DQ_IOC_BUSY);
++ return 1;
++}
+diff --git a/tests/test_ioc_enqueue_0.c b/tests/test_ioc_enqueue_0.c
+--- /dev/null
++++ b/tests/test_ioc_enqueue_0.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M164: enqueue scenario 0, original source private IOC behavior. */
++int test_ioc_enqueue_0(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ assert(port_dq_ioc_enqueue(&q,1u)==PORT_DQ_IOC_NOTFOUND);
++ return 1;
++}
+diff --git a/tests/test_ioc_enqueue_1.c b/tests/test_ioc_enqueue_1.c
+--- /dev/null
++++ b/tests/test_ioc_enqueue_1.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M164: enqueue scenario 1, original source private IOC behavior. */
++int test_ioc_enqueue_1(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};assert(port_dq_ioc_prepare(&q,1u,2u,b,512u)==PORT_DQ_IOC_OK);assert(port_dq_ioc_enqueue(&q,1u)==PORT_DQ_IOC_OK);assert(q.submitted==1u);
++ return 1;
++}
+diff --git a/tests/test_ioc_enqueue_2.c b/tests/test_ioc_enqueue_2.c
+--- /dev/null
++++ b/tests/test_ioc_enqueue_2.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M164: enqueue scenario 2, original source private IOC behavior. */
++int test_ioc_enqueue_2(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,1u,2u,b);assert(port_dq_ioc_enqueue(&q,1u)==PORT_DQ_IOC_BUSY);
++ return 1;
++}
+diff --git a/tests/test_ioc_enqueue_3.c b/tests/test_ioc_enqueue_3.c
+--- /dev/null
++++ b/tests/test_ioc_enqueue_3.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M164: enqueue scenario 3, original source private IOC behavior. */
++int test_ioc_enqueue_3(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,3u,0u,b);assert(port_dq_ioc_validate(&q)==PORT_DQ_IOC_OK);
++ return 1;
++}
+diff --git a/tests/test_ioc_start_0.c b/tests/test_ioc_start_0.c
+--- /dev/null
++++ b/tests/test_ioc_start_0.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M165: start scenario 0, original source private IOC behavior. */
++int test_ioc_start_0(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint32_t tag=123u;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_NOTFOUND&&tag==123u);
++ return 1;
++}
+diff --git a/tests/test_ioc_start_1.c b/tests/test_ioc_start_1.c
+--- /dev/null
++++ b/tests/test_ioc_start_1.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M165: start scenario 1, original source private IOC behavior. */
++int test_ioc_start_1(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t a[512]={0},b[512]={0};dq_ioc_test_add(&q,12u,1u,a);dq_ioc_test_add(&q,13u,2u,b);uint32_t tag=0u;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK&&tag==12u);
++ return 1;
++}
+diff --git a/tests/test_ioc_start_2.c b/tests/test_ioc_start_2.c
+--- /dev/null
++++ b/tests/test_ioc_start_2.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M165: start scenario 2, original source private IOC behavior. */
++int test_ioc_start_2(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t a[512]={0};dq_ioc_test_add(&q,20u,3u,a);uint32_t tag=0u;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK);assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_BUSY);
++ return 1;
++}
+diff --git a/tests/test_ioc_start_3.c b/tests/test_ioc_start_3.c
+--- /dev/null
++++ b/tests/test_ioc_start_3.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M165: start scenario 3, original source private IOC behavior. */
++int test_ioc_start_3(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t a[512]={0},b[512]={0};dq_ioc_test_add(&q,7u,4u,a);dq_ioc_test_add(&q,8u,5u,b);dq_ioc_test_run(&q,7u);uint32_t tag=0u;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK&&tag==8u);
++ return 1;
++}
+diff --git a/tests/test_ioc_transfer_0.c b/tests/test_ioc_transfer_0.c
+--- /dev/null
++++ b/tests/test_ioc_transfer_0.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M166: transfer scenario 0, original source private IOC behavior. */
++int test_ioc_transfer_0(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ assert(port_dq_ioc_transfer(&q)==PORT_DQ_IOC_NOTFOUND);
++ return 1;
++}
+diff --git a/tests/test_ioc_transfer_1.c b/tests/test_ioc_transfer_1.c
+--- /dev/null
++++ b/tests/test_ioc_transfer_1.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M166: transfer scenario 1, original source private IOC behavior. */
++int test_ioc_transfer_1(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,1u,7u,b);uint32_t tag=0;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK);assert(port_dq_ioc_transfer(&q)==PORT_DQ_IOC_OK&&f.count==1u);
++ return 1;
++}
+diff --git a/tests/test_ioc_transfer_2.c b/tests/test_ioc_transfer_2.c
+--- /dev/null
++++ b/tests/test_ioc_transfer_2.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M166: transfer scenario 2, original source private IOC behavior. */
++int test_ioc_transfer_2(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512];memset(b,0x7d,512);dq_ioc_test_add(&q,1u,8u,b);uint32_t tag=0;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK);f.fail_at=1u;assert(port_dq_ioc_transfer(&q)==PORT_DQ_IOC_IO&&b[0]==0x7d);
++ return 1;
++}
+diff --git a/tests/test_ioc_transfer_3.c b/tests/test_ioc_transfer_3.c
+--- /dev/null
++++ b/tests/test_ioc_transfer_3.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M166: transfer scenario 3, original source private IOC behavior. */
++int test_ioc_transfer_3(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,1u,0x0fffffffu,b);uint32_t tag=0;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK);assert(port_dq_ioc_transfer(&q)==PORT_DQ_IOC_OK);
++ return 1;
++}
+diff --git a/tests/test_ioc_complete_0.c b/tests/test_ioc_complete_0.c
+--- /dev/null
++++ b/tests/test_ioc_complete_0.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M167: complete scenario 0, original source private IOC behavior. */
++int test_ioc_complete_0(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint32_t tag=0;assert(port_dq_ioc_complete(&q,&tag)==PORT_DQ_IOC_BAD);
++ return 1;
++}
+diff --git a/tests/test_ioc_complete_1.c b/tests/test_ioc_complete_1.c
+--- /dev/null
++++ b/tests/test_ioc_complete_1.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M167: complete scenario 1, original source private IOC behavior. */
++int test_ioc_complete_1(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,3u,5u,b);uint32_t tag=0;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK);assert(port_dq_ioc_complete(&q,&tag)==PORT_DQ_IOC_BUSY);
++ return 1;
++}
+diff --git a/tests/test_ioc_complete_2.c b/tests/test_ioc_complete_2.c
+--- /dev/null
++++ b/tests/test_ioc_complete_2.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M167: complete scenario 2, original source private IOC behavior. */
++int test_ioc_complete_2(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512]={0};dq_ioc_test_add(&q,4u,5u,b);dq_ioc_test_run(&q,4u);assert(b[0]==5u&&b[511]==(uint8_t)(5u+511u)&&q.completed==1u);
++ return 1;
++}
+diff --git a/tests/test_ioc_complete_3.c b/tests/test_ioc_complete_3.c
+--- /dev/null
++++ b/tests/test_ioc_complete_3.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M167: complete scenario 3, original source private IOC behavior. */
++int test_ioc_complete_3(void){
++ struct port_dq_ioc_queue q;struct dq_ioc_fixture f;
++ dq_ioc_test_setup(&q,&f);
++ uint8_t b[512];memset(b,0x55,512);dq_ioc_test_add(&q,6u,3u,b);uint32_t tag=0;assert(port_dq_ioc_start(&q,&tag)==PORT_DQ_IOC_OK);f.fail_at=1u;assert(port_dq_ioc_transfer(&q)==PORT_DQ_IOC_IO);assert(port_dq_ioc_complete(&q,&tag)==PORT_DQ_IOC_IO&&tag==6u&&q.failed==1u&&b[0]==0x55);
++ return 1;
++}
+diff --git a/tests/test_ioc_cancel_0.c b/tests/test_ioc_cancel_0.c
+--- /dev/null
++++ b/tests/test_ioc_cancel_0.c
+@@ -0,0 +1,8 @@
++#include "dq_ioc_test_common.h"
++/* M168: cancel scenario 0, original source private IOC behavior. */
++int test_ioc_cancel_0(void){
