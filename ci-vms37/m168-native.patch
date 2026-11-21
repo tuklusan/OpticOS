@@ -1,3 +1,17 @@
+diff --git a/tools/gen_source_coverage.py b/tools/gen_source_coverage.py
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2331,7 +2331,9 @@
+  (655,671,'src/vms_dq_bootread_commit.c','port_dq_bootread_commit','UCB retry count, BCNT, FEX and media field update, partial DQ PREPROCESS'),
+  (672,677,None,None,'Unimplemented RB730 branch/diagnostic bits and controller hardware'),
+  (678,709,'src/vms_dq_bootread_preflight.c','port_dq_bootread_preflight','Source FDISPATCH: PHYSIO bypass of volume-valid, guarded read-only boot transfer'),
+- (710,916,None,None,'Original pack acknowledgement, RB730 asynchronous transfer, ECC and retries remain unresolved'),
++ (710,751,None,None,'Original RB730 pack acknowledgement, no-op commands and explicit seek hardware unresolved'),
++ (752,771,'src/vms_dq_ioc_transfer.c','port_dq_ioc_transfer','Source DQ_READPBLK transfer state mapped to read-only IA-32 ATA PIO callback and single outstanding private request; original seek/IRQ/ERR remain unresolved'),
++ (772,916,None,None,'Original RB730 async transfer, ECC retry and fatal hardware paths remain unresolved'),
+  (917,939,'src/vms_dq_bootread_commit.c','port_dq_bootread_commit','Original FUNCXT status1/bytecount and BCR; IOC queue and hardware channel release absent'),
+  (940,2189,None,None,'RB730 CSR/interrupts, retry, init, controller/port resource and remaining disk source unresolved')]
+ dq_fdt_sections=[]
 diff --git a/Makefile b/Makefile
 --- a/Makefile
 +++ b/Makefile
