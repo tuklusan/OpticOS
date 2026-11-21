@@ -1,0 +1,1107 @@
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -953,8 +953,18 @@
+ f11ioccheck: $(M184_F11_IOC_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc -Itests $(M184_F11_IOC_SRCS) src/vms_f11_chain_lbn.c $(M168_IOC_SRCS) tests/test_f11_ioc_*_[0123].c tests/test_f11_ioc_main.c -o build/f11ioccheck
+ 	./build/f11ioccheck
+-build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) $(M134_DDTRELOC_OBJS) $(M137_INDEX_OBJS) $(M138_MFD_OBJS) $(M139_DIR_OBJS) $(M140_IMAGE_OBJS) $(M144_AUX_OBJS) $(M146_RANGE_OBJS) $(M149_BOOTPATH_OBJS) $(M149_BOOTDIR_OBJS) $(M152_CHAIN_OBJS) $(M160_CURSOR_OBJS) $(M168_IOC_OBJS) $(M184_F11_IOC_OBJS) build/vms_boot_files11.o build/vms_bootio.o build/executive-partial.o sys_native.ld
+-	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) $(M134_DDTRELOC_OBJS) $(M137_INDEX_OBJS) $(M138_MFD_OBJS) $(M139_DIR_OBJS) $(M140_IMAGE_OBJS) $(M144_AUX_OBJS) $(M146_RANGE_OBJS) $(M149_BOOTPATH_OBJS) $(M149_BOOTDIR_OBJS) $(M152_CHAIN_OBJS) $(M160_CURSOR_OBJS) $(M168_IOC_OBJS) $(M184_F11_IOC_OBJS) build/vms_boot_files11.o build/vms_bootio.o build/executive-partial.o
++# M185-M192: bounded owner-scoped private Files-11 channel over IOC.
++# Actual source FIL$READVBN bytes, no real process $ASSIGN or ACP yet.
++M192_CHAN_SRCS=$(wildcard src/vms_f11_channel_*.c)
++M192_CHAN_OBJS=$(patsubst src/%.c,build/%.o,$(M192_CHAN_SRCS))
++$(M192_CHAN_OBJS): build/%.o: src/%.c src/vms_f11_channel.h src/vms_f11_channel_priv.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: f11channelcheck
++f11channelcheck: $(M192_CHAN_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc -Itests $(M192_CHAN_SRCS) $(M184_F11_IOC_SRCS) src/vms_f11_chain_lbn.c $(M168_IOC_SRCS) tests/test_f11_channel_*_[0123].c tests/test_f11_channel_main.c -o build/f11channelcheck
++	./build/f11channelcheck
++build/sys.exe: build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) $(M134_DDTRELOC_OBJS) $(M137_INDEX_OBJS) $(M138_MFD_OBJS) $(M139_DIR_OBJS) $(M140_IMAGE_OBJS) $(M144_AUX_OBJS) $(M146_RANGE_OBJS) $(M149_BOOTPATH_OBJS) $(M149_BOOTDIR_OBJS) $(M152_CHAIN_OBJS) $(M160_CURSOR_OBJS) $(M168_IOC_OBJS) $(M184_F11_IOC_OBJS) $(M192_CHAN_OBJS) build/vms_boot_files11.o build/vms_bootio.o build/executive-partial.o sys_native.ld
++	$(LD) -m elf_i386 -T sys_native.ld -o $@ build/vms_sys_executive_entry.o build/vms_ini_syswcb.o build/vms_ini_pflvec.o build/vms_ini_mpw.o build/vms_ini_phv_swap.o build/vms_ini_procvec.o build/vms_ini_lockdb.o build/vms_sysboot_pktmem.o build/vms_ini_packet_queues.o build/vms_ini_log_templates.o build/vms_ini_syslog.o build/vms_ini_bootdev_scan.o build/vms_ini_dpt_templates.o build/vms_ini_dpt_mb.o build/vms_ini_dpt_nl.o build/vms_ini_dpt_op.o $(M118_DB_OBJS) $(M119_CON_OBJS) $(M120_IOC_OBJS) $(M121_QIO_OBJS) $(M122_NL_DDT_OBJS) $(M123_IOPOST_OBJS) $(M125_DQ_OBJS) $(M126_DQ_READ_OBJS) $(M127_FIN_OBJS) $(M128_LOG_OBJS) $(M129_DEVLOG_OBJS) $(M130_DQDDT_OBJS) $(M131_RELOC_OBJS) $(M134_DDTRELOC_OBJS) $(M137_INDEX_OBJS) $(M138_MFD_OBJS) $(M139_DIR_OBJS) $(M140_IMAGE_OBJS) $(M144_AUX_OBJS) $(M146_RANGE_OBJS) $(M149_BOOTPATH_OBJS) $(M149_BOOTDIR_OBJS) $(M152_CHAIN_OBJS) $(M160_CURSOR_OBJS) $(M168_IOC_OBJS) $(M184_F11_IOC_OBJS) $(M192_CHAN_OBJS) build/vms_boot_files11.o build/vms_bootio.o build/executive-partial.o
+ build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
+@@ -978,7 +988,7 @@
+ 	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
+ .PHONY: sysexecentrycheck
+ sysexecentrycheck: | build
+-	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) $(M129_DEVLOG_SRCS) $(M130_DQDDT_SRCS) $(M131_RELOC_SRCS) $(M134_DDTRELOC_SRCS) $(M137_INDEX_SRCS) $(M138_MFD_SRCS) $(M139_DIR_SRCS) $(M140_IMAGE_SRCS) $(M144_AUX_SRCS) $(M146_RANGE_SRCS) $(M149_BOOTPATH_SRCS) $(M149_BOOTDIR_SRCS) $(M152_CHAIN_SRCS) $(M160_CURSOR_SRCS) $(M168_IOC_SRCS) $(M184_F11_IOC_SRCS) src/vms_boot_files11.c src/vms_bootio.c src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
++	$(CC) -std=c11 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Werror -Isrc src/vms_sysloavec.c $(M118_DB_SRCS) $(M119_CON_SRCS) $(M120_IOC_SRCS) $(M121_QIO_SRCS) $(M122_NL_DDT_SRCS) $(M123_IOPOST_SRCS) $(M125_DQ_SRCS) $(M126_DQ_READ_SRCS) $(M127_FIN_SRCS) $(M128_LOG_SRCS) $(M129_DEVLOG_SRCS) $(M130_DQDDT_SRCS) $(M131_RELOC_SRCS) $(M134_DDTRELOC_SRCS) $(M137_INDEX_SRCS) $(M138_MFD_SRCS) $(M139_DIR_SRCS) $(M140_IMAGE_SRCS) $(M144_AUX_SRCS) $(M146_RANGE_SRCS) $(M149_BOOTPATH_SRCS) $(M149_BOOTDIR_SRCS) $(M152_CHAIN_SRCS) $(M160_CURSOR_SRCS) $(M168_IOC_SRCS) $(M184_F11_IOC_SRCS) $(M192_CHAN_SRCS) src/vms_boot_files11.c src/vms_bootio.c src/vms_sys_executive_entry.c src/vms_ini_log_templates.c src/vms_ini_syslog.c src/vms_ini_bootdev_scan.c src/vms_ini_dpt_templates.c src/vms_ini_dpt_mb.c src/vms_ini_dpt_nl.c src/vms_ini_dpt_op.c src/vms_sys85.c src/vms_rtl85.c src/vms_rtl85_tables.c src/vms_ini_syswcb.c src/vms_ini_pflvec.c src/vms_ini_mpw.c src/vms_ini_phv_swap.c src/vms_ini_procvec.c src/vms_ini_lockdb.c src/vms_sysboot_pktmem.c src/vms_ini_packet_queues.c src/vms_exe_sched.c src/vms_exe_scbvector.c src/vms_exe_gettim.c src/vms_userptr.c tests/test_sys_exec_entry_host.c -o build/sysexecentrycheck
+ 	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
+ .PHONY: inicpbuscheck
+ inicpbuscheck: | build
+diff --git a/src/kernel.c b/src/kernel.c
+--- a/src/kernel.c
++++ b/src/kernel.c
+@@ -3262,6 +3262,8 @@
+        dq_bootread_result.dq_image_probe->private_ioc_bytes!=1536u||
+        dq_bootread_result.dq_image_probe->f11_ioc_reads!=2u||
+        dq_bootread_result.dq_image_probe->f11_ioc_bytes!=700u||
++       dq_bootread_result.dq_image_probe->f11_channel_reads!=2u||
++       dq_bootread_result.dq_image_probe->f11_channel_bytes!=600u||
+        dq_bootread_result.dq_image_probe->irp_count!=13u+
+              dq_bootread_result.dq_image_probe->text_sectors_verified+
+              dq_bootread_result.dq_image_probe->aux_sectors_verified+
+@@ -3270,7 +3272,8 @@
+              dq_bootread_result.dq_image_probe->chain_irps+
+              dq_bootread_result.dq_image_probe->cursor_irps+
+              dq_bootread_result.dq_image_probe->private_ioc_reads+
+-             dq_bootread_result.dq_image_probe->f11_ioc_reads+2u||
++             dq_bootread_result.dq_image_probe->f11_ioc_reads+
++             dq_bootread_result.dq_image_probe->f11_channel_reads+2u||
+        dq_bootread_result.dq_image_probe->text_va!=PORT_SYS_ELF_START||
+        dq_bootread_result.dq_image_probe->text_file_offset!=4096u||
+        dq_bootread_result.dq_image_probe->text_bytes_verified!=dq_bootread_result.dq_image_probe->text_elf_filesz||
+@@ -3295,6 +3298,7 @@
+     bootstrap_message("INIT: SYS.EXE source DQ_STARTIO private IOC queue completed three FIFO ATA IRPs with real resident text (DDT and ACP unbound).");
+     bootstrap_message("INIT: SYS.EXE RETRYERR/IOCIOPOST posted three source FIFO ATA IOSBs after live resident reads (no DQA0 DDT or IRQ).");
+     bootstrap_message("INIT: SYS.EXE FIL$READVBN used IOC private FIFO for two real ATA reads and matched 700 bytes (ACP/IRQ unbound).");
++    bootstrap_message("INIT: SYS.EXE private owner-scoped channel assigned, read 600 live ATA bytes and deassigned (ACP/$QIO unbound).");
+ 
+     /* Original INIT.MAR FIX_DRV_NAME/FIN_DATABASE (1500-1559): after
+      * the actual Files-11 boot home read, populate source-compatible DQA
+diff --git a/src/vms_dq_imageprobe.h b/src/vms_dq_imageprobe.h
+--- a/src/vms_dq_imageprobe.h
++++ b/src/vms_dq_imageprobe.h
+@@ -19,6 +19,7 @@
+     uint32_t cursor_bytes_verified,cursor_irps;
+     uint32_t private_ioc_reads,private_ioc_bytes;
+     uint32_t f11_ioc_reads,f11_ioc_bytes;
++    uint32_t f11_channel_reads,f11_channel_bytes;
+ };
+ uint32_t port_dq_image_header_lbn(const uint8_t home[512],
+     const uint8_t index[512],const struct port_dq_dir_fid *,uint32_t *lbn);
+diff --git a/src/vms_sys_executive_entry.c b/src/vms_sys_executive_entry.c
+--- a/src/vms_sys_executive_entry.c
++++ b/src/vms_sys_executive_entry.c
+@@ -26,6 +26,7 @@
+ #include "vms_f11_cursor.h"
+ #include "vms_dq_ioc.h"
+ #include "vms_f11_ioc.h"
++#include "vms_f11_channel.h"
+ #include "vms_qio_post.h"
+ #include "vms_nl_ddt.h"
+ #include "vms_iopost_end.h"
+@@ -138,6 +139,9 @@
+  * buffer is resident, not allocated on the small bootstrap stack. */
+ static struct port_dq_ioc_queue executive_f11_ioc_queue;
+ static struct port_f11_ioc_file executive_f11_ioc_file;
++/* M185-M192 read-only owner-scoped private handle table; DQA0 remains unbound. */
++static struct port_dq_ioc_queue executive_f11_channel_ioc_queue;
++static struct port_f11_chan_table executive_f11_channel_table;
+ static uint8_t executive_ioc_private_sectors[3][512] __attribute__((aligned(4)));
+ 
+ static uint32_t executive_dq_image_ready;
+@@ -1223,6 +1227,37 @@
+            port_f11_ioc_validate(bridge_file)!=PORT_F11_IOC_OK)
+             return PORT_SYS_EXEC_BAD_PARAMETERS;
+         completed+=bridge_ctx.reads;
++        /* M185-M192: persistent owner-scoped channel (not public $ASSIGN).
++         * Read genuine SYS.EXE text through a second private IOC context;
++         * preserve original FH2/VBN map and source DQ ATA completion. */
++        struct executive_f11_context channel_ctx={dq,completed,0u,
++            executive_devicedb_result.ucb[0]};
++        uint32_t channel_handle=0u,channel_equal=0u;
++        struct port_f11_chan_status channel_state={0};
++        if(port_dq_ioc_init(&executive_f11_channel_ioc_queue,
++             executive_f11_native_sector,&channel_ctx)!=PORT_DQ_IOC_OK||
++           port_f11_chan_init(&executive_f11_channel_table,
++             &executive_f11_chain,&executive_f11_channel_ioc_queue,
++             executive_f11_chain.blocks*512u)!=PORT_F11_CHAN_OK||
++           port_f11_chan_assign(&executive_f11_channel_table,1u,
++             &channel_handle)!=PORT_F11_CHAN_OK||
++           port_f11_chan_seek(&executive_f11_channel_table,1u,
++             channel_handle,text_offset+2900u)!=PORT_F11_CHAN_OK||
++           port_f11_chan_compare(&executive_f11_channel_table,1u,
++             channel_handle,(const uint8_t *)(uintptr_t)(text_va+2900u),
++             600u,&channel_equal)!=PORT_F11_CHAN_OK||
++           channel_equal!=600u||channel_ctx.reads!=2u||
++           port_f11_chan_status(&executive_f11_channel_table,1u,
++             channel_handle,&channel_state)!=PORT_F11_CHAN_OK||
++           channel_state.position!=text_offset+3500u||
++           channel_state.physical_reads!=2u||
++           port_f11_chan_release(&executive_f11_channel_table,1u,
++             channel_handle)!=PORT_F11_CHAN_OK||
++           executive_f11_channel_table.open_count!=0u||
++           port_f11_chan_validate(&executive_f11_channel_table)
++             !=PORT_F11_CHAN_OK)
++            return PORT_SYS_EXEC_BAD_PARAMETERS;
++        completed+=channel_ctx.reads;
+         executive_f11_bootpath_ready=1u;
+         executive_dq_image_probe=(struct port_dq_image_result){
+            .header_lbn=image_header_lbn,.data_lbn=image_data_lbn,
+@@ -1241,6 +1276,7 @@
+            .cursor_bytes_verified=cursor_matched,.cursor_irps=cursor.reads,
+            .private_ioc_reads=iocctx.reads,.private_ioc_bytes=1536u,
+            .f11_ioc_reads=bridge_ctx.reads,.f11_ioc_bytes=bridge_equal,
++           .f11_channel_reads=channel_ctx.reads,.f11_channel_bytes=channel_equal,
+            .file_number=executive_sysexecutable_fid.number,
+            .file_sequence=executive_sysexecutable_fid.sequence,
+            .elf_segments=elf_segments,.elf_type=2u};
+diff --git a/tools/gen_source_coverage.py b/tools/gen_source_coverage.py
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -967,7 +967,7 @@
+                          'function':reason})
+ result['files'].append({'original_file':'SYS/SRC/FILEREAD.MAR',
+                        'original_lines':1999,'sections':sections,
+-                       'unresolved_integration':'Structure level 1, numeric/UIC directories, directory cache, full FIL$OPENFILE and remaining error cases need work. M137 reads real INDEXF.SYS FH2 in resident supervisor memory; M138 follows its FH2 retrieval-pointer map to read MFD FID 4,4,0 in another privileged IRP. M139 resolves MFD->SYSEXE.DIR->SYS.EXE FIDs via actual resident directory reads. M140 physically reads SYS.EXE FH2 and first native ELF32 sector using separate IRPs, but does not activate an image, bind Files-11 ACP or publish DQA0 DDT. M144 also verifies real SYSLOA386/INILOA supervisor text from Files-11 mapped physical sectors. M145 adds bounded multi-VBN directory search using the same FH2 map and a caller-supplied native disk callback; early SYS.EXE uses only its already-read VBN1 cache, not a live Files-11 ACP. M146 adds byte-granular FH2-mapped source FIL$READVBN with partial-I/O accounting and a real guest ATA read of an unaligned three-sector range, still outside any live public IOC/ACP. M147-M149 adds bounded source FIL$FINDFILID -> FIL$RDCHKFILHDR -> FIL$READVBN directory/file lookup and version enumeration over real native ATA reads, with independent FH2 verification, atomic lookup output, error-injection tests and host/guest checks; all remain privileged private boot operations, not a public Files-11 ACP. M150-M152 additionally follows source FIL$RDCHKFILHDR extension FID chains using the original SYSBOOT normalized extent decoder, protects against cycles/physical overflow, and reads cross-extent bytes through real privileged ATA sector callbacks; test fixtures include disjoint second-header extents. No active ACP, file channel or VAX process image activation.'})
++                       'unresolved_integration':'Structure level 1, numeric/UIC directories, directory cache, full FIL$OPENFILE and remaining error cases need work. M137 reads real INDEXF.SYS FH2 in resident supervisor memory; M138 follows its FH2 retrieval-pointer map to read MFD FID 4,4,0 in another privileged IRP. M139 resolves MFD->SYSEXE.DIR->SYS.EXE FIDs via actual resident directory reads. M140 physically reads SYS.EXE FH2 and first native ELF32 sector using separate IRPs, but does not activate an image, bind Files-11 ACP or publish DQA0 DDT. M144 also verifies real SYSLOA386/INILOA supervisor text from Files-11 mapped physical sectors. M145 adds bounded multi-VBN directory search using the same FH2 map and a caller-supplied native disk callback; early SYS.EXE uses only its already-read VBN1 cache, not a live Files-11 ACP. M146 adds byte-granular FH2-mapped source FIL$READVBN with partial-I/O accounting and a real guest ATA read of an unaligned three-sector range, still outside any live public IOC/ACP. M147-M149 adds bounded source FIL$FINDFILID -> FIL$RDCHKFILHDR -> FIL$READVBN directory/file lookup and version enumeration over real native ATA reads, with independent FH2 verification, atomic lookup output, error-injection tests and host/guest checks; all remain privileged private boot operations, not a public Files-11 ACP. M150-M152 additionally follows source FIL$RDCHKFILHDR extension FID chains using the original SYSBOOT normalized extent decoder, protects against cycles/physical overflow, and reads cross-extent bytes through real privileged ATA sector callbacks; test fixtures include disjoint second-header extents. No active ACP or VAX process image activation. M185-M192 adds a limited supervisor-only owner-scoped channel assignment, seek, read, status and release layer over the private Files-11 IOC bridge; this is not original process $ASSIGN, public $QIO, or ACP.'})
+ 
+ # SYSINIT remains incomplete. Only its three source-defined system
+ # logical names and translation loop have a native implementation.
+diff --git a/tools/qemu_sysboot_m192.py b/tools/qemu_sysboot_m192.py
+new file mode 100644
+--- /dev/null
++++ b/tools/qemu_sysboot_m192.py
+@@ -0,0 +1,167 @@
++#!/usr/bin/env python3
++"""One real native IA-32 QEMU boot; verify DPL0 software IPL4 dispatch.
++
++Only source-derived loaded SYS.EXE PFLVEC/INTSTKLM records and an incomplete-INIT stop
++are successful here. A fabricated login or an old monitor prompt is failure.
++"""
++import os
++from pathlib import Path
++import select
++import shutil
++import subprocess
++import sys
++import time
++from datetime import datetime, timezone
++from checkpoint_serial_logs import capture
++ROOT=Path(__file__).resolve().parents[1]
++
++def main():
++    machine=shutil.which('qemu-system-i386') or shutil.which('qemu-system-x86_64')
++    if not machine:
++        print('QEMU M192: system QEMU not installed',file=sys.stderr)
++        return 77
++    cmd=[machine,'-display','none','-monitor','none','-serial','stdio',
++         '-m','128','-boot','a','-no-reboot','-accel','tcg',
++         '-drive','if=floppy,format=raw,file='+str(ROOT/'vms37lab.ima')+',snapshot=on',
++         '-drive','if=ide,index=0,media=disk,format=raw,file='+str(ROOT/'portdisk.img')+',snapshot=on']
++    p=subprocess.Popen(cmd,stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,
++                       stderr=subprocess.PIPE,bufsize=0)
++    observed=bytearray()
++    expected=[
++        b'SYSBOOT: Files-11 SYS.EXE normalized 32-bit retrieval map stored.',
++        b'SYSBOOT: Files-11 SYS.EXE native image loaded.',
++        b'INIT: loaded SYS.EXE initialized real IRP/LRP/SRP lookaside headers.',
++        b'SYSBOOT: Files-11 SYSLOA386.EXE native image loaded.',
++        b'INIT: SYS.EXE linked live SYSLOA386 processor vectors.',
++        b'SYSBOOT: Files-11 INILOA.EXE native image loaded.',
++        b'INIT: INILOA IOMAP executed on real IA-32 boot adapter.',
++        b'INIT: loaded SYS.EXE built lock ID, resource hash and deadlock bitmap tables.',
++        b'INIT: loaded SYS.EXE initialized SYSTEM and NULL PCB/sequence vectors.',
++        b'INIT: loaded SYS.EXE initialized process header vector and swapper PTE records.',
++        b'INIT: loaded SYS.EXE initialized modified-page writer PTE/index map.',
++        b'INIT: loaded SYS.EXE allocated unbound pagefile pointer vector.',
++        b'INIT: loaded SYS.EXE recorded real IA-32 TSS privilege stack and lock depth.',
++        b'INIT: loaded SYS.EXE compacted real Files-11 SYS.EXE BOO$ WCB map.',
++        b'INIT: SYS.EXE staged MB/NL/OP DPT headers (driver images not linked).',
++        b'INIT: loaded SYS.EXE executed original NLDRIVER read/write FDT (IOC pending).',
++        b'INIT: SYS.EXE staged original DYN$C_LOG=11 records (logical service pending).',
++        b'INIT: SYS.EXE selected registered ATA boot adapter (DDB/UCB pending).',
++        b'INIT: SYS.EXE staged DQDRIVER 12 source FDT masks (disk DDT and ACP unbound).',
++        b'INIT: SYS.EXE linked NL$DDT DDTAB/FUNCTAB to NLA0 (other drivers absent).',
++        b'INIT: SYS.EXE DQ READPBLK fetched actual ATA Files-11 LBN1 (disk DDT/ACP not linked).',
++        b'INIT: SYS.EXE DQ READPBLK fetched real ATA LBN0 in second privileged IRP (no public QIO).',
++        b'INIT: SYS.EXE DQ READPBLK verified real ATA INDEXF.SYS FH2 in third privileged IRP (ACP unbound).',
++        b'INIT: SYS.EXE DQ READPBLK verified real ATA MFD FID 4,4,0 via INDEXF.SYS extent map (ACP unbound).',
++        b'INIT: SYS.EXE native FIL$FINDFILID traversed real MFD and SYSEXE.DIR to SYS.EXE FID 11 (ACP unbound).',
++        b'INIT: SYS.EXE FIL$READVBN verified real ATA SYS.EXE FH2 and native ELF32 via IRPs 8 and 9 (activation pending).',
++        b'INIT: SYS.EXE FIL$READVBN verified complete native executable PT_LOAD text against resident SYS.EXE (activation pending).',
++        b'INIT: SYS.EXE verified native SYSLOA386.EXE and INILOA.EXE text from real Files-11 ATA sectors (ACP unbound).',
++        b'INIT: SYS.EXE FIL$READVBN verified unaligned 1024-byte range through three real ATA IRPs (ACP unbound).',
++        b'INIT: SYS.EXE native FIL$FINDFILID reopened SYS.EXE through real MFD/SYSEXE/FH2 and verified 768 text bytes (ACP unbound).',
++        b'INIT: SYS.EXE native FIL$FINDFILID enumerated real SYSEXE.DIR image FIDs via ATA (ACP unbound).',
++        b'INIT: SYS.EXE FIL$RDCHKFILHDR collected source FH2 extent chain and verified 777 bytes via ATA (ACP unbound).',
++        b'INIT: SYS.EXE FIL$READVBN cursor compared 901 resident bytes through four physical ATA IRPs (ACP unbound).',
++        b'INIT: SYS.EXE source DQ_STARTIO private IOC queue completed three FIFO ATA IRPs with real resident text (DDT and ACP unbound).',
++        b'INIT: SYS.EXE RETRYERR/IOCIOPOST posted three source FIFO ATA IOSBs after live resident reads (no DQA0 DDT or IRQ).',
++        b'INIT: SYS.EXE FIL$READVBN used IOC private FIFO for two real ATA reads and matched 700 bytes (ACP/IRQ unbound).',
++        b'INIT: SYS.EXE private owner-scoped channel assigned, read 600 live ATA bytes and deassigned (ACP/$QIO unbound).',
++        b'INIT: SYS.EXE FIN_DATABASE staged DQA0 names and resident SYS$DISK/SYS$SYSDEVICE (logical lookup pending).',
++        b'INIT: SYS.EXE LOG$TRANSLATE resolved original SYS$DISK and SYS$SYSDEVICE names (system bootstrap only).',
++        b'INIT: SYS.EXE executed console XON/XOFF/STOP/RESUME transitions (TT driver absent).',
++        b'INIT: SYS.EXE IOC device search resolved NLA0 with native null DDT (others unbound).',
++        b'INIT: SYS.EXE IOC$SEARCHDEV resolved SYS$DISK/SYS$SYSDEVICE to unbound DQA0 and NLA0 to linked DDT (no $ASSIGN).',
++        b'INIT: SYS.EXE staged source DQ DPTAB/DDTAB and 136-byte FUNCTAB (all disk actions unbound).',
++        b'INIT: SYS.EXE RELOCDRV IOC$INITDRV applied source DQ DPT_STORE to private DQA0 records (DDT/CRB unbound).',
++        b'INIT: resident IOC$RELOC_DDT source DDT/FDT relocation verified (private only; DQA0 unbound).',
++        b'INIT: SYS.EXE NLDRIVER completed two IRPs via linked DDT/FDT and EXE$FINISHIOC (IPL4 requested).',
++        b'INIT: SYS.EXE IOCIOPOST serviced two NLA IRPs through IA-32 CPL0 software INT 0x90 (no process AST).',
++        b'INIT: loaded SYS.EXE resident entry executed and verified.',
++        b'INIT: linked SYSLOA386 read real IDT, CR0, CR3, TSS, PIT and Files-11 boot home.',
++        b'INIT: actual IRQ0 advanced resident SYS.EXE VMS clock.',
++        b'INIT stopped: remaining original initialization dependencies incomplete.']
++    failures=[
++        b'SYSBOOT: SYS.EXE retrieval map invalid.',
++        b'-F-Unable to locate SYS.EXE',
++        b'-F-Unable to locate usable SYSLOA386.EXE',
++        b'-F-Unable to locate INILOA.EXE',
++        b'SYSBOOT: SYSLOA386.EXE image validation or loading failed.',
++        b'INIT: SYSLOA386 self-describing vector image invalid.',
++        b'INIT: resident SYS.EXE SYSLOA386 vector linking failed.',
++        b'INIT: SYS.EXE packet queue initialization failed.',
++        b'INIT: resident SYS.EXE lock database setup failed.',
++        b'INIT: resident SYS.EXE PCB sequence vectors failed.',
++        b'INIT: resident SYS.EXE PHV and swap PTE record validation failed.',
++        b'INIT: resident SYS.EXE modified-page writer record validation failed.',
++        b'INIT: resident SYS.EXE interrupt stack depth setup failed.',
++        b'INIT: resident SYS.EXE SYSWCB map overlay validation failed.',
++        b'INIT: resident SYS.EXE pointer vector setup failed.',
++        b'INIT: resident SYS.EXE logical record staging failed.',
++        b'INIT: resident SYS.EXE DPT prologue staging failed.',
++        b'INIT: resident SYS.EXE null driver FDT validation failed.',
++        b'INIT: resident SYS.EXE boot adapter scan failed.',
++        b'INIT: resident source DQ FDT staging validation failed.',
++        b'INIT: resident DQ physical boot READPBLK failed.',
++        b'INIT: resident DQ physical LBN0 READPBLK failed.',
++        b'INIT: resident SYS.EXE INDEXF.SYS physical FH2 read failed.',
++        b'INIT: resident SYS.EXE MFD FH2 indexed physical read failed.',
++        b'INIT: resident SYS.EXE Files-11 MFD/SYSEXE directory traversal failed.',
++        b'INIT: resident SYS.EXE physical ELF32 source probe failed.',
++        b'INIT: resident native auxiliary disk text verification failed.',
++        b'INIT: resident FIN_DATABASE source boot DDB/logical record staging failed.',
++        b'INIT: resident source LOGNAMSUB bootstrap translation failed.',
++        b'INIT: SYS.EXE DEVICEDAT DDB/UCB prelink validation failed.',
++        b'INIT: resident CONINTDSP source port action checks failed.',
++        b'INIT: resident SYS.EXE physical IOC name search validation failed.',
++        b'INIT: resident IOC logical to physical boot name lookup failed.',
++        b'INIT: resident DQ DDT source table staging failed.',
++        b'INIT: resident RELOCDRV original DQ INITDRV table failed.',
++        b'INIT: resident SYS.EXE NLDRIVER to IOC post queue failed.',
++        b'INIT: resident private IOC$RELOC_DDT failed.',
++        b'INIT: resident IOCIOPOST source kernel end-action processing failed.',
++        b'INIT: resident IOCIOPOST native software interrupt failed.',
++        b'INIT: SYS.EXE resident initialization failed.',
++        b'INIT: SYS.EXE PIT clock handoff failed.',
++        b'INIT: live SYS.EXE PIT clock did not advance.',
++        b'INIT: IA-32 privilege transition stack is unprotected.',
++        b'PORTLAB> ',b'Login successful',b'Login: ',b'\n$ ']
++    passed=False
++    try:
++        until=time.monotonic()+80
++        while time.monotonic()<until:
++            if any(x in observed for x in failures):break
++            if all(x in observed for x in expected):
++                positions=[observed.index(x) for x in expected]
++                passed=positions==sorted(positions)
++                break
++            if p.poll() is not None:break
++            ready,_,_=select.select([p.stdout],[],[],0.25)
++            if ready:
++                chunk=os.read(p.stdout.fileno(),4096)
++                if not chunk:break
++                observed.extend(chunk)
++    finally:
++        p.terminate()
++        try:p.wait(timeout=3)
++        except subprocess.TimeoutExpired:p.kill();p.wait()
++        # Preserve COM1 bytes exactly; QEMU stderr is a separate diagnostic.
++        qemu_stderr=p.stderr.read(8192)
++        serial_path=ROOT/'qemu-m192-serial.log'
++        serial_path.write_bytes(observed)
++        # Always retain the real transcript, including failed QEMU attempts.
++        # GitHub run attempts get distinct keys; local runs get UTC keys.
++        ci_run=os.environ.get('GITHUB_RUN_ID')
++        ci_attempt=os.environ.get('GITHUB_RUN_ATTEMPT','1')
++        identifier=(ci_run + ('-attempt'+ci_attempt if ci_attempt!='1' else '')
++                    if ci_run else 'local-'+datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S%fZ'))
++        run_url=('https://github.com/tuklusan/OpticOS/actions/runs/'+ci_run
++                 if ci_run else '')
++        capture(ROOT,serial_path,160,identifier,run_url,
++                'harness-pass' if passed else 'harness-fail')
++    if passed:
++        print('QEMU M192: resident source DDT/FDT relocation in private SYS.EXE memory PASS')
++        return 0
++    print('QEMU M192: real guest execution or source-order check failed',file=sys.stderr)
++    print(observed[-8192:].decode('ascii','replace'),file=sys.stderr)
++    print(qemu_stderr.decode('ascii','replace'),file=sys.stderr)
++    return 1
++if __name__=='__main__':raise SystemExit(main())
+diff --git a/src/vms_f11_channel.h b/src/vms_f11_channel.h
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel.h
+@@ -0,0 +1,39 @@
++#ifndef VMS37_F11_CHANNEL_H
++#define VMS37_F11_CHANNEL_H
++#include "vms_f11_ioc.h"
++/* M185-M192. Read-only privileged source FIL$READVBN / IOC assignment
++ * interface. This is NOT VMS process $ASSIGN, ACP or DQA0 public $QIO.
++ * Every call executes at supervisor boot privilege only. */
++#define PORT_F11_CHAN_SLOTS 4u
++#define PORT_F11_CHAN_MAX_GENERATION 0x00ffffffu
++enum { PORT_F11_CHAN_OK=1u, PORT_F11_CHAN_BAD=2u,
++       PORT_F11_CHAN_BUSY=4u, PORT_F11_CHAN_NOCHANNEL=6u,
++       PORT_F11_CHAN_EOF=8u, PORT_F11_CHAN_IO=10u,
++       PORT_F11_CHAN_DIFFERENT=12u };
++struct port_f11_chan_slot {
++ struct port_f11_ioc_file file;
++ uint32_t owner,generation;
++ uint8_t assigned;
++};
++struct port_f11_chan_table {
++ const struct port_f11_chain *chain;
++ struct port_dq_ioc_queue *queue;
++ uint32_t length,next_generation,open_count,assignments,releases;
++ struct port_f11_chan_slot slots[PORT_F11_CHAN_SLOTS];
++};
++struct port_f11_chan_status {
++ uint32_t owner,handle,position,length,physical_reads;
++};
++uint32_t port_f11_chan_init(struct port_f11_chan_table *,
++ const struct port_f11_chain *,struct port_dq_ioc_queue *,uint32_t);
++uint32_t port_f11_chan_validate(const struct port_f11_chan_table *);
++uint32_t port_f11_chan_assign(struct port_f11_chan_table *,uint32_t,uint32_t *);
++uint32_t port_f11_chan_release(struct port_f11_chan_table *,uint32_t,uint32_t);
++uint32_t port_f11_chan_seek(struct port_f11_chan_table *,uint32_t,uint32_t,uint32_t);
++uint32_t port_f11_chan_read(struct port_f11_chan_table *,uint32_t,uint32_t,
++ uint8_t *,uint32_t,size_t,uint32_t *);
++uint32_t port_f11_chan_compare(struct port_f11_chan_table *,uint32_t,uint32_t,
++ const uint8_t *,uint32_t,uint32_t *);
++uint32_t port_f11_chan_status(struct port_f11_chan_table *,uint32_t,uint32_t,
++ struct port_f11_chan_status *);
++#endif
+diff --git a/src/vms_f11_channel_priv.h b/src/vms_f11_channel_priv.h
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_priv.h
+@@ -0,0 +1,17 @@
++#include "vms_f11_channel.h"
++/* Source-private channel handle: 24-bit monotonic generation and 1-based slot.
++ * Old handles never alias new ones during the finite boot lifetime. */
++static inline struct port_f11_chan_slot *port_f11_chan_get(
++ struct port_f11_chan_table *t,uint32_t owner,uint32_t handle){
++ if(!t||!owner||!(handle&255u)||((handle&255u)>PORT_F11_CHAN_SLOTS))return 0;
++ struct port_f11_chan_slot *s=&t->slots[(handle&255u)-1u];
++ if(!s->assigned||s->owner!=owner||s->generation!=(handle>>8))return 0;
++ return s;
++}
++static inline uint32_t port_f11_chan_map_status(uint32_t status){
++ if(status==PORT_F11_IOC_OK)return PORT_F11_CHAN_OK;
++ if(status==PORT_F11_IOC_EOF)return PORT_F11_CHAN_EOF;
++ if(status==PORT_F11_IOC_IO)return PORT_F11_CHAN_IO;
++ if(status==PORT_F11_IOC_DIFFERENT)return PORT_F11_CHAN_DIFFERENT;
++ return status==PORT_F11_IOC_BUSY?PORT_F11_CHAN_BUSY:PORT_F11_CHAN_BAD;
++}
+diff --git a/tests/test_f11_channel_cases.h b/tests/test_f11_channel_cases.h
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_cases.h
+@@ -0,0 +1,34 @@
++#ifndef M192_CHANNEL_CASES_H
++#define M192_CHANNEL_CASES_H
++#include "vms_f11_channel.h"
++#include <assert.h>
++#include <string.h>
++struct m192_env {
++ struct port_f11_chain chain;
++ struct port_dq_ioc_queue queue;
++ struct port_f11_chan_table table;
++ uint32_t reads,fail_at;
++};
++static inline uint8_t m192_byte(uint32_t lbn,uint32_t i){
++ return (uint8_t)(lbn*13u+i*7u+11u);
++}
++static inline uint32_t m192_sector(void *ctx,uint32_t lbn,uint8_t out[512]){
++ struct m192_env *e=ctx;e->reads++;
++ if(e->fail_at&&e->reads==e->fail_at)return 0;
++ for(unsigned i=0;i<512;i++)out[i]=m192_byte(lbn,i);
++ return 1u;
++}
++static inline void m192_setup(struct m192_env *e){
++ memset(e,0,sizeof(*e));e->chain.count=2;e->chain.blocks=6;
++ e->chain.extents[0].lbn=40;e->chain.extents[0].blocks=3;
++ e->chain.extents[1].lbn=80;e->chain.extents[1].blocks=3;
++ assert(port_dq_ioc_init(&e->queue,m192_sector,e)==PORT_DQ_IOC_OK);
++ assert(port_f11_chan_init(&e->table,&e->chain,&e->queue,3072)==PORT_F11_CHAN_OK);
++}
++static inline uint32_t m192_lbn(uint32_t offset){
++ uint32_t b=offset/512u;return b<3u?40u+b:80u+b-3u;
++}
++static inline void m192_expected(uint8_t *out,uint32_t from,uint32_t count){
++ for(uint32_t i=0;i<count;i++)out[i]=m192_byte(m192_lbn(from+i),(from+i)%512u);
++}
++#endif
+diff --git a/tests/test_f11_channel_main.c b/tests/test_f11_channel_main.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_main.c
+@@ -0,0 +1,69 @@
++#include <assert.h>
++#include <stdio.h>
++int test_f11_channel_init_0(void);
++int test_f11_channel_init_1(void);
++int test_f11_channel_init_2(void);
++int test_f11_channel_init_3(void);
++int test_f11_channel_validate_0(void);
++int test_f11_channel_validate_1(void);
++int test_f11_channel_validate_2(void);
++int test_f11_channel_validate_3(void);
++int test_f11_channel_assign_0(void);
++int test_f11_channel_assign_1(void);
++int test_f11_channel_assign_2(void);
++int test_f11_channel_assign_3(void);
++int test_f11_channel_release_0(void);
++int test_f11_channel_release_1(void);
++int test_f11_channel_release_2(void);
++int test_f11_channel_release_3(void);
++int test_f11_channel_seek_0(void);
++int test_f11_channel_seek_1(void);
++int test_f11_channel_seek_2(void);
++int test_f11_channel_seek_3(void);
++int test_f11_channel_read_0(void);
++int test_f11_channel_read_1(void);
++int test_f11_channel_read_2(void);
++int test_f11_channel_read_3(void);
++int test_f11_channel_compare_0(void);
++int test_f11_channel_compare_1(void);
++int test_f11_channel_compare_2(void);
++int test_f11_channel_compare_3(void);
++int test_f11_channel_status_0(void);
++int test_f11_channel_status_1(void);
++int test_f11_channel_status_2(void);
++int test_f11_channel_status_3(void);
++int main(void){
++ assert(test_f11_channel_init_0());
++ assert(test_f11_channel_init_1());
++ assert(test_f11_channel_init_2());
++ assert(test_f11_channel_init_3());
++ assert(test_f11_channel_validate_0());
++ assert(test_f11_channel_validate_1());
++ assert(test_f11_channel_validate_2());
++ assert(test_f11_channel_validate_3());
++ assert(test_f11_channel_assign_0());
++ assert(test_f11_channel_assign_1());
++ assert(test_f11_channel_assign_2());
++ assert(test_f11_channel_assign_3());
++ assert(test_f11_channel_release_0());
++ assert(test_f11_channel_release_1());
++ assert(test_f11_channel_release_2());
++ assert(test_f11_channel_release_3());
++ assert(test_f11_channel_seek_0());
++ assert(test_f11_channel_seek_1());
++ assert(test_f11_channel_seek_2());
++ assert(test_f11_channel_seek_3());
++ assert(test_f11_channel_read_0());
++ assert(test_f11_channel_read_1());
++ assert(test_f11_channel_read_2());
++ assert(test_f11_channel_read_3());
++ assert(test_f11_channel_compare_0());
++ assert(test_f11_channel_compare_1());
++ assert(test_f11_channel_compare_2());
++ assert(test_f11_channel_compare_3());
++ assert(test_f11_channel_status_0());
++ assert(test_f11_channel_status_1());
++ assert(test_f11_channel_status_2());
++ assert(test_f11_channel_status_3());
++ puts("M185-M192 source-private Files-11 channel 32 regression cases PASS"); return 0;
++}
+diff --git a/src/vms_f11_channel_assign.c b/src/vms_f11_channel_assign.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_assign.c
+@@ -0,0 +1,20 @@
++#include "vms_f11_channel_priv.h"
++/* M187: generation-protected source-style private channel assignment. */
++uint32_t port_f11_chan_assign(struct port_f11_chan_table *t,
++ uint32_t owner,uint32_t *handle){
++ if(!t||!owner||!handle||
++    port_f11_chan_validate(t)!=PORT_F11_CHAN_OK)return PORT_F11_CHAN_BAD;
++ if(t->next_generation>PORT_F11_CHAN_MAX_GENERATION)return PORT_F11_CHAN_BUSY;
++ for(unsigned i=0;i<PORT_F11_CHAN_SLOTS;i++){
++  struct port_f11_chan_slot *s=&t->slots[i];
++  if(s->assigned)continue;
++  struct port_f11_ioc_file file={0};
++  if(port_f11_ioc_init(&file,t->chain,t->queue,t->length)!=PORT_F11_IOC_OK)
++   return PORT_F11_CHAN_BAD;
++  s->file=file;s->owner=owner;s->generation=t->next_generation++;
++  s->assigned=1u;t->open_count++;t->assignments++;
++  *handle=(s->generation<<8)|(i+1u);
++  return PORT_F11_CHAN_OK;
++ }
++ return PORT_F11_CHAN_BUSY;
++}
+diff --git a/src/vms_f11_channel_compare.c b/src/vms_f11_channel_compare.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_compare.c
+@@ -0,0 +1,11 @@
++#include "vms_f11_channel_priv.h"
++/* M191: compare media bytes to resident image, not a synthetic prompt. */
++uint32_t port_f11_chan_compare(struct port_f11_chan_table *t,
++ uint32_t owner,uint32_t handle,const uint8_t *expected,
++ uint32_t count,uint32_t *equal){
++ struct port_f11_chan_slot *s=port_f11_chan_get(t,owner,handle);
++ if(!s)return PORT_F11_CHAN_NOCHANNEL;
++ if(!expected||!equal)return PORT_F11_CHAN_BAD;
++ return port_f11_chan_map_status(port_f11_ioc_compare(
++          &s->file,expected,count,equal));
++}
+diff --git a/src/vms_f11_channel_init.c b/src/vms_f11_channel_init.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_init.c
+@@ -0,0 +1,12 @@
++#include "vms_f11_channel_priv.h"
++/* M185: initialize bounded supervisor-only channel table. */
++uint32_t port_f11_chan_init(struct port_f11_chan_table *t,
++ const struct port_f11_chain *c,struct port_dq_ioc_queue *q,uint32_t length){
++ if(!t||!c||!q)return PORT_F11_CHAN_BAD;
++ struct port_f11_ioc_file probe={0};
++ if(port_f11_ioc_init(&probe,c,q,length)!=PORT_F11_IOC_OK)
++  return PORT_F11_CHAN_BAD;
++ struct port_f11_chan_table v={0};
++ v.chain=c;v.queue=q;v.length=length;v.next_generation=1u;
++ *t=v;return PORT_F11_CHAN_OK;
++}
+diff --git a/src/vms_f11_channel_read.c b/src/vms_f11_channel_read.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_read.c
+@@ -0,0 +1,12 @@
++#include "vms_f11_channel_priv.h"
++/* M190: source FIL$READVBN through the actual private IOC physical queue.
++ * Existing file-read transaction prevents failed partial destination writes. */
++uint32_t port_f11_chan_read(struct port_f11_chan_table *t,
++ uint32_t owner,uint32_t handle,uint8_t *dst,uint32_t count,
++ size_t capacity,uint32_t *done){
++ struct port_f11_chan_slot *s=port_f11_chan_get(t,owner,handle);
++ if(!s)return PORT_F11_CHAN_NOCHANNEL;
++ if(!dst||!done)return PORT_F11_CHAN_BAD;
++ return port_f11_chan_map_status(port_f11_ioc_read(
++          &s->file,dst,count,capacity,done));
++}
+diff --git a/src/vms_f11_channel_release.c b/src/vms_f11_channel_release.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_release.c
+@@ -0,0 +1,11 @@
++#include "vms_f11_channel_priv.h"
++/* M188: old handles cannot close a reused slot; pending I/O is retained. */
++uint32_t port_f11_chan_release(struct port_f11_chan_table *t,
++ uint32_t owner,uint32_t handle){
++ struct port_f11_chan_slot *s=port_f11_chan_get(t,owner,handle);
++ if(!s)return PORT_F11_CHAN_NOCHANNEL;
++ if(s->file.pending)return PORT_F11_CHAN_BUSY;
++ struct port_f11_chan_slot blank={0};
++ *s=blank;t->open_count--;t->releases++;
++ return PORT_F11_CHAN_OK;
++}
+diff --git a/src/vms_f11_channel_seek.c b/src/vms_f11_channel_seek.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_seek.c
+@@ -0,0 +1,8 @@
++#include "vms_f11_channel_priv.h"
++/* M189: preserve output position on invalid VBN/ownership. */
++uint32_t port_f11_chan_seek(struct port_f11_chan_table *t,
++ uint32_t owner,uint32_t handle,uint32_t pos){
++ struct port_f11_chan_slot *s=port_f11_chan_get(t,owner,handle);
++ if(!s)return PORT_F11_CHAN_NOCHANNEL;
++ return port_f11_chan_map_status(port_f11_ioc_seek(&s->file,pos));
++}
+diff --git a/src/vms_f11_channel_status.c b/src/vms_f11_channel_status.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_status.c
+@@ -0,0 +1,12 @@
++#include "vms_f11_channel_priv.h"
++/* M192: copy a source-style channel position/physical I/O snapshot. */
++uint32_t port_f11_chan_status(struct port_f11_chan_table *t,
++ uint32_t owner,uint32_t handle,struct port_f11_chan_status *out){
++ struct port_f11_chan_slot *s=port_f11_chan_get(t,owner,handle);
++ if(!s)return PORT_F11_CHAN_NOCHANNEL;
++ if(!out)return PORT_F11_CHAN_BAD;
++ if(port_f11_chan_validate(t)!=PORT_F11_CHAN_OK)return PORT_F11_CHAN_BAD;
++ const struct port_f11_chan_status result={owner,handle,
++  s->file.position,s->file.length,s->file.reads};
++ *out=result;return PORT_F11_CHAN_OK;
++}
+diff --git a/src/vms_f11_channel_validate.c b/src/vms_f11_channel_validate.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_f11_channel_validate.c
+@@ -0,0 +1,23 @@
++#include "vms_f11_channel_priv.h"
++/* M186: validate ownership/counts/generation without touching media. */
++uint32_t port_f11_chan_validate(const struct port_f11_chan_table *t){
++ if(!t||!t->queue||!t->chain||!t->next_generation||
++     t->next_generation>PORT_F11_CHAN_MAX_GENERATION+1u||
++     t->open_count>PORT_F11_CHAN_SLOTS||
++     port_dq_ioc_validate(t->queue)!=PORT_DQ_IOC_OK)
++  return PORT_F11_CHAN_BAD;
++ uint32_t live=0;
++ for(unsigned i=0;i<PORT_F11_CHAN_SLOTS;i++){
++  const struct port_f11_chan_slot *s=&t->slots[i];
++  if(!s->assigned){if(s->owner||s->generation)return PORT_F11_CHAN_BAD;continue;}
++  if(!s->owner||!s->generation||s->generation>=t->next_generation||
++     s->file.chain!=t->chain||s->file.queue!=t->queue||
++     s->file.length!=t->length||
++     port_f11_ioc_validate(&s->file)!=PORT_F11_IOC_OK)
++   return PORT_F11_CHAN_BAD;
++  live++;
++ }
++ if(live!=t->open_count||t->assignments<t->releases||
++    t->assignments-t->releases!=live)return PORT_F11_CHAN_BAD;
++ return PORT_F11_CHAN_OK;
++}
+diff --git a/tests/test_f11_channel_assign_0.c b/tests/test_f11_channel_assign_0.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_assign_0.c
+@@ -0,0 +1,8 @@
++#include "test_f11_channel_cases.h"
++/* M187: independent assign regression #0. */
++int test_f11_channel_assign_0(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,3,&h)==PORT_F11_CHAN_OK);
++assert(h==257u&&e.table.open_count==1u&&e.table.assignments==1u);
++return 1;
++}
+diff --git a/tests/test_f11_channel_assign_1.c b/tests/test_f11_channel_assign_1.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_assign_1.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M187: independent assign regression #1. */
++int test_f11_channel_assign_1(void){
++struct m192_env e; m192_setup(&e);uint32_t h[4]={0};
++for(unsigned i=0;i<4;i++)assert(port_f11_chan_assign(&e.table,10+i,&h[i])==PORT_F11_CHAN_OK);
++uint32_t old=0xdeadbeefu;
++assert(port_f11_chan_assign(&e.table,55,&old)==PORT_F11_CHAN_BUSY);
++assert(old==0xdeadbeefu&&e.table.open_count==4u);
++return 1;
++}
+diff --git a/tests/test_f11_channel_assign_2.c b/tests/test_f11_channel_assign_2.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_assign_2.c
+@@ -0,0 +1,8 @@
++#include "test_f11_channel_cases.h"
++/* M187: independent assign regression #2. */
++int test_f11_channel_assign_2(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0x77889900u;
++assert(port_f11_chan_assign(&e.table,0,&h)==PORT_F11_CHAN_BAD);
++assert(h==0x77889900u&&e.table.open_count==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_assign_3.c b/tests/test_f11_channel_assign_3.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_assign_3.c
+@@ -0,0 +1,9 @@
++#include "test_f11_channel_cases.h"
++/* M187: independent assign regression #3. */
++int test_f11_channel_assign_3(void){
++struct m192_env e; m192_setup(&e);e.table.next_generation=PORT_F11_CHAN_MAX_GENERATION+1u;
++uint32_t h=999;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_BUSY);
++assert(h==999&&e.table.open_count==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_compare_0.c b/tests/test_f11_channel_compare_0.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_compare_0.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M191: independent compare regression #0. */
++int test_f11_channel_compare_0(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,equal=0;
++uint8_t want[300];m192_expected(want,0,300);
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_compare(&e.table,1,h,want,300,&equal)==PORT_F11_CHAN_OK);
++assert(equal==300&&e.reads==1);
++return 1;
++}
+diff --git a/tests/test_f11_channel_compare_1.c b/tests/test_f11_channel_compare_1.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_compare_1.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M191: independent compare regression #1. */
++int test_f11_channel_compare_1(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,equal=999;
++uint8_t want[300];m192_expected(want,0,300);want[20]^=1;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_compare(&e.table,1,h,want,300,&equal)==PORT_F11_CHAN_DIFFERENT);
++assert(equal==20&&e.reads==1);
++return 1;
++}
+diff --git a/tests/test_f11_channel_compare_2.c b/tests/test_f11_channel_compare_2.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_compare_2.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M191: independent compare regression #2. */
++int test_f11_channel_compare_2(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,equal=888;
++uint8_t want[300];m192_expected(want,0,300);
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_compare(&e.table,2,h,want,300,&equal)==PORT_F11_CHAN_NOCHANNEL);
++assert(equal==888&&e.reads==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_compare_3.c b/tests/test_f11_channel_compare_3.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_compare_3.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M191: independent compare regression #3. */
++int test_f11_channel_compare_3(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,equal=888;
++uint8_t want[300];m192_expected(want,0,300);e.fail_at=1;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_compare(&e.table,1,h,want,300,&equal)==PORT_F11_CHAN_IO);
++assert(equal==888&&e.table.slots[0].file.position==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_init_0.c b/tests/test_f11_channel_init_0.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_init_0.c
+@@ -0,0 +1,6 @@
++#include "test_f11_channel_cases.h"
++/* M185: independent init regression #0. */
++int test_f11_channel_init_0(void){
++struct m192_env e; m192_setup(&e);assert(port_f11_chan_validate(&e.table)==PORT_F11_CHAN_OK);
++return 1;
++}
+diff --git a/tests/test_f11_channel_init_1.c b/tests/test_f11_channel_init_1.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_init_1.c
+@@ -0,0 +1,8 @@
++#include "test_f11_channel_cases.h"
++/* M185: independent init regression #1. */
++int test_f11_channel_init_1(void){
++struct m192_env e; m192_setup(&e);struct port_f11_chan_table old=e.table;
++assert(port_f11_chan_init(&e.table,&e.chain,&e.queue,3073)==PORT_F11_CHAN_BAD);
++assert(memcmp(&old,&e.table,sizeof(old))==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_init_2.c b/tests/test_f11_channel_init_2.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_init_2.c
+@@ -0,0 +1,8 @@
++#include "test_f11_channel_cases.h"
++/* M185: independent init regression #2. */
++int test_f11_channel_init_2(void){
++struct m192_env e; m192_setup(&e);struct port_f11_chan_table before=e.table;
++assert(port_f11_chan_init(&e.table,0,&e.queue,0)==PORT_F11_CHAN_BAD);
++assert(memcmp(&before,&e.table,sizeof(before))==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_init_3.c b/tests/test_f11_channel_init_3.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_init_3.c
+@@ -0,0 +1,8 @@
++#include "test_f11_channel_cases.h"
++/* M185: independent init regression #3. */
++int test_f11_channel_init_3(void){
++struct m192_env e; m192_setup(&e);struct port_f11_chan_table t={0};
++assert(port_f11_chan_init(&t,&e.chain,&e.queue,0)==PORT_F11_CHAN_OK);
++assert(t.length==0&&t.open_count==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_read_0.c b/tests/test_f11_channel_read_0.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_read_0.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M190: independent read regression #0. */
++int test_f11_channel_read_0(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,done=0;
++uint8_t out[700],want[700];assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_seek(&e.table,1,h,1400)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_read(&e.table,1,h,out,700,sizeof(out),&done)==PORT_F11_CHAN_OK);
++m192_expected(want,1400,700);assert(done==700&&memcmp(out,want,700)==0&&e.reads==3);
++return 1;
++}
+diff --git a/tests/test_f11_channel_read_1.c b/tests/test_f11_channel_read_1.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_read_1.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M190: independent read regression #1. */
++int test_f11_channel_read_1(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,done=0x1234;
++uint8_t out[16];memset(out,0xa5,sizeof(out));
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_read(&e.table,2,h,out,16,sizeof(out),&done)==PORT_F11_CHAN_NOCHANNEL);
++assert(done==0x1234&&out[0]==0xa5&&e.reads==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_read_2.c b/tests/test_f11_channel_read_2.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_read_2.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M190: independent read regression #2. */
++int test_f11_channel_read_2(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,done=78;
++uint8_t out[16];memset(out,0xa5,sizeof(out));
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_read(&e.table,1,h,out,17,sizeof(out),&done)==PORT_F11_CHAN_BAD);
++assert(done==78&&out[0]==0xa5&&e.reads==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_read_3.c b/tests/test_f11_channel_read_3.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_read_3.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M190: independent read regression #3. */
++int test_f11_channel_read_3(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,done=0;
++uint8_t out[700];memset(out,0xa5,sizeof(out));e.fail_at=2;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_read(&e.table,1,h,out,700,sizeof(out),&done)==PORT_F11_CHAN_IO);
++assert(out[0]==0xa5&&e.table.slots[0].file.position==0&&done==512u);
++return 1;
++}
+diff --git a/tests/test_f11_channel_release_0.c b/tests/test_f11_channel_release_0.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_release_0.c
+@@ -0,0 +1,9 @@
++#include "test_f11_channel_cases.h"
++/* M188: independent release regression #0. */
++int test_f11_channel_release_0(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_release(&e.table,1,h)==PORT_F11_CHAN_OK);
++assert(e.table.open_count==0&&e.table.releases==1u);
++return 1;
++}
+diff --git a/tests/test_f11_channel_release_1.c b/tests/test_f11_channel_release_1.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_release_1.c
+@@ -0,0 +1,9 @@
++#include "test_f11_channel_cases.h"
++/* M188: independent release regression #1. */
++int test_f11_channel_release_1(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_release(&e.table,2,h)==PORT_F11_CHAN_NOCHANNEL);
++assert(e.table.open_count==1);
++return 1;
++}
+diff --git a/tests/test_f11_channel_release_2.c b/tests/test_f11_channel_release_2.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_release_2.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M188: independent release regression #2. */
++int test_f11_channel_release_2(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,h2=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_release(&e.table,1,h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_assign(&e.table,1,&h2)==PORT_F11_CHAN_OK);
++assert(h!=h2&&port_f11_chan_release(&e.table,1,h)==PORT_F11_CHAN_NOCHANNEL);
++return 1;
++}
+diff --git a/tests/test_f11_channel_release_3.c b/tests/test_f11_channel_release_3.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_release_3.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M188: independent release regression #3. */
++int test_f11_channel_release_3(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++e.table.slots[0].file.pending=1;
++assert(port_f11_chan_release(&e.table,1,h)==PORT_F11_CHAN_BUSY);
++assert(e.table.open_count==1);
++return 1;
++}
+diff --git a/tests/test_f11_channel_seek_0.c b/tests/test_f11_channel_seek_0.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_seek_0.c
+@@ -0,0 +1,9 @@
++#include "test_f11_channel_cases.h"
++/* M189: independent seek regression #0. */
++int test_f11_channel_seek_0(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_seek(&e.table,1,h,1536)==PORT_F11_CHAN_OK);
++assert(e.table.slots[0].file.position==1536);
++return 1;
++}
+diff --git a/tests/test_f11_channel_seek_1.c b/tests/test_f11_channel_seek_1.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_seek_1.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M189: independent seek regression #1. */
++int test_f11_channel_seek_1(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_seek(&e.table,1,h,3072)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_seek(&e.table,1,h,3073)==PORT_F11_CHAN_EOF);
++assert(e.table.slots[0].file.position==3072);
++return 1;
++}
+diff --git a/tests/test_f11_channel_seek_2.c b/tests/test_f11_channel_seek_2.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_seek_2.c
+@@ -0,0 +1,9 @@
++#include "test_f11_channel_cases.h"
++/* M189: independent seek regression #2. */
++int test_f11_channel_seek_2(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_seek(&e.table,2,h,30)==PORT_F11_CHAN_NOCHANNEL);
++assert(e.table.slots[0].file.position==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_seek_3.c b/tests/test_f11_channel_seek_3.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_seek_3.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M189: independent seek regression #3. */
++int test_f11_channel_seek_3(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++e.table.slots[0].file.pending=1;
++assert(port_f11_chan_seek(&e.table,1,h,100)==PORT_F11_CHAN_BUSY);
++assert(e.table.slots[0].file.position==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_status_0.c b/tests/test_f11_channel_status_0.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_status_0.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M192: independent status regression #0. */
++int test_f11_channel_status_0(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++struct port_f11_chan_status s={0};
++assert(port_f11_chan_assign(&e.table,77,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_status(&e.table,77,h,&s)==PORT_F11_CHAN_OK);
++assert(s.owner==77&&s.handle==h&&s.length==3072&&s.position==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_status_1.c b/tests/test_f11_channel_status_1.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_status_1.c
+@@ -0,0 +1,11 @@
++#include "test_f11_channel_cases.h"
++/* M192: independent status regression #1. */
++int test_f11_channel_status_1(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++struct port_f11_chan_status s={0};
++assert(port_f11_chan_assign(&e.table,7,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_seek(&e.table,7,h,512)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_status(&e.table,7,h,&s)==PORT_F11_CHAN_OK);
++assert(s.position==512&&s.physical_reads==0);
++return 1;
++}
+diff --git a/tests/test_f11_channel_status_2.c b/tests/test_f11_channel_status_2.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_status_2.c
+@@ -0,0 +1,10 @@
++#include "test_f11_channel_cases.h"
++/* M192: independent status regression #2. */
++int test_f11_channel_status_2(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++struct port_f11_chan_status s={.position=55};
++assert(port_f11_chan_assign(&e.table,7,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_status(&e.table,8,h,&s)==PORT_F11_CHAN_NOCHANNEL);
++assert(s.position==55);
++return 1;
++}
+diff --git a/tests/test_f11_channel_status_3.c b/tests/test_f11_channel_status_3.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_status_3.c
+@@ -0,0 +1,11 @@
++#include "test_f11_channel_cases.h"
++/* M192: independent status regression #3. */
++int test_f11_channel_status_3(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0,done=0;
++uint8_t b[4];struct port_f11_chan_status s={0};
++assert(port_f11_chan_assign(&e.table,7,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_read(&e.table,7,h,b,4,sizeof(b),&done)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_status(&e.table,7,h,&s)==PORT_F11_CHAN_OK);
++assert(s.position==4&&s.physical_reads==1&&done==4);
++return 1;
++}
+diff --git a/tests/test_f11_channel_validate_0.c b/tests/test_f11_channel_validate_0.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_validate_0.c
+@@ -0,0 +1,8 @@
++#include "test_f11_channel_cases.h"
++/* M186: independent validate regression #0. */
++int test_f11_channel_validate_0(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,1,&h)==PORT_F11_CHAN_OK);
++assert(port_f11_chan_validate(&e.table)==PORT_F11_CHAN_OK);
++return 1;
++}
+diff --git a/tests/test_f11_channel_validate_1.c b/tests/test_f11_channel_validate_1.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_validate_1.c
+@@ -0,0 +1,7 @@
++#include "test_f11_channel_cases.h"
++/* M186: independent validate regression #1. */
++int test_f11_channel_validate_1(void){
++struct m192_env e; m192_setup(&e);e.table.open_count=1;
++assert(port_f11_chan_validate(&e.table)==PORT_F11_CHAN_BAD);
++return 1;
++}
+diff --git a/tests/test_f11_channel_validate_2.c b/tests/test_f11_channel_validate_2.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_validate_2.c
+@@ -0,0 +1,9 @@
++#include "test_f11_channel_cases.h"
++/* M186: independent validate regression #2. */
++int test_f11_channel_validate_2(void){
++struct m192_env e; m192_setup(&e);uint32_t h=0;
++assert(port_f11_chan_assign(&e.table,4,&h)==PORT_F11_CHAN_OK);
++e.table.slots[0].owner=0;
++assert(port_f11_chan_validate(&e.table)==PORT_F11_CHAN_BAD);
++return 1;
++}
+diff --git a/tests/test_f11_channel_validate_3.c b/tests/test_f11_channel_validate_3.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_f11_channel_validate_3.c
+@@ -0,0 +1,7 @@
++#include "test_f11_channel_cases.h"
++/* M186: independent validate regression #3. */
++int test_f11_channel_validate_3(void){
++struct m192_env e; m192_setup(&e);e.table.next_generation=0;
++assert(port_f11_chan_validate(&e.table)==PORT_F11_CHAN_BAD);
++return 1;
++}
