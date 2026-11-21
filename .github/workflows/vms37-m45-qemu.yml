@@ -94,6 +94,7 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m168-native.patch
           patch --batch -p1 < ../ci-vms37/m176-native.patch
           patch --batch -p1 < ../ci-vms37/m184-native.patch
+          python3 tools/upgrade_disk_image_check_m184.py
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           # Replay the 46 exact SHA-256-verified current guest-layout fixtures, not stale M89 copies.
