@@ -1,0 +1,451 @@
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -1246,3 +1246,17 @@
+ relocdrvcheck: $(M131_RELOC_OBJS) | build
+ 	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M131_RELOC_SRCS) $(M130_DQDDT_SRCS) $(M125_DQ_SRCS) $(M118_DB_SRCS) tests/test_relocdrv_host.c -o build/relocdrvcheck
+ 	./build/relocdrvcheck
++
++# M134: original IOC$RELOC_DDT private-table relocation, never active DQA0.
++M134_DDTRELOC_SRCS=$(wildcard src/vms_ddtreloc_*.c)
++M134_DDTRELOC_OBJS=$(patsubst src/%.c,build/%.o,$(M134_DDTRELOC_SRCS))
++$(M134_DDTRELOC_OBJS): build/%.o: src/%.c src/vms_ddtreloc.h | build
++	$(CC) $(CFLAGS) -c $< -o $@
++.PHONY: ddtreloccheck
++ddtreloccheck: $(M134_DDTRELOC_OBJS) | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M134_DDTRELOC_SRCS) tests/test_ddtreloc_host.c -o build/ddtreloccheck
++	./build/ddtreloccheck
++.PHONY: ddtreloccasescheck
++ddtreloccasescheck: | build
++	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=address,undefined -fno-sanitize-recover=undefined -Isrc -Itests $(M134_DDTRELOC_SRCS) tests/test_ddtreloc_case_*.c tests/test_ddtreloc_cases_main.c -o build/ddtreloccasescheck
++	./build/ddtreloccasescheck
+diff --git a/tools/gen_source_coverage.py b/tools/gen_source_coverage.py
+--- a/tools/gen_source_coverage.py
++++ b/tools/gen_source_coverage.py
+@@ -2360,7 +2360,7 @@
+  (236,245,None,None,'Original VAX LOCATE stack/documentation not used in IA-32 code'),
+  (246,278,'src/vms_relocdrv_region.c','port_relocdrv_region','Source CRB/DDB/IDB/UCB type dispatch with explicit IA-32 bounds, no unchecked pointer chase'),
+  (279,315,None,None,'Original DDT/FDT driver relocation declarations and VAX high-bit address convention unresolved'),
+- (316,352,None,None,'IOC$RELOC_DDT needs real callable DQ driver dispatch and FDT actions, not linked yet')]
++ (316,352,'src/vms_ddtreloc_apply.c','port_ddtreloc_apply','IOC$RELOC_DDT original DDT offset vector and 12-byte FDT action relocation on bounded isolated bytes only; resident DQ driver remains unbound')]
+ sections=[]
+ for lo,hi,pc,sym,desc in relocdrv_rows:
+     if pc:
+@@ -2371,7 +2371,7 @@
+     else:sections.append({'original_lines':[lo,hi],'status':'unresolved','reason':desc})
+ result['files'].append({'original_file':'SYS/SRC/RELOCDRV.MAR',
+     'original_lines':352,'sections':sections,
+-    'unresolved_integration':'Nine DQ DPT_STORE operations are interpreted on isolated resident DQA0 DDB/UCB copies using original source byte opcodes. This does NOT initialize/publish a live driver; original DDT/CRB/IDB, MNTVER, DQ hardware/ACP and DDT relocations remain unported.'})
++    'unresolved_integration':'Nine DQ DPT_STORE operations are interpreted on isolated resident DQA0 DDB/UCB copies using original source byte opcodes. This does NOT initialize/publish a live driver; original active DDT/CRB/IDB, MNTVER, DQ hardware/ACP and live driver relocation remain unported. A private IOC$RELOC_DDT DDT/FDT image rewrite is tested on host bytes only.'})
+ assert len({f['original_file'] for f in result['files']})==len(result['files'])
+ 
+ # M128: LOGNAMSUB.MAR source pin, not a claim of a full logical-name service.
+diff --git a/src/vms_ddtreloc.h b/src/vms_ddtreloc.h
+new file mode 100644
+--- /dev/null
++++ b/src/vms_ddtreloc.h
+@@ -0,0 +1,25 @@
++#ifndef VMS37_NATIVE_DDTRELOC_H
++#define VMS37_NATIVE_DDTRELOC_H
++#include <stddef.h>
++#include <stdint.h>
++/* IOC$RELOC_DDT, SYS/SRC/RELOCDRV.MAR 289-349. Strictly offline:
++ * this code rewrites a private DDT/FDT image and never binds a driver. */
++enum {PORT_DDTRELOC_OK=1u,PORT_DDTRELOC_BAD=2u,
++      PORT_DDTRELOC_UNBOUND=4u,PORT_DDTRELOC_DDT_LEN=38u,
++      PORT_DDTRELOC_FDT_OFF=8u,PORT_DDTRELOC_FDT_SIZE_OFF=36u,
++      PORT_DDTRELOC_FDT_START=40u};
++struct port_ddtreloc_image {
++    uint8_t *image;
++    size_t length;
++    uint32_t pc_base;
++};
++uint16_t port_ddtreloc_read16(const uint8_t *p);
++uint32_t port_ddtreloc_read32(const uint8_t *p);
++void port_ddtreloc_write32(uint8_t *p,uint32_t v);
++uint32_t port_ddtreloc_preflight(const struct port_ddtreloc_image *im,
++    uint32_t *fdt_offset,uint16_t *fdt_length);
++uint32_t port_ddtreloc_header(const struct port_ddtreloc_image *im);
++uint32_t port_ddtreloc_functions(const struct port_ddtreloc_image *im,
++    uint32_t fdt_offset,uint16_t fdt_length);
++uint32_t port_ddtreloc_apply(const struct port_ddtreloc_image *im);
++#endif
+diff --git a/src/vms_ddtreloc_apply.c b/src/vms_ddtreloc_apply.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_ddtreloc_apply.c
+@@ -0,0 +1,14 @@
++#include "vms_ddtreloc.h"
++/* Preserve the original relocation order: DDT followed by FDT. Reject
++ * malformed private images before committing any DDT field changes. */
++uint32_t port_ddtreloc_apply(const struct port_ddtreloc_image *im){
++    uint32_t fdt=0;uint16_t size=0;
++    uint32_t result=port_ddtreloc_preflight(im,&fdt,&size);
++    if(result!=PORT_DDTRELOC_OK)return result;
++    if(im->pc_base>UINT32_MAX-(uint32_t)im->length)return PORT_DDTRELOC_BAD;
++    /* The original does not roll back arbitrary writes. Our bounded private
++     * image has already passed every offset/size check. */
++    result=port_ddtreloc_header(im);
++    if(result!=PORT_DDTRELOC_OK)return result;
++    return port_ddtreloc_functions(im,fdt,size);
++}
+diff --git a/src/vms_ddtreloc_functions.c b/src/vms_ddtreloc_functions.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_ddtreloc_functions.c
+@@ -0,0 +1,15 @@
++#include "vms_ddtreloc.h"
++/* Source lines 336-347: skip two bitmap words and step 12-byte rows;
++ * each action is at row+8, relative to the current dispatch block. */
++uint32_t port_ddtreloc_functions(const struct port_ddtreloc_image *im,
++    uint32_t off,uint16_t len){
++    if(!im||!im->image||off>im->length||len>im->length-off||
++       len<16u||(len-16u)%12u)return PORT_DDTRELOC_BAD;
++    for(uint32_t at=off+24u;at+4u<=off+(uint32_t)len;at+=12u){
++        uint8_t *p=im->image+at;
++        const uint32_t old=port_ddtreloc_read32(p);
++        if(!(old&UINT32_C(0x80000000)))
++            port_ddtreloc_write32(p,old+im->pc_base+at-8u);
++    }
++    return PORT_DDTRELOC_OK;
++}
+diff --git a/src/vms_ddtreloc_header.c b/src/vms_ddtreloc_header.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_ddtreloc_header.c
+@@ -0,0 +1,15 @@
++#include "vms_ddtreloc.h"
++/* Source RELOC_DDT_TABLE byte offsets 67-75; the sign bit is DEC's
++ * 'already system address' marker. A high-bit word is left intact. */
++uint32_t port_ddtreloc_header(const struct port_ddtreloc_image *im){
++    static const uint8_t offsets[]={0u,4u,8u,12u,16u,24u,28u,32u};
++    if(!im||!im->image||im->length<PORT_DDTRELOC_DDT_LEN)
++        return PORT_DDTRELOC_BAD;
++    for(unsigned i=0;i<sizeof offsets;i++){
++        uint8_t *p=im->image+offsets[i];
++        const uint32_t prior=port_ddtreloc_read32(p);
++        if(!(prior&UINT32_C(0x80000000)))
++            port_ddtreloc_write32(p,prior+im->pc_base);
++    }
++    return PORT_DDTRELOC_OK;
++}
+diff --git a/src/vms_ddtreloc_preflight.c b/src/vms_ddtreloc_preflight.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_ddtreloc_preflight.c
+@@ -0,0 +1,19 @@
++#include "vms_ddtreloc.h"
++/* Source DDT has a 38-byte dispatch header and an FDT of 16+12*n.
++ * Validate the full source span before touching the supplied image. */
++uint32_t port_ddtreloc_preflight(const struct port_ddtreloc_image *im,
++    uint32_t *fdt_offset,uint16_t *fdt_length){
++    if(!im||!im->image||!fdt_offset||!fdt_length||
++       im->length<PORT_DDTRELOC_DDT_LEN||!im->pc_base||
++       (uint64_t)im->pc_base+im->length>UINT32_MAX)return PORT_DDTRELOC_BAD;
++    const uint16_t len=port_ddtreloc_read16(im->image+PORT_DDTRELOC_FDT_SIZE_OFF);
++    const uint32_t raw=port_ddtreloc_read32(im->image+PORT_DDTRELOC_FDT_OFF);
++    /* Before relocation this word is relative; after relocation high bit
++     * indicates it already points to native system virtual address. */
++    const uint32_t off=(raw&UINT32_C(0x80000000))?
++       (raw>=im->pc_base?raw-im->pc_base:UINT32_MAX):raw;
++    if(off<PORT_DDTRELOC_DDT_LEN||off>im->length||
++       len<16u||(len-16u)%12u||len>im->length-off)
++        return PORT_DDTRELOC_UNBOUND;
++    *fdt_offset=off;*fdt_length=len;return PORT_DDTRELOC_OK;
++}
+diff --git a/src/vms_ddtreloc_read16.c b/src/vms_ddtreloc_read16.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_ddtreloc_read16.c
+@@ -0,0 +1,5 @@
++#include "vms_ddtreloc.h"
++/* Source MOVZWL DDT$W_FDTSIZE, little-endian word. */
++uint16_t port_ddtreloc_read16(const uint8_t *p){
++    return (uint16_t)((uint16_t)p[0]|((uint16_t)p[1]<<8u));
++}
+diff --git a/src/vms_ddtreloc_read32.c b/src/vms_ddtreloc_read32.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_ddtreloc_read32.c
+@@ -0,0 +1,6 @@
++#include "vms_ddtreloc.h"
++/* VAX little-endian DDT dispatch pointer word. */
++uint32_t port_ddtreloc_read32(const uint8_t *p){
++    return (uint32_t)p[0]|((uint32_t)p[1]<<8u)|
++        ((uint32_t)p[2]<<16u)|((uint32_t)p[3]<<24u);
++}
+diff --git a/src/vms_ddtreloc_write32.c b/src/vms_ddtreloc_write32.c
+new file mode 100644
+--- /dev/null
++++ b/src/vms_ddtreloc_write32.c
+@@ -0,0 +1,5 @@
++#include "vms_ddtreloc.h"
++/* Native IA-32 byte serialization; no unaligned access assumption. */
++void port_ddtreloc_write32(uint8_t *p,uint32_t v){
++    for(unsigned i=0;i<4u;i++)p[i]=(uint8_t)(v>>(8u*i));
++}
+diff --git a/tests/ddtreloc_test_common.h b/tests/ddtreloc_test_common.h
+new file mode 100644
+--- /dev/null
++++ b/tests/ddtreloc_test_common.h
+@@ -0,0 +1,17 @@
++#ifndef DDTRELOC_TEST_COMMON_H
++#define DDTRELOC_TEST_COMMON_H
++#include "vms_ddtreloc.h"
++#include <stdint.h>
++#include <stdio.h>
++#include <string.h>
++#define REQUIRE(x) do {if(!(x)) {fprintf(stderr,"DDT case %s:%d %s\n",__FILE__,__LINE__,#x);return 1;}}while(0)
++static inline void ddtreloc_fixture(uint8_t *b,size_t len){
++    memset(b,0,len);
++    const unsigned offsets[]={0u,4u,8u,12u,16u,24u,28u,32u};
++    for(unsigned i=0;i<8u;i++)port_ddtreloc_write32(b+offsets[i],0x110u+4u*i);
++    port_ddtreloc_write32(b+8u,40u);
++    b[36u]=136u;
++    for(unsigned i=0;i<10u&&64u+i*12u+4u<=len;i++)
++        port_ddtreloc_write32(b+64u+i*12u,0x120u+i);
++}
++#endif
+diff --git a/tests/test_ddtreloc_case_action_offsets.c b/tests/test_ddtreloc_case_action_offsets.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_action_offsets.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_action_offsets(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);struct port_ddtreloc_image im={b,sizeof b,0x80010000u};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);for(unsigned i=0;i<10u;i++){uint32_t at=64u+12u*i;REQUIRE(port_ddtreloc_read32(b+at)==0x80010000u+at-8u+0x120u+i);REQUIRE(port_ddtreloc_read32(b+at-8u)==0u);}
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_bad_base.c b/tests/test_ddtreloc_case_bad_base.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_bad_base.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_bad_base(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);struct port_ddtreloc_image im={b,sizeof b,0};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_BAD);im.pc_base=UINT32_MAX-10u;REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_BAD);
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_bad_row_size.c b/tests/test_ddtreloc_case_bad_row_size.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_bad_row_size.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_bad_row_size(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);b[36]=137;struct port_ddtreloc_image im={b,sizeof b,0x80010000u};uint8_t old[176];memcpy(old,b,sizeof b);REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_UNBOUND);REQUIRE(!memcmp(old,b,sizeof b));
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_bitmap_preserve.c b/tests/test_ddtreloc_case_bitmap_preserve.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_bitmap_preserve.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_bitmap_preserve(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);for(unsigned i=40;i<56;i++)b[i]=(uint8_t)(i*7u);uint8_t prior[16];memcpy(prior,b+40u,16);struct port_ddtreloc_image im={b,sizeof b,0x80010000u};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);REQUIRE(!memcmp(prior,b+40u,16));
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_ddt_skip_system.c b/tests/test_ddtreloc_case_ddt_skip_system.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_ddt_skip_system.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_ddt_skip_system(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);port_ddtreloc_write32(b+0u,0x81234567u);struct port_ddtreloc_image im={b,sizeof b,0x80010000u};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);REQUIRE(port_ddtreloc_read32(b)==0x81234567u);
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_empty_fdt.c b/tests/test_ddtreloc_case_empty_fdt.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_empty_fdt.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_empty_fdt(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);b[36]=0;struct port_ddtreloc_image im={b,sizeof b,0x80010000u};uint8_t old[176];memcpy(old,b,sizeof b);REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_UNBOUND);REQUIRE(!memcmp(old,b,sizeof b));
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_fdt_outside.c b/tests/test_ddtreloc_case_fdt_outside.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_fdt_outside.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_fdt_outside(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);port_ddtreloc_write32(b+8u,150u);struct port_ddtreloc_image im={b,sizeof b,0x80010000u};uint8_t old[176];memcpy(old,b,sizeof b);REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_UNBOUND);REQUIRE(!memcmp(old,b,sizeof b));
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_fdt_skip_system.c b/tests/test_ddtreloc_case_fdt_skip_system.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_fdt_skip_system.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_fdt_skip_system(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);port_ddtreloc_write32(b+64u+36u,0x92345678u);struct port_ddtreloc_image im={b,sizeof b,0x80010000u};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);REQUIRE(port_ddtreloc_read32(b+100u)==0x92345678u);
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_header_offsets.c b/tests/test_ddtreloc_case_header_offsets.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_header_offsets.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_header_offsets(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);struct port_ddtreloc_image im={b,sizeof b,0x80010000u};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);const unsigned a[]={0,4,8,12,16,24,28,32};for(unsigned i=0;i<8;i++){uint32_t want=(i==2u)?0x80010028u:0x80010110u+4u*i;REQUIRE(port_ddtreloc_read32(b+a[i])==want);}
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_null_image.c b/tests/test_ddtreloc_case_null_image.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_null_image.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_null_image(void){
++    struct port_ddtreloc_image im={0};uint32_t off=5;uint16_t n=7;REQUIRE(port_ddtreloc_preflight(&im,&off,&n)==PORT_DDTRELOC_BAD);REQUIRE(off==5&&n==7);
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_null_outputs.c b/tests/test_ddtreloc_case_null_outputs.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_null_outputs.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_null_outputs(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);struct port_ddtreloc_image im={b,sizeof b,0x80010000u};uint32_t off=3;uint16_t n=5;REQUIRE(port_ddtreloc_preflight(&im,NULL,&n)==PORT_DDTRELOC_BAD);REQUIRE(port_ddtreloc_preflight(&im,&off,NULL)==PORT_DDTRELOC_BAD);REQUIRE(off==3&&n==5);
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_once_only.c b/tests/test_ddtreloc_case_once_only.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_once_only.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_once_only(void){
++    uint8_t b[176];ddtreloc_fixture(b,sizeof b);struct port_ddtreloc_image im={b,sizeof b,0x80010000u};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);uint8_t prior[176];memcpy(prior,b,176);REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);REQUIRE(!memcmp(prior,b,176));
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_single_row.c b/tests/test_ddtreloc_case_single_row.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_single_row.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_single_row(void){
++    uint8_t b[68];ddtreloc_fixture(b,sizeof b);b[36]=28u;struct port_ddtreloc_image im={b,sizeof b,0x80010000u};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);REQUIRE(port_ddtreloc_read32(b+64u)==0x80010158u);
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_word_io.c b/tests/test_ddtreloc_case_word_io.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_word_io.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_word_io(void){
++    uint8_t b[8]={0};port_ddtreloc_write32(b+1u,0x12345678u);REQUIRE(b[1]==0x78u&&b[2]==0x56u&&b[3]==0x34u&&b[4]==0x12u);REQUIRE(port_ddtreloc_read32(b+1u)==0x12345678u);REQUIRE(port_ddtreloc_read16(b+1u)==0x5678u);
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_case_zero_rows.c b/tests/test_ddtreloc_case_zero_rows.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_case_zero_rows.c
+@@ -0,0 +1,5 @@
++#include "ddtreloc_test_common.h"
++int test_ddtreloc_zero_rows(void){
++    uint8_t b[56];ddtreloc_fixture(b,sizeof b);b[36]=16u;struct port_ddtreloc_image im={b,sizeof b,0x80010000u};REQUIRE(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);REQUIRE(port_ddtreloc_read32(b+8u)==0x80010028u);
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_cases_main.c b/tests/test_ddtreloc_cases_main.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_cases_main.c
+@@ -0,0 +1,35 @@
++#include <stdio.h>
++int test_ddtreloc_null_image(void);
++int test_ddtreloc_null_outputs(void);
++int test_ddtreloc_empty_fdt(void);
++int test_ddtreloc_bad_row_size(void);
++int test_ddtreloc_fdt_outside(void);
++int test_ddtreloc_bad_base(void);
++int test_ddtreloc_ddt_skip_system(void);
++int test_ddtreloc_fdt_skip_system(void);
++int test_ddtreloc_bitmap_preserve(void);
++int test_ddtreloc_once_only(void);
++int test_ddtreloc_word_io(void);
++int test_ddtreloc_header_offsets(void);
++int test_ddtreloc_action_offsets(void);
++int test_ddtreloc_single_row(void);
++int test_ddtreloc_zero_rows(void);
++int main(void){
++    if(test_ddtreloc_null_image())return 1;
++    if(test_ddtreloc_null_outputs())return 1;
++    if(test_ddtreloc_empty_fdt())return 1;
++    if(test_ddtreloc_bad_row_size())return 1;
++    if(test_ddtreloc_fdt_outside())return 1;
++    if(test_ddtreloc_bad_base())return 1;
++    if(test_ddtreloc_ddt_skip_system())return 1;
++    if(test_ddtreloc_fdt_skip_system())return 1;
++    if(test_ddtreloc_bitmap_preserve())return 1;
++    if(test_ddtreloc_once_only())return 1;
++    if(test_ddtreloc_word_io())return 1;
++    if(test_ddtreloc_header_offsets())return 1;
++    if(test_ddtreloc_action_offsets())return 1;
++    if(test_ddtreloc_single_row())return 1;
++    if(test_ddtreloc_zero_rows())return 1;
++    puts("IOC$RELOC_DDT independent source range and relocation cases PASS");
++    return 0;
++}
+diff --git a/tests/test_ddtreloc_host.c b/tests/test_ddtreloc_host.c
+new file mode 100644
+--- /dev/null
++++ b/tests/test_ddtreloc_host.c
+@@ -0,0 +1,48 @@
++#include "vms_ddtreloc.h"
++#include <stdio.h>
++#include <string.h>
++#define CHECK(c) do{if(!(c)){fprintf(stderr,"DDTRELOC line %d: %s\n",__LINE__,#c);return 1;}}while(0)
++static void base_image(uint8_t *b,size_t n){
++    memset(b,0,n);
++    const unsigned offsets[]={0u,4u,8u,12u,16u,24u,28u,32u};
++    for(unsigned i=0;i<sizeof offsets/sizeof offsets[0];i++)
++        port_ddtreloc_write32(b+offsets[i],0x100u+i*4u);
++    port_ddtreloc_write32(b+8u,40u);
++    b[36u]=136u;b[37u]=0;
++    for(unsigned i=0;i<10u;i++)
++        port_ddtreloc_write32(b+40u+24u+12u*i,0x100u+i);
++}
++int main(void){
++    uint8_t buf[176];base_image(buf,sizeof buf);
++    struct port_ddtreloc_image im={buf,sizeof buf,0x80010000u};
++    uint32_t off=0;uint16_t len=0;
++    CHECK(port_ddtreloc_preflight(&im,&off,&len)==PORT_DDTRELOC_OK);
++    CHECK(off==40u&&len==136u);
++    CHECK(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);
++    CHECK(port_ddtreloc_read32(buf+8u)==0x80010028u);
++    CHECK(port_ddtreloc_read32(buf)==0x80010100u);
++    CHECK(port_ddtreloc_read32(buf+40u+24u)==0x80010038u+0x100u);
++    CHECK(port_ddtreloc_read32(buf+40u+24u+12u*9u)==0x80010038u+12u*9u+0x109u);
++    /* System pointers with sign bit set are never adjusted again. */
++    uint8_t snapshot[sizeof buf];memcpy(snapshot,buf,sizeof buf);
++    CHECK(port_ddtreloc_apply(&im)==PORT_DDTRELOC_OK);
++    CHECK(!memcmp(snapshot,buf,sizeof buf));
++    /* Each malformed image fails before a write. */
++    base_image(buf,sizeof buf);
++    port_ddtreloc_write32(buf+8u,176u);
++    memcpy(snapshot,buf,sizeof buf);
++    CHECK(port_ddtreloc_apply(&im)==PORT_DDTRELOC_UNBOUND);
++    CHECK(!memcmp(snapshot,buf,sizeof buf));
++    base_image(buf,sizeof buf);
++    buf[36u]=135u;memcpy(snapshot,buf,sizeof buf);
++    CHECK(port_ddtreloc_apply(&im)==PORT_DDTRELOC_UNBOUND);
++    CHECK(!memcmp(snapshot,buf,sizeof buf));
++    base_image(buf,sizeof buf);
++    im.pc_base=UINT32_MAX-1u;
++    CHECK(port_ddtreloc_apply(&im)==PORT_DDTRELOC_BAD);
++    im.pc_base=0x80010000u;
++    im.length=38u;
++    CHECK(port_ddtreloc_apply(&im)==PORT_DDTRELOC_UNBOUND);
++    puts("IOC$RELOC_DDT private DDT/FDT source relocation PASS; no DQA0 binding");
++    return 0;
++}
