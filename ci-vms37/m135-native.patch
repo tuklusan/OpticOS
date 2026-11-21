@@ -1,7 +1,16 @@
 diff --git a/Makefile b/Makefile
 --- a/Makefile
 +++ b/Makefile
-@@ -823,8 +823,8 @@
+@@ -808,6 +808,8 @@
+ M130_DQDDT_OBJS=$(patsubst src/%.c,build/%.o,$(M130_DQDDT_SRCS))
+ M131_RELOC_SRCS=$(wildcard src/vms_relocdrv_*.c)
+ M131_RELOC_OBJS=$(patsubst src/%.c,build/%.o,$(M131_RELOC_SRCS))
++M134_DDTRELOC_SRCS=$(wildcard src/vms_ddtreloc_*.c)
++M134_DDTRELOC_OBJS=$(patsubst src/%.c,build/%.o,$(M134_DDTRELOC_SRCS))
+ M123_IOPOST_SRCS=$(filter-out $(M124_SWI_SRCS),$(wildcard src/vms_iopost_*.c))
+ M123_IOPOST_OBJS=$(patsubst src/%.c,build/%.o,$(M123_IOPOST_SRCS))
+ $(M124_SWI_OBJS): build/%.o: src/%.c src/vms_iopost_swi.h | build
+@@ -823,8 +825,8 @@
  	$(CC) -std=c11 -O2 -g -Wall -Wextra -Werror -fsanitize=undefined -fno-sanitize-recover=undefined -Isrc $(M119_CON_SRCS) tests/test_con_port_host.c -o build/conportcheck
  	./build/conportcheck
  
@@ -12,7 +21,7 @@ diff --git a/Makefile b/Makefile
  build/vms_sysboot_elf.o: src/vms_sysboot_elf.c src/vms_sysboot_elf.h | build
  	$(CC) $(CFLAGS) -c $< -o $@
  build/install_sys_image: tools/install_sys_image.c src/vms_boot_files11.c src/vms_bootio.c src/vms_f11_home.c | build
-@@ -848,7 +848,7 @@
+@@ -848,7 +850,7 @@
  	$(CC) -std=c11 -O2 -Wall -Wextra -Werror -Isrc $^ -o $@
  .PHONY: sysexecentrycheck
  sysexecentrycheck: | build
@@ -21,6 +30,15 @@ diff --git a/Makefile b/Makefile
  	ASAN_OPTIONS=detect_leaks=1 ./build/sysexecentrycheck
  .PHONY: inicpbuscheck
  inicpbuscheck: | build
+@@ -1248,8 +1250,6 @@
+ 	./build/relocdrvcheck
+ 
+ # M134: original IOC$RELOC_DDT private-table relocation, never active DQA0.
+-M134_DDTRELOC_SRCS=$(wildcard src/vms_ddtreloc_*.c)
+-M134_DDTRELOC_OBJS=$(patsubst src/%.c,build/%.o,$(M134_DDTRELOC_SRCS))
+ $(M134_DDTRELOC_OBJS): build/%.o: src/%.c src/vms_ddtreloc.h | build
+ 	$(CC) $(CFLAGS) -c $< -o $@
+ .PHONY: ddtreloccheck
 diff --git a/src/kernel.c b/src/kernel.c
 --- a/src/kernel.c
 +++ b/src/kernel.c
