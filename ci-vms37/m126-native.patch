@@ -433,7 +433,7 @@ index ec8b44f..f4df5a7 100644
  #endif
 diff --git a/tests/test_dq_bootread_host.c b/tests/test_dq_bootread_host.c
 new file mode 100644
-index 0000000..348a12f
+index 0000000..10d56b6
 --- /dev/null
 +++ b/tests/test_dq_bootread_host.c
 @@ -0,0 +1,119 @@
@@ -461,10 +461,10 @@ index 0000000..348a12f
 +    uint8_t old_db[PORT_V37_DEVICE_BYTES];
 +    uint16_t old_sector[256];
 +    struct port_dq_bootread_result result={.irp_status=0xbeef};
++    if(mutate && mutate(q))return 0;
 +    memcpy(old_irp,q->irp,sizeof old_irp);
 +    memcpy(old_db,q->device_db,sizeof old_db);
 +    memcpy(old_sector,q->sector,sizeof old_sector);
-+    if(mutate(q))return 0;
 +    const uint32_t code=port_dq_bootread_execute(q,&result);
 +    if(code==PORT_DQ_BOOTREAD_OK || result.irp_status!=0xbeef ||
 +       memcmp(old_irp,q->irp,sizeof old_irp) ||
