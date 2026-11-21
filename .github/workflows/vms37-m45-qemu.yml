@@ -1,4 +1,4 @@
-name: VMS37 native IA-32 M176 private DQ RETRYERR error recovery and IOCIOPOST, 32 cases, ATA
+name: VMS37 native IA-32 M184 FIL$READVBN native Files-11 over IOC ATA bridge, 32 cases
 on:
   push:
     branches:
@@ -26,7 +26,7 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y -qq --no-install-recommends qemu-system-x86 unzip
-      - name: Rebuild pinned native source through M176
+      - name: Rebuild pinned native source through M184
         shell: bash
         run: |
           set -euo pipefail
@@ -93,12 +93,13 @@ jobs:
           patch --batch -p1 < ../ci-vms37/m160-native.patch
           patch --batch -p1 < ../ci-vms37/m168-native.patch
           patch --batch -p1 < ../ci-vms37/m176-native.patch
+          patch --batch -p1 < ../ci-vms37/m184-native.patch
           # Both Python tests now resolve INDEXF data/header LBNs dynamically.
           cp tests/test_sysloa386_disk_image.py tests/test_disk_image.py
           # Replay the 46 exact SHA-256-verified current guest-layout fixtures, not stale M89 copies.
           python3 tools/m110_sync_test_fixtures.py
           make -j2 all
-          make dqretrycheck dqprivateioccheck f11cursorcheck f11chaincheck f11chainextcheck f11chainboundscheck f11chainshortcheck f11bootpathcheck f11bootdircheck f11bootfragcheck f11rangecheck dqauxcheck dqdirblockscheck dqimagecheck dqdircheck dqmfdcheck dqindexcheck dqphysicalcheck ddtreloccheck ddtreloccasescheck relocdrvcheck dqddtcheck devlogcheck logsystemcheck inifindatabasecheck dqbootreadcheck dqfdtcheck swiopostcheck iopostendcheck nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
+          make f11ioccheck dqretrycheck dqprivateioccheck f11cursorcheck f11chaincheck f11chainextcheck f11chainboundscheck f11chainshortcheck f11bootpathcheck f11bootdircheck f11bootfragcheck f11rangecheck dqauxcheck dqdirblockscheck dqimagecheck dqdircheck dqmfdcheck dqindexcheck dqphysicalcheck ddtreloccheck ddtreloccasescheck relocdrvcheck dqddtcheck devlogcheck logsystemcheck inifindatabasecheck dqbootreadcheck dqfdtcheck swiopostcheck iopostendcheck nlddtcheck qiopostcheck iocphyscheck conportcheck inidevicedbcheck inidpttemplatecheck v37dyntagcheck inilogtemplatecheck inibootdevscancheck
           make rtl85check rtl107check rtl108check rtl109check rtl110check rtl111check rtl112check rtl113check sourcerangecheck m21bootcheck
           # Run the full historical guest-layout/host test suite, not only the modern smoke subset.
           make test
@@ -111,27 +112,27 @@ jobs:
           readelf -l build/sys.exe
           readelf -l build/iniloa.exe
           readelf -l build/sysloa386.exe
-      - name: Regress real QEMU M176 source RETRYERR/IOCIOPOST three actual ATA IOSBs
+      - name: Regress real QEMU M184 source FIL$READVBN IOC bridge two genuine ATA sectors
         shell: bash
         run: |
           set -euo pipefail
           cd vms37-native-x86-m89
-          python3 tools/qemu_sysboot_m176.py
-      - name: Capture recoverable M176 source, build and resume
+          python3 tools/qemu_sysboot_m184.py
+      - name: Capture recoverable M184 source, build and resume
         if: success()
         shell: bash
         run: |
           set -euo pipefail
           cat > resume.md <<'EOF'
-          # Native VAX/VMS 3.7 IA-32 M176 checkpoint
+          # Native VAX/VMS 3.7 IA-32 M184 checkpoint
 
-          INCOMPLETE. M169-M176 source DQ RETRYERR/IOCIOPOST implements bounded private ATA retry and IOSB post on resident queue; 32 host tests and three actual ATA reads in QEMU. DQA0 public DDT/IRQ, ACP, process QIO, LOGIN/DCL and DECnet remain unimplemented. Genuine SYSTEM login,
+          INCOMPLETE. M177-M184 bridges Files-11 FH2 FIL$READVBN to private IOC ATA request queue with 32 host cases; QEMU compares 700 real disk bytes via two IOC IRPs. DQA0 DDT/IRQ, public ACP, $QIO, login, DCL and DECnet remain unimplemented. Genuine SYSTEM login,
           DCL, DECnet Phase IV and SET HOST 0 are not implemented.
 
           Branch: tuklusan/OpticOS vms37-x86-qemu-m45-ci
-          Native tree: vms37-native-x86-m89 (all patches M90-M143, M146 (M144-M146 combined), M149 (M147-M149 combined), M152 (M150-M152 combined), M160 (M153-M160 combined), M168 (M161-M168 combined), M176 (M169-M176 combined) applied)
+          Native tree: vms37-native-x86-m89 (all patches M90-M143, M146 (M144-M146 combined), M149 (M147-M149 combined), M152 (M150-M152 combined), M160 (M153-M160 combined), M168 (M161-M168 combined), M176 (M169-M176 combined), M184 (M177-M184 combined) applied)
           Rebuild: make -j2 all && make relocdrvcheck
-          Guest regression: python3 tools/qemu_sysboot_m176.py
+          Guest regression: python3 tools/qemu_sysboot_m184.py
           All QEMU boot traces are partial INIT only, never a complete VMS boot.
           Original DEC source is not distributed with this archive.
           EOF
@@ -140,7 +141,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m176-recoverable-source-build
+          name: vms37-m184-recoverable-source-build
           path: |
             vms37-native-x86-m89/
             resume.md
@@ -150,7 +151,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: vms37-m176-ci-m176-guest-serial
+          name: vms37-m184-ci-m184-guest-serial
           path: |
-            vms37-native-x86-m89/qemu-m176-serial.log
+            vms37-native-x86-m89/qemu-m184-serial.log
           if-no-files-found: warn
