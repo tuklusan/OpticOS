@@ -1,0 +1,41 @@
+diff --git a/src/vms_relocdrv_isolated.c b/src/vms_relocdrv_isolated.c
+--- a/src/vms_relocdrv_isolated.c
++++ b/src/vms_relocdrv_isolated.c
+@@ -8,12 +8,18 @@
+ uint32_t port_relocdrv_isolated(const struct port_relocdrv_context *c,
+     const uint8_t *table,size_t len){
+     if(!c||!table||!len)return PORT_RELOCDRV_BAD;
++    /* Read-only literals have their own guest physical address range.
++     * Validate that entire span, not only each individual read. */
++    if(c->readonly_size&&(!c->readonly_bytes||!c->readonly_base||
++       (uint64_t)c->readonly_base+c->readonly_size>UINT32_MAX))
++        return PORT_RELOCDRV_BAD;
++
+     for(unsigned i=0;i<PORT_RELOCDRV_REGION_COUNT;i++){
+         const struct port_relocdrv_region *a=&c->region[i];
+         if(!a->structure_type)continue;
+         if(!a->bytes||!a->bytes_size||!a->pc_base||
+            (uint64_t)a->pc_base+a->bytes_size>UINT32_MAX||
+-           (c->readonly_bytes&&c->readonly_size&&c->readonly_base&&
++           (c->readonly_bytes&&c->readonly_size&&
+             overlaps((uintptr_t)a->pc_base,a->bytes_size,
+                      (uintptr_t)c->readonly_base,c->readonly_size))||
+            overlaps((uintptr_t)table,len,(uintptr_t)a->bytes,a->bytes_size)||
+diff --git a/tests/test_relocdrv_host.c b/tests/test_relocdrv_host.c
+--- a/tests/test_relocdrv_host.c
++++ b/tests/test_relocdrv_host.c
+@@ -94,6 +94,14 @@
+     CHECK(port_relocdrv_isolated(&alias,ops,sizeof ops)==PORT_RELOCDRV_BAD);
+     alias=c;alias.readonly_base=alias.region[0].pc_base+2u;
+     CHECK(port_relocdrv_isolated(&alias,ops,sizeof ops)==PORT_RELOCDRV_BAD);
++    alias=c;alias.readonly_base=UINT32_MAX-1u;
++    CHECK(port_relocdrv_isolated(&alias,ops,sizeof ops)==PORT_RELOCDRV_BAD);
++    alias=c;alias.readonly_base=0u;
++    CHECK(port_relocdrv_isolated(&alias,ops,sizeof ops)==PORT_RELOCDRV_BAD);
++    alias=c;alias.readonly_bytes=NULL;
++    CHECK(port_relocdrv_isolated(&alias,ops,sizeof ops)==PORT_RELOCDRV_BAD);
++    CHECK(port_relocdrv_apply(&alias,ops,sizeof ops,&done)==PORT_RELOCDRV_BAD);
++    CHECK(done==0u);
+     CHECK(port_relocdrv_isolated(&c,ops,sizeof ops)==PORT_RELOCDRV_OK);
+     puts("RELOCDRV.MAR source IOC$INITDRV DPT_STORE interpreter, original DQ defaults and strict no-DDT-bind PASS");
+     return 0;
